@@ -1,8 +1,8 @@
+
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { Role } from "./lib/mock-data";
 import { ShieldCheck, ShoppingCart, Package, Utensils, Coffee, Sun, Moon } from "lucide-react";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -37,7 +37,7 @@ export default function Home() {
     window.location.href = '/dashboard';
   };
 
-  const logo = PlaceHolderImages.find(img => img.id === 'app-logo');
+  const logo = useMemo(() => PlaceHolderImages.find(img => img.id === 'app-logo'), []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -47,15 +47,16 @@ export default function Home() {
             {logo && (
               <Image 
                 src={logo.imageUrl} 
-                alt="Logo" 
+                alt="Orange Hotel Logo" 
                 width={180} 
                 height={180} 
                 className="object-contain"
                 data-ai-hint={logo.imageHint}
+                priority
               />
             )}
           </div>
-          <p className="text-muted-foreground text-xs uppercase tracking-widest font-bold">
+          <p className="text-muted-foreground text-[10px] uppercase tracking-[0.3em] font-black opacity-60">
             Internal Operations Portal
           </p>
         </div>
@@ -71,28 +72,28 @@ export default function Home() {
               <div className={`${role.color} w-14 h-14 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-black/5`}>
                 <role.icon className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{role.label}</h3>
-              <p className="text-sm text-muted-foreground flex-1 mb-6">
+              <h3 className="text-xl font-black mb-2 group-hover:text-primary transition-colors tracking-tight uppercase">{role.label}</h3>
+              <p className="text-sm text-muted-foreground font-medium flex-1 mb-6 leading-relaxed">
                 {role.desc}
               </p>
 
               {role.id === 'cashier' && selectedRole === 'cashier' ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="flex flex-col gap-2">
-                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Select Shift</span>
+                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Select Shift</span>
                     <Tabs defaultValue="day" onValueChange={(v) => setShift(v as any)} className="w-full">
-                      <TabsList className="grid w-full grid-cols-2 bg-muted h-12">
-                        <TabsTrigger value="day" className="flex items-center gap-2 font-bold">
-                          <Sun className="w-4 h-4" /> Day
+                      <TabsList className="grid w-full grid-cols-2 bg-muted h-12 rounded-xl p-1">
+                        <TabsTrigger value="day" className="flex items-center gap-2 font-black uppercase text-[10px] tracking-widest rounded-lg">
+                          <Sun className="w-3.5 h-3.5" /> Day
                         </TabsTrigger>
-                        <TabsTrigger value="night" className="flex items-center gap-2 font-bold">
-                          <Moon className="w-4 h-4" /> Night
+                        <TabsTrigger value="night" className="flex items-center gap-2 font-black uppercase text-[10px] tracking-widest rounded-lg">
+                          <Moon className="w-3.5 h-3.5" /> Night
                         </TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </div>
                   <Button 
-                    className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12"
+                    className="w-full bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest h-14 rounded-xl shadow-lg shadow-primary/20"
                     onClick={() => handleLogin('cashier')}
                   >
                     Enter Workspace
@@ -101,7 +102,7 @@ export default function Home() {
               ) : (
                 <button
                   onClick={() => handleSelectRole(role.id)}
-                  className="mt-2 flex items-center text-xs font-black uppercase tracking-widest text-primary group-hover:translate-x-1 transition-transform text-left"
+                  className="mt-2 flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-primary group-hover:translate-x-1 transition-transform text-left"
                 >
                   {role.id === 'cashier' ? 'Configure Shift →' : 'Enter Dashboard →'}
                 </button>
@@ -111,8 +112,8 @@ export default function Home() {
         </div>
       </div>
 
-      <footer className="p-8 border-t text-center text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
-        © 2024 Authorized Personnel Only. Security Monitored.
+      <footer className="p-8 border-t text-center text-[10px] text-muted-foreground uppercase tracking-[0.4em] font-black opacity-40">
+        © 2024 Authorized Personnel Only • Security Monitored
       </footer>
     </div>
   );

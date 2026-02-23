@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -71,7 +72,7 @@ export function SidebarNav({ role }: { role: Role }) {
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-3 py-4">
+        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-3 py-4 opacity-50">
           Management
         </div>
         {filteredNav.map((item) => {
