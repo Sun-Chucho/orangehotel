@@ -1,9 +1,11 @@
 
 "use client";
 
-import { Role } from "./lib/mock-data";
-import { Hotel, ShieldCheck, ShoppingCart, Package, Utensils, Coffee } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
+import { Role } from "./lib/mock-data";
+import { ShieldCheck, ShoppingCart, Package, Utensils, Coffee, Hotel } from "lucide-react";
+import { PlaceHolderImages } from "@/lib/placeholder-images";
 
 const ROLES: { id: Role; label: string; icon: any; color: string; desc: string }[] = [
   { id: 'manager', label: 'Hotel Manager', icon: ShieldCheck, color: 'bg-orange-500', desc: 'Full system oversight & analytics' },
@@ -18,12 +20,25 @@ export default function Home() {
     localStorage.setItem('orangeflow-role', role);
   };
 
+  const logo = PlaceHolderImages.find(img => img.id === 'app-logo');
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="mb-12">
-          <div className="w-20 h-20 bg-primary rounded-3xl flex items-center justify-center mx-auto shadow-xl rotate-3 hover:rotate-0 transition-transform mb-6">
-            <Hotel className="w-12 h-12 text-white" />
+          <div className="w-32 h-32 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-xl rotate-3 hover:rotate-0 transition-transform mb-8 overflow-hidden p-2">
+            {logo ? (
+              <Image 
+                src={logo.imageUrl} 
+                alt="Orange Hotel Logo" 
+                width={120} 
+                height={120} 
+                className="object-contain"
+                data-ai-hint={logo.imageHint}
+              />
+            ) : (
+              <Hotel className="w-16 h-16 text-primary" />
+            )}
           </div>
           <h1 className="text-5xl font-headline font-black tracking-tight mb-4">
             Orange<span className="text-primary">Flow</span>

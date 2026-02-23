@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { Role, ROOMS, INVENTORY, SALES_HISTORY } from '@/app/lib/mock-data';
+import { Role, ROOMS, INVENTORY } from '@/app/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,6 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from "lucide-react";
-import { AISummaryCard } from "@/components/dashboard/ai-summary-card";
-import { AIForecastCard } from "@/components/dashboard/ai-forecast-card";
 
 export default function OverviewPage() {
   const [role, setRole] = useState<Role>('manager');
@@ -54,7 +52,7 @@ export default function OverviewPage() {
             Shift: Day (08:00 - 16:00)
           </Button>
           <Button size="sm" className="bg-primary hover:bg-primary/90">
-            Generate Report
+            Export Report
           </Button>
         </div>
       </header>
@@ -85,8 +83,6 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Analytics Area */}
         <div className="lg:col-span-2 space-y-8">
-          <AIForecastCard />
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Low Stock Widget */}
             <Card className="shadow-sm">
@@ -155,17 +151,15 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* AI Sidebar Area */}
+        {/* Sidebar Area */}
         <div className="space-y-8">
-          <AISummaryCard />
-          
           <Card className="bg-secondary text-white shadow-lg overflow-hidden relative">
             <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                Shift Activity Log
+                Recent Shift Activity
               </CardTitle>
-              <CardDescription className="text-muted-foreground">Recent actions across all roles</CardDescription>
+              <CardDescription className="text-muted-foreground">Log of actions across all roles</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">

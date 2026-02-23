@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, 
@@ -13,11 +14,11 @@ import {
   Users, 
   BarChart3, 
   Settings,
-  LogOut,
-  Bell
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role } from "@/app/lib/mock-data";
+import { PlaceHolderImages } from "@/lib/placeholder-images";
 
 interface NavItem {
   label: string;
@@ -41,18 +42,30 @@ const NAV_ITEMS: NavItem[] = [
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
   const filteredNav = NAV_ITEMS.filter(item => item.roles.includes(role));
+  const logo = PlaceHolderImages.find(img => img.id === 'app-logo');
 
   return (
     <div className="flex flex-col h-full bg-secondary text-white border-r border-sidebar-border w-64 fixed left-0 top-0 z-40">
       <div className="p-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Hotel className="w-5 h-5 text-white" />
+        <Link href="/dashboard" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 group-hover:scale-105 transition-transform overflow-hidden">
+            {logo ? (
+              <Image 
+                src={logo.imageUrl} 
+                alt="Orange Hotel Logo" 
+                width={40} 
+                height={40} 
+                className="object-contain"
+                data-ai-hint={logo.imageHint}
+              />
+            ) : (
+              <Hotel className="w-6 h-6 text-primary" />
+            )}
           </div>
           <span className="font-headline font-bold text-xl tracking-tight text-white">
             Orange<span className="text-primary">Flow</span>
           </span>
-        </div>
+        </Link>
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
@@ -87,8 +100,13 @@ export function SidebarNav({ role }: { role: Role }) {
 
       <div className="p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent mb-4">
-          <div className="w-8 h-8 rounded-full bg-muted overflow-hidden">
-            <img src={`https://picsum.photos/seed/${role}/50/50`} alt="avatar" />
+          <div className="w-8 h-8 rounded-full bg-muted overflow-hidden relative">
+            <Image 
+              src={`https://picsum.photos/seed/${role}/50/50`} 
+              alt="avatar" 
+              fill 
+              className="object-cover"
+            />
           </div>
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm font-semibold truncate">{role.charAt(0).toUpperCase() + role.slice(1)}</span>
