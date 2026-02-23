@@ -1,47 +1,112 @@
-
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
-import { Role, ROOMS, INVENTORY } from '@/app/lib/mock-data';
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { Role, ROOMS, INVENTORY } from "@/app/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  Users, 
-  BedDouble, 
-  DollarSign, 
-  AlertCircle, 
-  TrendingUp, 
+import {
+  Users,
+  BedDouble,
+  DollarSign,
+  AlertCircle,
+  TrendingUp,
   Clock,
   ChevronRight,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  FileText,
 } from "lucide-react";
 
+interface CashierTransaction {
+  total: number;
+}
+
+interface QueueTicket {
+  id: string;
+}
+
 export default function OverviewPage() {
-  const [role, setRole] = useState<Role>('manager');
+  const [role, setRole] = useState<Role>("manager");
   const [shift, setShift] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [reportText, setReportText] = useState("");
+
+  const [cashierRevenue, setCashierRevenue] = useState(0);
+  const [activeKitchen, setActiveKitchen] = useState(0);
+  const [activeBarista, setActiveBarista] = useState(0);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('orange-hotel-role') as Role;
-    const savedShift = localStorage.getItem('orange-hotel-shift');
+    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    const savedShift = localStorage.getItem("orange-hotel-shift");
+    const savedTx = localStorage.getItem("orange-hotel-cashier-transactions");
+    const kitchenQueue = localStorage.getItem("orange-hotel-kitchen-tickets");
+    const baristaQueue = localStorage.getItem("orange-hotel-barista-orders");
+
     if (savedRole) setRole(savedRole);
     if (savedShift) setShift(savedShift);
+
+    if (savedTx) {
+      try {
+        const parsed = JSON.parse(savedTx) as CashierTransaction[];
+        if (Array.isArray(parsed)) {
+          setCashierRevenue(parsed.reduce((sum, tx) => sum + (tx.total || 0), 0));
+        }
+      } catch {
+        setCashierRevenue(0);
+      }
+    }
+
+    if (kitchenQueue) {
+      try {
+        const parsed = JSON.parse(kitchenQueue) as QueueTicket[];
+        if (Array.isArray(parsed)) setActiveKitchen(parsed.length);
+      } catch {
+        setActiveKitchen(0);
+      }
+    }
+
+    if (baristaQueue) {
+      try {
+        const parsed = JSON.parse(baristaQueue) as QueueTicket[];
+        if (Array.isArray(parsed)) setActiveBarista(parsed.length);
+      } catch {
+        setActiveBarista(0);
+      }
+    }
+
     setMounted(true);
   }, []);
 
-  const stats = useMemo(() => [
-    { label: 'Total Revenue', value: 'TSh 4,285,000', icon: DollarSign, trend: '+12%', trendUp: true, color: 'text-green-500' },
-    { label: 'Room Occupancy', value: '82%', icon: BedDouble, trend: '+5%', trendUp: true, color: 'text-blue-500' },
-    { label: 'Food & Drinks', value: 'TSh 1,120,000', icon: TrendingUp, trend: '-2%', trendUp: false, color: 'text-orange-500' },
-    { label: 'Staff on Duty', value: '18', icon: Users, trend: 'Normal', trendUp: true, color: 'text-purple-500' },
-  ], []);
-
-  const lowStock = useMemo(() => INVENTORY.filter(i => i.stock < i.minStock), []);
+  const lowStock = useMemo(() => INVENTORY.filter((item) => item.stock < item.minStock), []);
+  const occupiedRooms = useMemo(() => ROOMS.filter((room) => room.status === "occupied").length, []);
   const recentRooms = useMemo(() => ROOMS.slice(0, 4), []);
+
+  const stats = useMemo(
+    () => [
+      { label: "Cashier Revenue", value: `TSh ${cashierRevenue.toLocaleString()}`, icon: DollarSign, trend: "+12%", trendUp: true, color: "text-green-500" },
+      { label: "Room Occupancy", value: `${Math.round((occupiedRooms / ROOMS.length) * 100)}%`, icon: BedDouble, trend: "+5%", trendUp: true, color: "text-blue-500" },
+      { label: "Kitchen Queue", value: `${activeKitchen}`, icon: TrendingUp, trend: activeKitchen > 5 ? "High" : "Stable", trendUp: activeKitchen <= 5, color: "text-orange-500" },
+      { label: "Barista Queue", value: `${activeBarista}`, icon: Users, trend: activeBarista > 5 ? "High" : "Stable", trendUp: activeBarista <= 5, color: "text-purple-500" },
+    ],
+    [activeBarista, activeKitchen, cashierRevenue, occupiedRooms],
+  );
+
+  const generateReport = () => {
+    const text = [
+      `Operations Report (${new Date().toLocaleString()})`,
+      `Role: ${role}${shift ? ` (${shift} shift)` : ""}`,
+      `Cashier Revenue: TSh ${cashierRevenue.toLocaleString()}`,
+      `Occupied Rooms: ${occupiedRooms}/${ROOMS.length}`,
+      `Low Stock Items: ${lowStock.length}`,
+      `Active Kitchen Tickets: ${activeKitchen}`,
+      `Active Barista Tickets: ${activeBarista}`,
+    ].join("\n");
+
+    setReportText(text);
+  };
 
   if (!mounted) return null;
 
@@ -59,11 +124,19 @@ export default function OverviewPage() {
               {shift} Shift
             </Badge>
           )}
-          <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6 uppercase tracking-widest text-[10px]">
-            Generate Report
+          <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6 uppercase tracking-widest text-[10px]" onClick={generateReport}>
+            <FileText className="w-3.5 h-3.5 mr-2" /> Generate Report
           </Button>
         </div>
       </header>
+
+      {reportText && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <pre className="text-xs whitespace-pre-wrap font-semibold text-muted-foreground">{reportText}</pre>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
@@ -99,7 +172,7 @@ export default function OverviewPage() {
                 <AlertCircle className="w-5 h-5 text-destructive" />
               </CardHeader>
               <CardContent className="space-y-4">
-                {lowStock.map(item => (
+                {lowStock.map((item) => (
                   <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-orange-100 bg-orange-50/30">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold">{item.name}</span>
@@ -126,7 +199,7 @@ export default function OverviewPage() {
                 <BedDouble className="w-5 h-5 text-primary" />
               </CardHeader>
               <CardContent className="space-y-4">
-                {recentRooms.map(room => (
+                {recentRooms.map((room) => (
                   <div key={room.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center font-black text-sm">
@@ -134,14 +207,14 @@ export default function OverviewPage() {
                       </div>
                       <p className="text-[10px] text-muted-foreground leading-none font-black uppercase tracking-tighter">{room.type}</p>
                     </div>
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className={cn(
                         "text-[10px] capitalize font-black uppercase tracking-tighter",
-                        room.status === 'available' && "bg-green-50 text-green-700 border-green-200",
-                        room.status === 'occupied' && "bg-blue-50 text-blue-700 border-blue-200",
-                        room.status === 'cleaning' && "bg-orange-50 text-orange-700 border-orange-200",
-                        room.status === 'maintenance' && "bg-gray-50 text-gray-700 border-gray-200",
+                        room.status === "available" && "bg-green-50 text-green-700 border-green-200",
+                        room.status === "occupied" && "bg-blue-50 text-blue-700 border-blue-200",
+                        room.status === "cleaning" && "bg-orange-50 text-orange-700 border-orange-200",
+                        room.status === "maintenance" && "bg-gray-50 text-gray-700 border-gray-200",
                       )}
                     >
                       {room.status}
@@ -153,41 +226,37 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        <div className="space-y-8">
-          <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-3xl">
-            <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2 font-black uppercase tracking-tight">
-                Activity Log
-              </CardTitle>
-              <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Updates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {[
-                  { user: 'Reception', action: 'Guest Room 204 checked in', time: '12m ago' },
-                  { user: 'Kitchen', action: 'Order #242 served', time: '15m ago' },
-                  { user: 'Manager', action: 'Stock audit completed', time: '45m ago' },
-                  { user: 'Housekeeping', action: 'Room 103 cleaned', time: '1h ago' },
-                ].map((log, i) => (
-                  <div key={i} className="flex gap-3 relative">
-                    {i !== 3 && <div className="absolute left-4 top-8 bottom-[-24px] w-0.5 bg-sidebar-accent" />}
-                    <div className="w-8 h-8 rounded-full bg-sidebar-accent shrink-0 flex items-center justify-center border border-white/10 z-10">
-                      <span className="text-[10px] font-black">{log.user[0]}</span>
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-tighter">{log.user}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{log.action}</p>
-                      <p className="text-[9px] text-primary mt-1 flex items-center gap-1 uppercase tracking-widest font-black">
-                        <Clock className="w-2 h-2" /> {log.time}
-                      </p>
-                    </div>
+        <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-3xl">
+          <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2 font-black uppercase tracking-tight">Activity Log</CardTitle>
+            <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Updates</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {[
+                { user: "Reception", action: "Guest Room 204 checked in", time: `${activeKitchen} kitchen tickets active` },
+                { user: "Kitchen", action: "Prep pipeline updated", time: `${activeKitchen} open orders` },
+                { user: "Barista", action: "Beverage queue updated", time: `${activeBarista} open orders` },
+                { user: "Inventory", action: "Low-stock monitoring active", time: `${lowStock.length} alerts` },
+              ].map((log, index) => (
+                <div key={index} className="flex gap-3 relative">
+                  {index !== 3 && <div className="absolute left-4 top-8 bottom-[-24px] w-0.5 bg-sidebar-accent" />}
+                  <div className="w-8 h-8 rounded-full bg-sidebar-accent shrink-0 flex items-center justify-center border border-white/10 z-10">
+                    <span className="text-[10px] font-black">{log.user[0]}</span>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-tighter">{log.user}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{log.action}</p>
+                    <p className="text-[9px] text-primary mt-1 flex items-center gap-1 uppercase tracking-widest font-black">
+                      <Clock className="w-2 h-2" /> {log.time}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

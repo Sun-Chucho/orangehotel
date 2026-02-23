@@ -8,6 +8,8 @@ import { Bell, Search, User, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
+const VALID_ROLES: Role[] = ['manager', 'inventory', 'cashier', 'kitchen', 'barista'];
+
 export default function DashboardLayout({
   children,
 }: {
@@ -20,7 +22,7 @@ export default function DashboardLayout({
   const [mounted, setMounted] = useState(false);
 
   const allowedByRole: Record<Role, string[]> = {
-    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/kitchen', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
+    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/cashier', '/dashboard/kitchen', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
     inventory: ['/dashboard/inventory'],
     cashier: ['/dashboard/cashier', '/dashboard/rooms'],
     kitchen: ['/dashboard/kitchen'],
@@ -36,14 +38,16 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('orange-hotel-role') as Role;
+    const savedRole = localStorage.getItem('orange-hotel-role');
     const savedShift = localStorage.getItem('orange-hotel-shift');
-    if (!savedRole) {
+    if (!savedRole || !VALID_ROLES.includes(savedRole as Role)) {
+      localStorage.removeItem('orange-hotel-role');
+      localStorage.removeItem('orange-hotel-shift');
       router.replace('/');
       return;
     }
 
-    setRole(savedRole);
+    setRole(savedRole as Role);
     if (savedShift) setShift(savedShift);
     setMounted(true);
   }, [router]);

@@ -29,7 +29,8 @@ export function AIForecastCard() {
       const result = await managerSalesForecast({
         historicalSalesData: SALES_HISTORY,
         forecastDurationInDays: 7,
-        includeWeeklyForecast: true
+        includeWeeklyForecast: true,
+        includeMonthlyForecast: false
       });
       setForecast(result);
     } catch (error) {

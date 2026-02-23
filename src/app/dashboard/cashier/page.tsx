@@ -23,6 +23,7 @@ import {
 type ServiceCategory = "all" | "rooms" | "transport" | "wellness" | "food" | "fees";
 type PaymentMethod = "cash" | "card" | "mobile-money" | "room-charge";
 type TxFilter = "all" | PaymentMethod;
+type RoomAction = "occupied" | "left" | "reserved" | "cleaning";
 
 interface ServiceItem {
   id: string;
@@ -42,6 +43,7 @@ interface Transaction {
   createdAt: number;
   guestName: string;
   roomNumber: string;
+  roomAction: RoomAction;
   payment: PaymentMethod;
   lines: Array<{ name: string; qty: number; unitPrice: number }>;
   subtotal: number;
@@ -78,6 +80,7 @@ export default function CashierPage() {
   const [txFilter, setTxFilter] = useState<TxFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
+  const [roomAction, setRoomAction] = useState<RoomAction>("occupied");
   const [guestName, setGuestName] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -177,6 +180,7 @@ export default function CashierPage() {
       createdAt: Date.now(),
       guestName: guestName.trim(),
       roomNumber: roomNumber.trim() || "Walk-in",
+      roomAction,
       payment,
       lines: cart.map((line) => ({ name: line.item.name, qty: line.qty, unitPrice: line.item.price })),
       subtotal,
@@ -292,7 +296,7 @@ export default function CashierPage() {
                     <div>
                       <p className="font-black text-sm">{tx.receiptNo}</p>
                       <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                        {tx.guestName} | Room: {tx.roomNumber} | {tx.payment} | {formatAgo(tx.createdAt)}
+                        {tx.guestName} | Room: {tx.roomNumber} ({tx.roomAction}) | {tx.payment} | {formatAgo(tx.createdAt)}
                       </p>
                     </div>
                     <p className="font-black text-sm">TSh {tx.total.toLocaleString()}</p>
@@ -341,6 +345,23 @@ export default function CashierPage() {
                   placeholder="Room number (optional)"
                   className="pl-10"
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room Action</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(["occupied", "left", "reserved", "cleaning"] as RoomAction[]).map((action) => (
+                  <Button
+                    key={action}
+                    type="button"
+                    variant={roomAction === action ? "default" : "outline"}
+                    onClick={() => setRoomAction(action)}
+                    className="h-10 font-black uppercase text-[10px] tracking-widest"
+                  >
+                    {action}
+                  </Button>
+                ))}
               </div>
             </div>
 

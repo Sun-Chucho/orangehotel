@@ -117,7 +117,7 @@ export default function Home() {
                   onClick={() => role.id === 'cashier' ? handleSelectRole(role.id) : handleLogin(role.id)}
                   className="mt-2 flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-primary group-hover:translate-x-1 transition-transform text-left"
                 >
-                  {role.id === 'cashier' ? 'Configure Shift →' : 'Enter Dashboard →'}
+                  {role.id === 'cashier' ? 'Configure Shift ->' : 'Enter Dashboard ->'}
                 </button>
               )}
             </div>
@@ -126,7 +126,7 @@ export default function Home() {
       </div>
 
       <footer className="p-8 border-t text-center text-[10px] text-muted-foreground uppercase tracking-[0.4em] font-black opacity-40">
-        © 2024 Authorized Personnel Only • Security Monitored
+        (C) 2024 Authorized Personnel Only | Security Monitored
       </footer>
     </div>
   );
