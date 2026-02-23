@@ -1,8 +1,7 @@
-
 "use client";
 
-import { useState } from 'react';
-import { INVENTORY, InventoryItem } from '@/app/lib/mock-data';
+import { useState, useMemo } from 'react';
+import { INVENTORY } from '@/app/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,17 +27,22 @@ import {
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const lowStockItems = INVENTORY.filter(item => item.stock < item.minStock);
-  const filteredInventory = INVENTORY.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const lowStockItems = useMemo(() => 
+    INVENTORY.filter(item => item.stock < item.minStock),
+  []);
+
+  const filteredInventory = useMemo(() => 
+    INVENTORY.filter(item => 
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+  [searchTerm]);
 
   return (
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Stock Control</h1>
+          <h1 className="text-3xl font-black tracking-tight uppercase">Stock Control</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Inventory & procurement management</p>
         </div>
         <div className="flex gap-2">
@@ -130,7 +134,7 @@ export default function InventoryPage() {
         <div className="space-y-6">
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg">Stock Summary</CardTitle>
+              <CardTitle className="text-lg uppercase font-black">Stock Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 rounded-xl bg-muted/30 border border-muted flex items-center justify-between">
@@ -152,7 +156,7 @@ export default function InventoryPage() {
 
           <Card className="shadow-sm border-primary/20 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 uppercase font-black">
                 <Plus className="w-5 h-5 text-primary" />
                 Quick Restock
               </CardTitle>

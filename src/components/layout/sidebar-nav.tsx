@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useMemo } from 'react';
 import { 
   LayoutDashboard, 
   Hotel, 
@@ -40,20 +41,27 @@ const NAV_ITEMS: NavItem[] = [
 
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
-  const filteredNav = NAV_ITEMS.filter(item => item.roles.includes(role));
-  const logo = PlaceHolderImages.find(img => img.id === 'app-logo');
+  
+  const filteredNav = useMemo(() => 
+    NAV_ITEMS.filter(item => item.roles.includes(role)), 
+  [role]);
+
+  const logo = useMemo(() => 
+    PlaceHolderImages.find(img => img.id === 'app-logo'), 
+  []);
 
   return (
-    <div className="flex flex-col h-full bg-secondary text-white border-r border-sidebar-border w-64 fixed left-0 top-0 z-40">
+    <div className="flex flex-col h-full bg-black text-white border-r border-sidebar-border w-64 fixed left-0 top-0 z-40">
       <div className="p-8 flex justify-center">
         <Link href="/dashboard" className="group">
-          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-2xl">
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-2xl relative">
             {logo && (
               <Image 
                 src={logo.imageUrl} 
-                alt="Logo" 
+                alt="Orange Hotel Logo" 
                 width={80} 
                 height={80} 
+                priority
                 className="object-contain"
                 data-ai-hint={logo.imageHint}
               />
@@ -97,7 +105,7 @@ export function SidebarNav({ role }: { role: Role }) {
           <div className="w-9 h-9 rounded-lg bg-muted overflow-hidden relative border border-white/20">
             <Image 
               src={`https://picsum.photos/seed/${role}/100/100`} 
-              alt="avatar" 
+              alt="User Avatar" 
               fill 
               className="object-cover"
             />

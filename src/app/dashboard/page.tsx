@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Role, ROOMS, INVENTORY } from '@/app/lib/mock-data';
@@ -32,21 +32,24 @@ export default function OverviewPage() {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
-
-  const stats = [
+  const stats = useMemo(() => [
     { label: 'Total Revenue', value: 'TSh 4,285,000', icon: DollarSign, trend: '+12%', trendUp: true, color: 'text-green-500' },
     { label: 'Room Occupancy', value: '82%', icon: BedDouble, trend: '+5%', trendUp: true, color: 'text-blue-500' },
     { label: 'Food & Drinks', value: 'TSh 1,120,000', icon: TrendingUp, trend: '-2%', trendUp: false, color: 'text-orange-500' },
     { label: 'Staff on Duty', value: '18', icon: Users, trend: 'Normal', trendUp: true, color: 'text-purple-500' },
-  ];
+  ], []);
+
+  const lowStock = useMemo(() => INVENTORY.filter(i => i.stock < i.minStock), []);
+  const recentRooms = useMemo(() => ROOMS.slice(0, 4), []);
+
+  if (!mounted) return null;
 
   return (
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Operations Overview</h1>
-          <p className="text-muted-foreground">Monitoring active performance for {role === 'cashier' ? `${shift} shift` : role}.</p>
+          <p className="text-muted-foreground uppercase font-bold text-xs tracking-wider">Active performance tracking for {role}</p>
         </div>
         <div className="flex gap-2">
           {shift && (
@@ -55,13 +58,12 @@ export default function OverviewPage() {
               {shift} Shift
             </Badge>
           )}
-          <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6">
+          <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6 uppercase tracking-widest text-[10px]">
             Generate Report
           </Button>
         </div>
       </header>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
           <Card key={stat.label} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white overflow-hidden group">
@@ -76,7 +78,7 @@ export default function OverviewPage() {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">{stat.label}</p>
                 <h3 className="text-2xl font-black mt-1 tracking-tight">{stat.value}</h3>
               </div>
             </CardContent>
@@ -87,7 +89,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card className="shadow-sm">
+            <Card className="shadow-sm border-none bg-white">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-black uppercase tracking-tight">Inventory Alerts</CardTitle>
@@ -96,7 +98,7 @@ export default function OverviewPage() {
                 <AlertCircle className="w-5 h-5 text-destructive" />
               </CardHeader>
               <CardContent className="space-y-4">
-                {INVENTORY.filter(i => i.stock < i.minStock).map(item => (
+                {lowStock.map(item => (
                   <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-orange-100 bg-orange-50/30">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold">{item.name}</span>
@@ -108,30 +110,28 @@ export default function OverviewPage() {
                     </div>
                   </div>
                 ))}
-                <Button variant="link" className="w-full text-xs text-primary font-black uppercase tracking-widest" asChild>
+                <Button variant="link" className="w-full text-[10px] text-primary font-black uppercase tracking-widest" asChild>
                   <Link href="/dashboard/inventory">Manage Inventory <ChevronRight className="w-3 h-3 ml-1" /></Link>
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm">
+            <Card className="shadow-sm border-none bg-white">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg font-black uppercase tracking-tight">Housekeeping</CardTitle>
-                  <CardDescription>Real-time room status update</CardDescription>
+                  <CardTitle className="text-lg font-black uppercase tracking-tight">Room Status</CardTitle>
+                  <CardDescription>Real-time housekeeping update</CardDescription>
                 </div>
                 <BedDouble className="w-5 h-5 text-primary" />
               </CardHeader>
               <CardContent className="space-y-4">
-                {ROOMS.slice(0, 4).map(room => (
+                {recentRooms.map(room => (
                   <div key={room.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center font-black text-sm">
                         {room.number}
                       </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground leading-none font-black uppercase tracking-tighter">{room.type}</p>
-                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-none font-black uppercase tracking-tighter">{room.type}</p>
                     </div>
                     <Badge 
                       variant="outline" 
@@ -153,13 +153,13 @@ export default function OverviewPage() {
         </div>
 
         <div className="space-y-8">
-          <Card className="bg-secondary text-white shadow-lg overflow-hidden relative border-none">
+          <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-3xl">
             <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2 font-black uppercase tracking-tight">
-                Recent Activity
+                Activity Log
               </CardTitle>
-              <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Log</CardDescription>
+              <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Updates</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">

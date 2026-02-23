@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ROOMS, Room } from '@/app/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,6 @@ import {
   BedDouble,
   CheckCircle2,
   Clock,
-  AlertTriangle,
   Wrench
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,10 +29,12 @@ import { cn } from "@/lib/utils";
 export default function RoomsPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredRooms = ROOMS.filter(room => 
-    room.number.includes(searchTerm) || 
-    room.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRooms = useMemo(() => 
+    ROOMS.filter(room => 
+      room.number.includes(searchTerm) || 
+      room.type.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+  [searchTerm]);
 
   const getStatusIcon = (status: Room['status']) => {
     switch (status) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SALES_HISTORY } from '@/app/lib/mock-data';
 import { 
@@ -32,12 +33,19 @@ import { Button } from "@/components/ui/button";
 const COLORS = ['#F57C00', '#000000', '#FFB74D', '#333333'];
 
 export default function AnalyticsPage() {
-  const pieData = [
+  const pieData = useMemo(() => [
     { name: 'Room Revenue', value: 8200000 },
     { name: 'Food & Drinks', value: 3400000 },
     { name: 'Services', value: 1200000 },
     { name: 'Other', value: 800000 },
-  ];
+  ], []);
+
+  const stats = useMemo(() => [
+    { label: 'Avg Daily Revenue', value: 'TSh 2,840,000', trend: '+14%', icon: DollarSign },
+    { label: 'Weekly Growth', value: '22.4%', trend: '+4%', icon: TrendingUp },
+    { label: 'Total Guests', value: '1,248', trend: '+8%', icon: Users },
+    { label: 'Booking Freq', value: '8.2/day', trend: '-2%', icon: Calendar },
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -62,12 +70,7 @@ export default function AnalyticsPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Avg Daily Revenue', value: 'TSh 2,840,000', trend: '+14%', icon: DollarSign },
-          { label: 'Weekly Growth', value: '22.4%', trend: '+4%', icon: TrendingUp },
-          { label: 'Total Guests', value: '1,248', trend: '+8%', icon: Users },
-          { label: 'Booking Freq', value: '8.2/day', trend: '-2%', icon: Calendar },
-        ].map((stat, i) => (
+        {stats.map((stat, i) => (
           <Card key={i} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-2">
