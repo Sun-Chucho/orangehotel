@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Zap, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -33,7 +34,7 @@ export function AISummaryCard() {
     <Card className="col-span-1 shadow-sm h-full">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg font-bold flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
+          < Zap className="w-5 h-5 text-primary" />
           AI Daily Digest
         </CardTitle>
         <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={loading} className="text-primary hover:bg-primary/10">

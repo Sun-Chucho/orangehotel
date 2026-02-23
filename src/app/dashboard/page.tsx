@@ -2,6 +2,8 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { Role, ROOMS, INVENTORY, SALES_HISTORY } from '@/app/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from "lucide-react";
-import { AISummaryCard } from "@/components/ai-summary-card";
+import { AISummaryCard } from "@/components/dashboard/ai-summary-card";
 import { AIForecastCard } from "@/components/dashboard/ai-forecast-card";
 
 export default function OverviewPage() {
