@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -49,7 +48,7 @@ export function SidebarNav({ role }: { role: Role }) {
       <div className="p-6 flex justify-center">
         <Link href="/dashboard" className="group">
           <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-inner">
-            {logo ? (
+            {logo && (
               <Image 
                 src={logo.imageUrl} 
                 alt="Orange Hotel Logo" 
@@ -58,8 +57,6 @@ export function SidebarNav({ role }: { role: Role }) {
                 className="object-contain"
                 data-ai-hint={logo.imageHint}
               />
-            ) : (
-              <Hotel className="w-12 h-12 text-primary" />
             )}
           </div>
         </Link>

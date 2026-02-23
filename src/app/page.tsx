@@ -1,10 +1,9 @@
-
 "use client";
 
 import Image from "next/image";
 import Link from "next/link";
 import { Role } from "./lib/mock-data";
-import { ShieldCheck, ShoppingCart, Package, Utensils, Coffee, Hotel } from "lucide-react";
+import { ShieldCheck, ShoppingCart, Package, Utensils, Coffee } from "lucide-react";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 
 const ROLES: { id: Role; label: string; icon: any; color: string; desc: string }[] = [
@@ -26,8 +25,8 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="mb-12">
-          <div className="w-48 h-48 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl rotate-2 hover:rotate-0 transition-all duration-500 mb-12 overflow-hidden p-4">
-            {logo ? (
+          <div className="w-48 h-48 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl transition-all duration-500 mb-8 overflow-hidden p-4">
+            {logo && (
               <Image 
                 src={logo.imageUrl} 
                 alt="Orange Hotel Logo" 
@@ -36,13 +35,10 @@ export default function Home() {
                 className="object-contain"
                 data-ai-hint={logo.imageHint}
               />
-            ) : (
-              <Hotel className="w-24 h-24 text-primary" />
             )}
           </div>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-            Internal Management & Operations System for <span className="text-primary font-bold">Orange Hotel</span>. 
-            Select your role to access your dedicated workspace.
+            Authorized personnel only. Select your role to access your dedicated workspace.
           </p>
         </div>
 
@@ -70,7 +66,7 @@ export default function Home() {
       </div>
 
       <footer className="p-8 border-t text-center text-sm text-muted-foreground">
-        © 2024 Orange Hotel Operations. For internal use only. Authorized personnel only.
+        © 2024 Orange Hotel Operations. For internal use only.
       </footer>
     </div>
   );
