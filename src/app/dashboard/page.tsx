@@ -21,11 +21,14 @@ import {
 
 export default function OverviewPage() {
   const [role, setRole] = useState<Role>('manager');
+  const [shift, setShift] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const savedRole = localStorage.getItem('orange-hotel-role') as Role;
+    const savedShift = localStorage.getItem('orange-hotel-shift');
     if (savedRole) setRole(savedRole);
+    if (savedShift) setShift(savedShift);
     setMounted(true);
   }, []);
 
@@ -42,16 +45,18 @@ export default function OverviewPage() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Daily Performance Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, {role.charAt(0).toUpperCase() + role.slice(1)}. Management overview for Orange Hotel.</p>
+          <h1 className="text-3xl font-black tracking-tight">Operations Overview</h1>
+          <p className="text-muted-foreground">Monitoring active performance for {role === 'cashier' ? `${shift} shift` : role}.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="bg-white border-muted">
-            <Clock className="w-4 h-4 mr-2" />
-            Shift: Day (08:00 - 16:00)
-          </Button>
-          <Button size="sm" className="bg-primary hover:bg-primary/90">
-            Export Report
+          {shift && (
+            <Badge variant="outline" className="bg-white border-primary text-primary px-3 py-1 font-bold uppercase tracking-tight">
+              <Clock className="w-3 h-3 mr-2" />
+              {shift} Shift
+            </Badge>
+          )}
+          <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6">
+            Generate Report
           </Button>
         </div>
       </header>
@@ -131,7 +136,7 @@ export default function OverviewPage() {
                     <Badge 
                       variant="outline" 
                       className={cn(
-                        "text-[10px] capitalize",
+                        "text-[10px] capitalize font-bold",
                         room.status === 'available' && "bg-green-50 text-green-700 border-green-200",
                         room.status === 'occupied' && "bg-blue-50 text-blue-700 border-blue-200",
                         room.status === 'cleaning' && "bg-orange-50 text-orange-700 border-orange-200",
@@ -148,13 +153,13 @@ export default function OverviewPage() {
         </div>
 
         <div className="space-y-8">
-          <Card className="bg-secondary text-white shadow-lg overflow-hidden relative">
+          <Card className="bg-secondary text-white shadow-lg overflow-hidden relative border-none">
             <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 Recent Activity
               </CardTitle>
-              <CardDescription className="text-muted-foreground text-xs">Internal operations log</CardDescription>
+              <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Security Log</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">

@@ -45,13 +45,13 @@ export function SidebarNav({ role }: { role: Role }) {
 
   return (
     <div className="flex flex-col h-full bg-secondary text-white border-r border-sidebar-border w-64 fixed left-0 top-0 z-40">
-      <div className="p-6 flex justify-center">
+      <div className="p-8 flex justify-center">
         <Link href="/dashboard" className="group">
-          <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-inner">
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-2xl">
             {logo && (
               <Image 
                 src={logo.imageUrl} 
-                alt="Orange Hotel Logo" 
+                alt="Logo" 
                 width={80} 
                 height={80} 
                 className="object-contain"
@@ -63,8 +63,8 @@ export function SidebarNav({ role }: { role: Role }) {
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        <div className="text-xs font-semibold text-muted-foreground uppercase px-3 py-2">
-          Menu
+        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-3 py-4">
+          Terminal Menu
         </div>
         {filteredNav.map((item) => {
           const isActive = pathname === item.href;
@@ -73,19 +73,19 @@ export function SidebarNav({ role }: { role: Role }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group",
+                "flex items-center gap-3 px-3 py-3 rounded-xl transition-all group mb-1",
                 isActive 
-                  ? "bg-sidebar-accent text-primary" 
+                  ? "bg-primary text-white shadow-lg shadow-primary/20" 
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
               )}
             >
               <item.icon className={cn(
                 "w-5 h-5 transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                isActive ? "text-white" : "text-muted-foreground group-hover:text-primary"
               )} />
-              <span className="font-medium">{item.label}</span>
+              <span className="font-bold text-sm tracking-tight">{item.label}</span>
               {isActive && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               )}
             </Link>
           );
@@ -93,26 +93,31 @@ export function SidebarNav({ role }: { role: Role }) {
       </nav>
 
       <div className="p-4 border-t border-sidebar-border mt-auto">
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent mb-4">
-          <div className="w-8 h-8 rounded-full bg-muted overflow-hidden relative border border-white/20">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-sidebar-accent mb-4 border border-white/5">
+          <div className="w-9 h-9 rounded-lg bg-muted overflow-hidden relative border border-white/20">
             <Image 
-              src={`https://picsum.photos/seed/${role}/50/50`} 
+              src={`https://picsum.photos/seed/${role}/100/100`} 
               alt="avatar" 
               fill 
               className="object-cover"
             />
           </div>
           <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-semibold truncate">{role.charAt(0).toUpperCase() + role.slice(1)}</span>
-            <span className="text-xs text-muted-foreground">Online</span>
+            <span className="text-xs font-black truncate uppercase tracking-tight">{role}</span>
+            <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest flex items-center gap-1">
+              <div className="w-1 h-1 rounded-full bg-green-500" /> Active
+            </span>
           </div>
         </div>
         <button 
-          onClick={() => window.location.href = '/'}
-          className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+          onClick={() => {
+            localStorage.clear();
+            window.location.href = '/';
+          }}
+          className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors font-bold text-xs uppercase tracking-widest"
         >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Logout</span>
+          <LogOut className="w-4 h-4" />
+          <span>Exit Session</span>
         </button>
       </div>
     </div>

@@ -1,11 +1,11 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Role } from "@/app/lib/mock-data";
-import { Bell, Search, User } from "lucide-react";
+import { Bell, Search, User, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 export default function DashboardLayout({
   children,
@@ -13,11 +13,14 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [role, setRole] = useState<Role>('manager');
+  const [shift, setShift] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const savedRole = localStorage.getItem('orange-hotel-role') as Role;
+    const savedShift = localStorage.getItem('orange-hotel-shift');
     if (savedRole) setRole(savedRole);
+    if (savedShift) setShift(savedShift);
     setMounted(true);
   }, []);
 
@@ -33,13 +36,19 @@ export default function DashboardLayout({
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
-                placeholder="Search rooms, staff, or inventory..." 
-                className="pl-10 h-9 bg-muted/50 border-none focus-visible:ring-primary" 
+                placeholder="Search resources..." 
+                className="pl-10 h-9 bg-muted/50 border-none focus-visible:ring-primary text-sm" 
               />
             </div>
           </div>
 
           <div className="flex items-center gap-6">
+            {shift && (
+              <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-primary text-primary px-2">
+                <Clock className="w-3 h-3 mr-1" /> {shift}
+              </Badge>
+            )}
+            
             <div className="flex items-center gap-4 text-muted-foreground">
               <button className="relative p-2 hover:bg-muted rounded-full transition-colors">
                 <Bell className="w-5 h-5" />
@@ -49,10 +58,10 @@ export default function DashboardLayout({
             
             <div className="flex items-center gap-3 border-l pl-6">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold leading-none">{role.charAt(0).toUpperCase() + role.slice(1)} Dashboard</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Orange Hotel Official</p>
+                <p className="text-sm font-black leading-none uppercase tracking-tight">{role}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase tracking-widest">Active Session</p>
               </div>
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white">
+              <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-white shadow-lg">
                 <User className="w-5 h-5" />
               </div>
             </div>
