@@ -23,18 +23,31 @@ export default function Home() {
 
   const handleSelectRole = (role: Role) => {
     setSelectedRole(role);
-    if (role !== 'cashier') {
-      localStorage.setItem('orange-hotel-role', role);
-      localStorage.removeItem('orange-hotel-shift');
-    }
   };
 
   const handleLogin = (role: Role) => {
     localStorage.setItem('orange-hotel-role', role);
     if (role === 'cashier') {
       localStorage.setItem('orange-hotel-shift', shift);
+      window.location.href = '/dashboard/cashier';
+      return;
     }
-    window.location.href = '/dashboard';
+
+    localStorage.removeItem('orange-hotel-shift');
+    switch (role) {
+      case 'manager':
+        window.location.href = '/dashboard';
+        break;
+      case 'inventory':
+        window.location.href = '/dashboard/inventory';
+        break;
+      case 'kitchen':
+        window.location.href = '/dashboard/kitchen';
+        break;
+      case 'barista':
+        window.location.href = '/dashboard/barista';
+        break;
+    }
   };
 
   const logo = useMemo(() => PlaceHolderImages.find(img => img.id === 'app-logo'), []);
@@ -101,7 +114,7 @@ export default function Home() {
                 </div>
               ) : (
                 <button
-                  onClick={() => handleSelectRole(role.id)}
+                  onClick={() => role.id === 'cashier' ? handleSelectRole(role.id) : handleLogin(role.id)}
                   className="mt-2 flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-primary group-hover:translate-x-1 transition-transform text-left"
                 >
                   {role.id === 'cashier' ? 'Configure Shift →' : 'Enter Dashboard →'}

@@ -9,12 +9,12 @@ export interface User {
 }
 
 export const USERS: User[] = [
-  { id: 'u1', name: 'Alex Rivera', role: 'manager', avatar: 'https://picsum.photos/seed/u1/100/100' },
-  { id: 'u2', name: 'Sara Jenkins', role: 'inventory', avatar: 'https://picsum.photos/seed/u2/100/100' },
-  { id: 'u3', name: 'Mike Ross (Day)', role: 'cashier', avatar: 'https://picsum.photos/seed/u3/100/100' },
-  { id: 'u4', name: 'Rachel Zane (Night)', role: 'cashier', avatar: 'https://picsum.photos/seed/u4/100/100' },
-  { id: 'u5', name: 'Chef Gordon', role: 'kitchen', avatar: 'https://picsum.photos/seed/u5/100/100' },
-  { id: 'u6', name: 'Barista James', role: 'barista', avatar: 'https://picsum.photos/seed/u6/100/100' },
+  { id: 'u1', name: 'Alex Rivera', role: 'manager', avatar: '/logo.jpeg' },
+  { id: 'u2', name: 'Sara Jenkins', role: 'inventory', avatar: '/logo.jpeg' },
+  { id: 'u3', name: 'Mike Ross (Day)', role: 'cashier', avatar: '/logo.jpeg' },
+  { id: 'u4', name: 'Rachel Zane (Night)', role: 'cashier', avatar: '/logo.jpeg' },
+  { id: 'u5', name: 'Chef Gordon', role: 'kitchen', avatar: '/logo.jpeg' },
+  { id: 'u6', name: 'Barista James', role: 'barista', avatar: '/logo.jpeg' },
 ];
 
 export interface Room {

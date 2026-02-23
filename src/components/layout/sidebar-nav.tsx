@@ -105,7 +105,7 @@ export function SidebarNav({ role }: { role: Role }) {
         <div className="flex items-center gap-3 p-3 rounded-xl bg-sidebar-accent mb-4 border border-white/5">
           <div className="w-9 h-9 rounded-lg bg-muted overflow-hidden relative border border-white/20">
             <Image 
-              src={`https://picsum.photos/seed/${role}/100/100`} 
+              src="/logo.jpeg" 
               alt="User Avatar" 
               fill 
               className="object-cover"

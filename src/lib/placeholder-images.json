@@ -3,20 +3,20 @@
     {
       "id": "app-logo",
       "description": "Orange Hotel Official Logo",
-      "imageUrl": "https://images.unsplash.com/photo-1557800636-894a64c1696f?auto=format&fit=crop&q=80&w=1000",
-      "imageHint": "orange fruit"
+      "imageUrl": "/logo.jpeg",
+      "imageHint": "orange hotel logo"
     },
     {
       "id": "hotel-lobby",
       "description": "Orange Hotel Lobby",
-      "imageUrl": "https://images.unsplash.com/photo-1583953458882-302655b5c376?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxob3RlbCUyMGxvYmJ5fGVufDB8fHx8MTc3MTc0Mjg1M3ww&ixlib=rb-4.1.0&q=80&w=1080",
-      "imageHint": "hotel lobby"
+      "imageUrl": "/logo.jpeg",
+      "imageHint": "orange hotel logo"
     },
     {
       "id": "avatar-manager",
       "description": "Hotel Manager Avatar",
-      "imageUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cHJvZmVzc2lvbmFsJTIwbWFufGVufDB8fHx8MTc3MTgwOTEzNHww&ixlib=rb-4.1.0&q=80&w=1080",
-      "imageHint": "professional man"
+      "imageUrl": "/logo.jpeg",
+      "imageHint": "orange hotel logo"
     }
   ]
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Role } from "@/app/lib/mock-data";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,17 +13,49 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [role, setRole] = useState<Role>('manager');
   const [shift, setShift] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  const allowedByRole: Record<Role, string[]> = {
+    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/kitchen', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
+    inventory: ['/dashboard/inventory'],
+    cashier: ['/dashboard/cashier', '/dashboard/rooms'],
+    kitchen: ['/dashboard/kitchen'],
+    barista: ['/dashboard/barista'],
+  };
+
+  const defaultByRole: Record<Role, string> = {
+    manager: '/dashboard',
+    inventory: '/dashboard/inventory',
+    cashier: '/dashboard/cashier',
+    kitchen: '/dashboard/kitchen',
+    barista: '/dashboard/barista',
+  };
+
   useEffect(() => {
     const savedRole = localStorage.getItem('orange-hotel-role') as Role;
     const savedShift = localStorage.getItem('orange-hotel-shift');
-    if (savedRole) setRole(savedRole);
+    if (!savedRole) {
+      router.replace('/');
+      return;
+    }
+
+    setRole(savedRole);
     if (savedShift) setShift(savedShift);
     setMounted(true);
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    const allowedRoutes = allowedByRole[role];
+    if (!allowedRoutes.includes(pathname)) {
+      router.replace(defaultByRole[role]);
+    }
+  }, [mounted, pathname, role, router]);
 
   if (!mounted) return null;
 
