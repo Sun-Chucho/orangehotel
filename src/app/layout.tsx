@@ -2,8 +2,8 @@ import type {Metadata} from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Orange Hotel Internal Management',
-  description: 'Professional internal hospitality management system for Orange Hotel.',
+  title: 'Orange Hotel Management',
+  description: 'Internal hospitality management system for Orange Hotel.',
 };
 
 export default function RootLayout({

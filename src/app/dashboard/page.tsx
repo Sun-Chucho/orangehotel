@@ -159,7 +159,7 @@ export default function OverviewPage() {
               <CardTitle className="text-lg flex items-center gap-2">
                 Recent Activity
               </CardTitle>
-              <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Security Log</CardDescription>
+              <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Log</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">

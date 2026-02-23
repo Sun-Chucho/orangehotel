@@ -22,9 +22,8 @@ export default function Home() {
   const [shift, setShift] = useState<'day' | 'night'>('day');
 
   const handleSelectRole = (role: Role) => {
-    if (role === 'cashier') {
-      setSelectedRole('cashier');
-    } else {
+    setSelectedRole(role);
+    if (role !== 'cashier') {
       localStorage.setItem('orange-hotel-role', role);
       localStorage.removeItem('orange-hotel-shift');
     }
@@ -56,7 +55,7 @@ export default function Home() {
               />
             )}
           </div>
-          <p className="text-muted-foreground text-sm uppercase tracking-widest font-bold">
+          <p className="text-muted-foreground text-xs uppercase tracking-widest font-bold">
             Internal Operations Portal
           </p>
         </div>
@@ -80,13 +79,13 @@ export default function Home() {
               {role.id === 'cashier' && selectedRole === 'cashier' ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="flex flex-col gap-2">
-                    <span className="text-xs font-bold uppercase text-muted-foreground">Select Shift</span>
+                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Select Shift</span>
                     <Tabs defaultValue="day" onValueChange={(v) => setShift(v as any)} className="w-full">
                       <TabsList className="grid w-full grid-cols-2 bg-muted h-12">
-                        <TabsTrigger value="day" className="flex items-center gap-2">
+                        <TabsTrigger value="day" className="flex items-center gap-2 font-bold">
                           <Sun className="w-4 h-4" /> Day
                         </TabsTrigger>
-                        <TabsTrigger value="night" className="flex items-center gap-2">
+                        <TabsTrigger value="night" className="flex items-center gap-2 font-bold">
                           <Moon className="w-4 h-4" /> Night
                         </TabsTrigger>
                       </TabsList>
@@ -100,13 +99,12 @@ export default function Home() {
                   </Button>
                 </div>
               ) : (
-                <Link
-                  href={role.id === 'cashier' ? '#' : '/dashboard'}
+                <button
                   onClick={() => handleSelectRole(role.id)}
-                  className="mt-2 flex items-center text-xs font-bold uppercase tracking-wider text-primary group-hover:translate-x-1 transition-transform"
+                  className="mt-2 flex items-center text-xs font-black uppercase tracking-widest text-primary group-hover:translate-x-1 transition-transform text-left"
                 >
                   {role.id === 'cashier' ? 'Configure Shift →' : 'Enter Dashboard →'}
-                </Link>
+                </button>
               )}
             </div>
           ))}

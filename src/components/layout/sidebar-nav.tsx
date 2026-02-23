@@ -64,7 +64,7 @@ export function SidebarNav({ role }: { role: Role }) {
 
       <nav className="flex-1 px-3 space-y-1">
         <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-3 py-4">
-          Terminal Menu
+          Management
         </div>
         {filteredNav.map((item) => {
           const isActive = pathname === item.href;
