@@ -4,8 +4,8 @@
     {
       "id": "app-logo",
       "description": "Orange Hotel Official Logo",
-      "imageUrl": "https://images.unsplash.com/photo-1557800636-894a64c1696f?auto=format&fit=crop&q=80&w=1000",
-      "imageHint": "orange fruit"
+      "imageUrl": "/logo.jpeg",
+      "imageHint": "orange hotel logo"
     },
     {
       "id": "hotel-lobby",
