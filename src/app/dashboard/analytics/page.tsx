@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,10 +33,10 @@ const COLORS = ['#F57C00', '#000000', '#FFB74D', '#333333'];
 
 export default function AnalyticsPage() {
   const pieData = [
-    { name: 'Room Revenue', value: 8200 },
-    { name: 'Food & Drinks', value: 3400 },
-    { name: 'Services', value: 1200 },
-    { name: 'Other', value: 800 },
+    { name: 'Room Revenue', value: 8200000 },
+    { name: 'Food & Drinks', value: 3400000 },
+    { name: 'Services', value: 1200000 },
+    { name: 'Other', value: 800000 },
   ];
 
   return (
@@ -48,15 +47,15 @@ export default function AnalyticsPage() {
             <BarChart3 className="w-7 h-7 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight">Performance Analytics</h1>
+            <h1 className="text-3xl font-black tracking-tight uppercase">Performance Analytics</h1>
             <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Business intelligence & trends</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="font-bold">
+          <Button variant="outline" size="sm" className="font-black uppercase tracking-widest text-[10px]">
             <Filter className="w-4 h-4 mr-2" /> Custom Range
           </Button>
-          <Button size="sm" className="bg-primary font-bold">
+          <Button size="sm" className="bg-primary font-black uppercase tracking-widest text-[10px]">
             <Download className="w-4 h-4 mr-2" /> Export Report
           </Button>
         </div>
@@ -64,12 +63,12 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Avg Daily Revenue', value: '$2,840', trend: '+14%', icon: DollarSign },
+          { label: 'Avg Daily Revenue', value: 'TSh 2,840,000', trend: '+14%', icon: DollarSign },
           { label: 'Weekly Growth', value: '22.4%', trend: '+4%', icon: TrendingUp },
           { label: 'Total Guests', value: '1,248', trend: '+8%', icon: Users },
           { label: 'Booking Freq', value: '8.2/day', trend: '-2%', icon: Calendar },
         ].map((stat, i) => (
-          <Card key={i} className="border-none shadow-sm hover:shadow-md transition-shadow">
+          <Card key={i} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-2">
                 <div className="p-2 rounded-lg bg-muted/50 text-primary">
@@ -79,17 +78,17 @@ export default function AnalyticsPage() {
                   {stat.trend}
                 </span>
               </div>
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-              <h4 className="text-2xl font-black mt-1 tracking-tight">{stat.value}</h4>
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
+              <h4 className="text-xl font-black mt-1 tracking-tight">{stat.value}</h4>
             </CardContent>
           </Card>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-sm">
+        <Card className="lg:col-span-2 shadow-sm border-none bg-white">
           <CardHeader>
-            <CardTitle className="text-xl font-black">Revenue Trend</CardTitle>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Trend</CardTitle>
             <CardDescription>Daily financial performance for the last 7 days</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
@@ -103,19 +102,22 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} fontSize={12} tickFormatter={(v) => new Date(v).toLocaleDateString('en-US', { weekday: 'short' })} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={12} tickFormatter={(v) => `$${v}`} />
-                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                  <Area type="monotone" dataKey="totalRevenue" stroke="#F57C00" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} fontSize={10} fontWeight="bold" tickFormatter={(v) => new Date(v).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()} />
+                  <YAxis axisLine={false} tickLine={false} fontSize={10} fontWeight="bold" tickFormatter={(v) => `TSh ${v/1000}k`} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 32px rgba(0,0,0,0.1)', fontWeight: 'bold' }} 
+                    formatter={(v: any) => [`TSh ${v.toLocaleString()}`, "Revenue"]}
+                  />
+                  <Area type="monotone" dataKey="totalRevenue" stroke="#F57C00" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card className="shadow-sm border-none bg-white">
           <CardHeader>
-            <CardTitle className="text-xl font-black">Revenue Mix</CardTitle>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Mix</CardTitle>
             <CardDescription>Income distribution by department</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
@@ -127,26 +129,27 @@ export default function AnalyticsPage() {
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
+                    outerRadius={90}
+                    paddingAngle={8}
                     dataKey="value"
+                    stroke="none"
                   >
                     {pieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(v: any) => [`TSh ${v.toLocaleString()}`, "Value"]} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="grid grid-cols-2 gap-4 w-full mt-4">
+            <div className="grid grid-cols-1 gap-4 w-full mt-6 border-t pt-6">
               {pieData.map((item, i) => (
-                <div key={i} className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">{item.name}</span>
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.name}</span>
                   </div>
-                  <span className="text-sm font-black ml-4">${item.value}</span>
+                  <span className="text-sm font-black">TSh {item.value.toLocaleString()}</span>
                 </div>
               ))}
             </div>

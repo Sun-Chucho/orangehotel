@@ -35,9 +35,9 @@ export default function OverviewPage() {
   if (!mounted) return null;
 
   const stats = [
-    { label: 'Total Revenue', value: '$4,285', icon: DollarSign, trend: '+12%', trendUp: true, color: 'text-green-500' },
+    { label: 'Total Revenue', value: 'TSh 4,285,000', icon: DollarSign, trend: '+12%', trendUp: true, color: 'text-green-500' },
     { label: 'Room Occupancy', value: '82%', icon: BedDouble, trend: '+5%', trendUp: true, color: 'text-blue-500' },
-    { label: 'Food & Drinks', value: '$1,120', icon: TrendingUp, trend: '-2%', trendUp: false, color: 'text-orange-500' },
+    { label: 'Food & Drinks', value: 'TSh 1,120,000', icon: TrendingUp, trend: '-2%', trendUp: false, color: 'text-orange-500' },
     { label: 'Staff on Duty', value: '18', icon: Users, trend: 'Normal', trendUp: true, color: 'text-purple-500' },
   ];
 
@@ -45,7 +45,7 @@ export default function OverviewPage() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Operations Overview</h1>
+          <h1 className="text-3xl font-black tracking-tight uppercase">Operations Overview</h1>
           <p className="text-muted-foreground">Monitoring active performance for {role === 'cashier' ? `${shift} shift` : role}.</p>
         </div>
         <div className="flex gap-2">
@@ -76,8 +76,8 @@ export default function OverviewPage() {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                <h3 className="text-2xl font-bold mt-1 tracking-tight">{stat.value}</h3>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                <h3 className="text-2xl font-black mt-1 tracking-tight">{stat.value}</h3>
               </div>
             </CardContent>
           </Card>
@@ -90,7 +90,7 @@ export default function OverviewPage() {
             <Card className="shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg">Inventory Alerts</CardTitle>
+                  <CardTitle className="text-lg font-black uppercase tracking-tight">Inventory Alerts</CardTitle>
                   <CardDescription>Items below threshold levels</CardDescription>
                 </div>
                 <AlertCircle className="w-5 h-5 text-destructive" />
@@ -99,16 +99,16 @@ export default function OverviewPage() {
                 {INVENTORY.filter(i => i.stock < i.minStock).map(item => (
                   <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-orange-100 bg-orange-50/30">
                     <div className="flex flex-col">
-                      <span className="text-sm font-semibold">{item.name}</span>
-                      <span className="text-xs text-muted-foreground">{item.category}</span>
+                      <span className="text-sm font-bold">{item.name}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-black">{item.category}</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-destructive">{item.stock} {item.unit}</p>
-                      <p className="text-[10px] text-muted-foreground italic">Min: {item.minStock}</p>
+                      <p className="text-sm font-black text-destructive">{item.stock} {item.unit}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Min: {item.minStock}</p>
                     </div>
                   </div>
                 ))}
-                <Button variant="link" className="w-full text-xs text-primary" asChild>
+                <Button variant="link" className="w-full text-xs text-primary font-black uppercase tracking-widest" asChild>
                   <Link href="/dashboard/inventory">Manage Inventory <ChevronRight className="w-3 h-3 ml-1" /></Link>
                 </Button>
               </CardContent>
@@ -117,7 +117,7 @@ export default function OverviewPage() {
             <Card className="shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg">Housekeeping</CardTitle>
+                  <CardTitle className="text-lg font-black uppercase tracking-tight">Housekeeping</CardTitle>
                   <CardDescription>Real-time room status update</CardDescription>
                 </div>
                 <BedDouble className="w-5 h-5 text-primary" />
@@ -126,17 +126,17 @@ export default function OverviewPage() {
                 {ROOMS.slice(0, 4).map(room => (
                   <div key={room.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center font-bold text-sm">
+                      <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center font-black text-sm">
                         {room.number}
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground leading-none">{room.type}</p>
+                        <p className="text-[10px] text-muted-foreground leading-none font-black uppercase tracking-tighter">{room.type}</p>
                       </div>
                     </div>
                     <Badge 
                       variant="outline" 
                       className={cn(
-                        "text-[10px] capitalize font-bold",
+                        "text-[10px] capitalize font-black uppercase tracking-tighter",
                         room.status === 'available' && "bg-green-50 text-green-700 border-green-200",
                         room.status === 'occupied' && "bg-blue-50 text-blue-700 border-blue-200",
                         room.status === 'cleaning' && "bg-orange-50 text-orange-700 border-orange-200",
@@ -156,7 +156,7 @@ export default function OverviewPage() {
           <Card className="bg-secondary text-white shadow-lg overflow-hidden relative border-none">
             <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 font-black uppercase tracking-tight">
                 Recent Activity
               </CardTitle>
               <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Log</CardDescription>
@@ -172,12 +172,12 @@ export default function OverviewPage() {
                   <div key={i} className="flex gap-3 relative">
                     {i !== 3 && <div className="absolute left-4 top-8 bottom-[-24px] w-0.5 bg-sidebar-accent" />}
                     <div className="w-8 h-8 rounded-full bg-sidebar-accent shrink-0 flex items-center justify-center border border-white/10 z-10">
-                      <span className="text-[10px] font-bold">{log.user[0]}</span>
+                      <span className="text-[10px] font-black">{log.user[0]}</span>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold">{log.user}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{log.action}</p>
-                      <p className="text-[9px] text-primary mt-1 flex items-center gap-1 uppercase tracking-widest font-bold">
+                      <p className="text-xs font-black uppercase tracking-tighter">{log.user}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{log.action}</p>
+                      <p className="text-[9px] text-primary mt-1 flex items-center gap-1 uppercase tracking-widest font-black">
                         <Clock className="w-2 h-2" /> {log.time}
                       </p>
                     </div>
