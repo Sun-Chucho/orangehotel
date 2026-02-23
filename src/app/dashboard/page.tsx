@@ -25,7 +25,7 @@ export default function OverviewPage() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('orangeflow-role') as Role;
+    const savedRole = localStorage.getItem('orange-hotel-role') as Role;
     if (savedRole) setRole(savedRole);
     setMounted(true);
   }, []);
@@ -44,10 +44,10 @@ export default function OverviewPage() {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Daily Performance Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, {role.charAt(0).toUpperCase() + role.slice(1)}. Here is what's happening at Orange Hotel today.</p>
+          <p className="text-muted-foreground">Welcome back, {role.charAt(0).toUpperCase() + role.slice(1)}. Management overview for Orange Hotel.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="bg-white">
+          <Button variant="outline" size="sm" className="bg-white border-muted">
             <Clock className="w-4 h-4 mr-2" />
             Shift: Day (08:00 - 16:00)
           </Button>
@@ -81,10 +81,8 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Analytics Area */}
         <div className="lg:col-span-2 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Low Stock Widget */}
             <Card className="shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -112,7 +110,6 @@ export default function OverviewPage() {
               </CardContent>
             </Card>
 
-            {/* Room Status Widget */}
             <Card className="shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -151,7 +148,6 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* Sidebar Area */}
         <div className="space-y-8">
           <Card className="bg-secondary text-white shadow-lg overflow-hidden relative">
             <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />

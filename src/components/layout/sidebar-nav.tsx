@@ -97,7 +97,7 @@ export function SidebarNav({ role }: { role: Role }) {
 
       <div className="p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent mb-4">
-          <div className="w-8 h-8 rounded-full bg-muted overflow-hidden relative">
+          <div className="w-8 h-8 rounded-full bg-muted overflow-hidden relative border border-white/20">
             <Image 
               src={`https://picsum.photos/seed/${role}/50/50`} 
               alt="avatar" 
@@ -107,7 +107,7 @@ export function SidebarNav({ role }: { role: Role }) {
           </div>
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm font-semibold truncate">{role.charAt(0).toUpperCase() + role.slice(1)}</span>
-            <span className="text-xs text-muted-foreground">Connected</span>
+            <span className="text-xs text-muted-foreground">Online</span>
           </div>
         </div>
         <button 

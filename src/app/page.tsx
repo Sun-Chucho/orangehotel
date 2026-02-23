@@ -17,7 +17,7 @@ const ROLES: { id: Role; label: string; icon: any; color: string; desc: string }
 
 export default function Home() {
   const handleSelectRole = (role: Role) => {
-    localStorage.setItem('orangeflow-role', role);
+    localStorage.setItem('orange-hotel-role', role);
   };
 
   const logo = PlaceHolderImages.find(img => img.id === 'app-logo');

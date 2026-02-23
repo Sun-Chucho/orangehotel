@@ -12,12 +12,11 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Simplified role management for the demo
   const [role, setRole] = useState<Role>('manager');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('orangeflow-role') as Role;
+    const savedRole = localStorage.getItem('orange-hotel-role') as Role;
     if (savedRole) setRole(savedRole);
     setMounted(true);
   }, []);
@@ -29,7 +28,6 @@ export default function DashboardLayout({
       <SidebarNav role={role} />
       
       <div className="flex-1 ml-64 flex flex-col">
-        {/* Top Header */}
         <header className="h-16 bg-white border-b sticky top-0 z-30 flex items-center justify-between px-8 shadow-sm">
           <div className="flex items-center gap-4 w-1/3">
             <div className="relative w-full max-w-sm">
@@ -61,7 +59,6 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 p-8">
           {children}
         </main>
