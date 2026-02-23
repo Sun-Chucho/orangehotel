@@ -43,7 +43,7 @@ export default function OverviewPage() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-headline font-black tracking-tight">Daily Performance Dashboard</h1>
+          <h1 className="text-3xl font-black tracking-tight">Daily Performance Dashboard</h1>
           <p className="text-muted-foreground">Welcome back, {role.charAt(0).toUpperCase() + role.slice(1)}. Here is what's happening at Orange Hotel today.</p>
         </div>
         <div className="flex gap-2">
@@ -157,17 +157,17 @@ export default function OverviewPage() {
             <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                Recent Shift Activity
+                Recent Activity
               </CardTitle>
-              <CardDescription className="text-muted-foreground">Log of actions across all roles</CardDescription>
+              <CardDescription className="text-muted-foreground text-xs">Internal operations log</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
                 {[
-                  { user: 'Cashier Day', action: 'Checked-in Guest Room 204', time: '12 min ago' },
-                  { user: 'Kitchen POS', action: 'New Order: Grilled Salmon x2', time: '15 min ago' },
-                  { user: 'Manager', action: 'Approved Stock Purchase #402', time: '45 min ago' },
-                  { user: 'Barista', action: 'Item Served: Iced Latte', time: '1 hour ago' },
+                  { user: 'Reception', action: 'Guest Room 204 checked in', time: '12m ago' },
+                  { user: 'Kitchen', action: 'Order #242 served', time: '15m ago' },
+                  { user: 'Manager', action: 'Stock audit completed', time: '45m ago' },
+                  { user: 'Housekeeping', action: 'Room 103 cleaned', time: '1h ago' },
                 ].map((log, i) => (
                   <div key={i} className="flex gap-3 relative">
                     {i !== 3 && <div className="absolute left-4 top-8 bottom-[-24px] w-0.5 bg-sidebar-accent" />}

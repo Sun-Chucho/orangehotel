@@ -26,23 +26,20 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="mb-12">
-          <div className="w-32 h-32 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-xl rotate-3 hover:rotate-0 transition-transform mb-8 overflow-hidden p-2">
+          <div className="w-48 h-48 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl rotate-2 hover:rotate-0 transition-all duration-500 mb-12 overflow-hidden p-4">
             {logo ? (
               <Image 
                 src={logo.imageUrl} 
                 alt="Orange Hotel Logo" 
-                width={120} 
-                height={120} 
+                width={180} 
+                height={180} 
                 className="object-contain"
                 data-ai-hint={logo.imageHint}
               />
             ) : (
-              <Hotel className="w-16 h-16 text-primary" />
+              <Hotel className="w-24 h-24 text-primary" />
             )}
           </div>
-          <h1 className="text-5xl font-headline font-black tracking-tight mb-4">
-            Orange<span className="text-primary">Flow</span>
-          </h1>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto">
             Internal Management & Operations System for <span className="text-primary font-bold">Orange Hotel</span>. 
             Select your role to access your dedicated workspace.

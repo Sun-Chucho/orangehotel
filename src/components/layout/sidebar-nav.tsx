@@ -46,25 +46,22 @@ export function SidebarNav({ role }: { role: Role }) {
 
   return (
     <div className="flex flex-col h-full bg-secondary text-white border-r border-sidebar-border w-64 fixed left-0 top-0 z-40">
-      <div className="p-6">
-        <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 group-hover:scale-105 transition-transform overflow-hidden">
+      <div className="p-6 flex justify-center">
+        <Link href="/dashboard" className="group">
+          <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-inner">
             {logo ? (
               <Image 
                 src={logo.imageUrl} 
                 alt="Orange Hotel Logo" 
-                width={40} 
-                height={40} 
+                width={80} 
+                height={80} 
                 className="object-contain"
                 data-ai-hint={logo.imageHint}
               />
             ) : (
-              <Hotel className="w-6 h-6 text-primary" />
+              <Hotel className="w-12 h-12 text-primary" />
             )}
           </div>
-          <span className="font-headline font-bold text-xl tracking-tight text-white">
-            Orange<span className="text-primary">Flow</span>
-          </span>
         </Link>
       </div>
 
