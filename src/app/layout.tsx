@@ -3,8 +3,8 @@ import type {Metadata} from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Orange Hotel Management',
-  description: 'Internal hospitality management system for Orange Hotel.',
+  title: 'Orange Hotel | Secure Booking',
+  description: 'Book Standard and Platinum rooms online at Orange Hotel.',
 };
 
 export default function RootLayout({
