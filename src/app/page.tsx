@@ -29,26 +29,26 @@ const dayDiff = (checkIn: string, checkOut: string) => {
 
 const destinationCards = [
   {
-    title: "Business District",
-    description: "Minutes from corporate centers and executive meeting venues.",
+    title: "Luxury Rooms",
+    description: "Elegant Standard and Platinum stays designed for rest, privacy, and comfort.",
     image:
       "https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?auto=format&fit=crop&w=900&q=80",
   },
   {
-    title: "Coastal Leisure",
-    description: "Easy access to scenic waterfront routes and quiet evening escapes.",
+    title: "Signature Restaurant",
+    description: "Fresh breakfast, lunch, and dinner menus prepared by our in-house culinary team.",
     image:
       "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
   },
   {
-    title: "Cultural Core",
-    description: "Close to city landmarks, galleries, and curated local experiences.",
+    title: "Cocktail Bar",
+    description: "A refined evening bar experience with classic pours, mocktails, and lounge service.",
     image:
       "https://images.unsplash.com/photo-1526481280695-3c469867e5f3?auto=format&fit=crop&w=900&q=80",
   },
   {
-    title: "Airport Link",
-    description: "Fast transit corridors for efficient arrivals and departures.",
+    title: "Events & Private Dining",
+    description: "Host business dinners, celebrations, and group bookings with curated service options.",
     image:
       "https://images.unsplash.com/photo-1569949381669-ecf31ae8e613?auto=format&fit=crop&w=900&q=80",
   },
@@ -56,20 +56,20 @@ const destinationCards = [
 
 const stories = [
   {
-    title: "Evening Calm At Orange Lounge",
-    tag: "Guest Experience",
+    title: "Chef Specials This Week",
+    tag: "Restaurant",
     image:
       "https://images.unsplash.com/photo-1551776235-dde6d4829808?auto=format&fit=crop&w=900&q=80",
   },
   {
-    title: "Platinum Floor Details",
-    tag: "Design",
+    title: "Platinum Room Experience",
+    tag: "Hotel",
     image:
       "https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=700&q=80",
   },
   {
-    title: "Chef Table Highlights",
-    tag: "Dining",
+    title: "Friday Bar Nights",
+    tag: "Bar & Lounge",
     image:
       "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=700&q=80",
   },
@@ -201,8 +201,8 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-6 py-14">
         <div className="mb-8 text-center">
-          <h2 className="font-headline text-4xl">Destinations</h2>
-          <p className="mt-2 text-sm text-black/65">Where Orange Hotel connects you to work, culture, and escape.</p>
+          <h2 className="font-headline text-4xl">What We Offer</h2>
+          <p className="mt-2 text-sm text-black/65">Premium hotel accommodation, restaurant dining, and bar experiences in one destination.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {destinationCards.map((card) => (
@@ -230,15 +230,15 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
           <div className="relative flex h-full max-w-xl flex-col justify-center px-8 text-white md:px-12">
-            <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Space</p>
-            <h2 className="mt-3 font-headline text-4xl">A Palace-Like Retreat For The Modern Traveler</h2>
-            <p className="mt-4 text-sm text-white/85">Refined textures, calm lighting, and carefully designed private areas for complete comfort.</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Experience</p>
+            <h2 className="mt-3 font-headline text-4xl">Stay Well, Dine Better, Unwind At The Bar</h2>
+            <p className="mt-4 text-sm text-white/85">From check-in to last call, Orange Hotel delivers a complete hospitality experience under one roof.</p>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
-        <h2 className="font-headline text-4xl">Our Stories</h2>
+        <h2 className="font-headline text-4xl">Latest Highlights</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-[1.3fr_0.8fr_0.9fr]">
           {stories.map((story) => (
             <article key={story.title} className="group relative min-h-[280px] overflow-hidden rounded-sm">
@@ -255,9 +255,9 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="rounded-sm bg-[#1c1c1c] px-6 py-16 text-center text-white md:px-10">
-          <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Premium Category</p>
-          <h2 className="mt-3 font-headline text-5xl">Sensational Suites</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Choose between Standard and Platinum categories, each designed for elegant rest and high-function travel.</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Orange Experience</p>
+          <h2 className="mt-3 font-headline text-5xl">Rooms, Restaurant, And Bar</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Book your stay, enjoy chef-crafted meals, and relax with signature drinks in our lounge bar.</p>
           <a href="#book" className="mt-8 inline-block border-b border-orange-300 pb-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
             Discover More
           </a>
@@ -267,13 +267,13 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="grid rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
           <div className="px-8 py-12 text-center">
-            <h3 className="font-headline text-3xl">Instant Benefits</h3>
+            <h3 className="font-headline text-3xl">Comfortable Stays</h3>
           </div>
           <div className="border-y border-white/20 px-8 py-12 text-center md:border-x md:border-y-0">
-            <h3 className="font-headline text-3xl">Discovery Deals</h3>
+            <h3 className="font-headline text-3xl">Great Dining</h3>
           </div>
           <div className="px-8 py-12 text-center">
-            <h3 className="font-headline text-3xl">Live Local</h3>
+            <h3 className="font-headline text-3xl">Evening Bar Vibes</h3>
           </div>
         </div>
       </section>
