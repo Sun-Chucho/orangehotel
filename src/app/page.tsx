@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { CheckCircle2, LoaderCircle, ShieldCheck, Star, Sparkles, Car, UtensilsCrossed, Wifi, Waves } from "lucide-react";
+import { CheckCircle2, LoaderCircle, MapPin, ShieldCheck, Star } from "lucide-react";
 
 const INVENTORY = {
   total: 53,
@@ -27,41 +27,51 @@ const dayDiff = (checkIn: string, checkOut: string) => {
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 };
 
-const gallery = [
+const destinationCards = [
   {
-    src: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1400&q=80",
-    alt: "Luxury hotel lounge",
+    title: "Business District",
+    description: "Minutes from corporate centers and executive meeting venues.",
+    image:
+      "https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?auto=format&fit=crop&w=900&q=80",
   },
   {
-    src: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=80",
-    alt: "Modern hotel suite",
+    title: "Coastal Leisure",
+    description: "Easy access to scenic waterfront routes and quiet evening escapes.",
+    image:
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
   },
   {
-    src: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80",
-    alt: "Premium bedroom interior",
+    title: "Cultural Core",
+    description: "Close to city landmarks, galleries, and curated local experiences.",
+    image:
+      "https://images.unsplash.com/photo-1526481280695-3c469867e5f3?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    title: "Airport Link",
+    description: "Fast transit corridors for efficient arrivals and departures.",
+    image:
+      "https://images.unsplash.com/photo-1569949381669-ecf31ae8e613?auto=format&fit=crop&w=900&q=80",
   },
 ];
 
-const amenityCards = [
+const stories = [
   {
-    icon: Wifi,
-    title: "Ultra-Fast Wi-Fi",
-    description: "Reliable high-speed connection throughout rooms and public spaces.",
+    title: "Evening Calm At Orange Lounge",
+    tag: "Guest Experience",
+    image:
+      "https://images.unsplash.com/photo-1551776235-dde6d4829808?auto=format&fit=crop&w=900&q=80",
   },
   {
-    icon: UtensilsCrossed,
-    title: "Chef Curated Dining",
-    description: "Fresh local and international menu options available all day.",
+    title: "Platinum Floor Details",
+    tag: "Design",
+    image:
+      "https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=700&q=80",
   },
   {
-    icon: Car,
-    title: "Airport Transfers",
-    description: "Planned pickup and drop-off support for stress-free arrivals.",
-  },
-  {
-    icon: Waves,
-    title: "Wellness Comfort",
-    description: "Quiet atmosphere and recovery-focused spaces for deep relaxation.",
+    title: "Chef Table Highlights",
+    tag: "Dining",
+    image:
+      "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=700&q=80",
   },
 ];
 
@@ -141,158 +151,140 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#fffaf5_45%,#ffffff_100%)] text-black">
-      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/70 backdrop-blur-xl">
+    <main className="bg-[#f8f6f3] text-black">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/20 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo.jpeg" alt="Orange Hotel logo" width={42} height={42} className="rounded-lg border border-black/15" priority />
+          <Link href="/" className="flex items-center gap-3 text-white">
+            <Image src="/logo.jpeg" alt="Orange Hotel logo" width={42} height={42} className="rounded-lg border border-white/40" priority />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-black/60">Orange Hotel</p>
-              <p className="text-sm font-black uppercase">Luxury Booking</p>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-white/70">Orange Hotel</p>
+              <p className="font-headline text-lg leading-none">Signature Stay</p>
             </div>
           </Link>
-          <div className="flex items-center gap-3">
-            <a href="#book" className="hidden rounded-xl border border-black/20 bg-white/60 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] backdrop-blur sm:inline-block">
-              Book Now
+          <nav className="flex items-center gap-3">
+            <a href="#book" className="rounded-full border border-white/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white">
+              Reserve
             </a>
-            <Link href="/staff" className="rounded-xl border border-black/20 bg-black/75 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-white backdrop-blur transition hover:bg-orange-500/90">
-              StaffLogin
+            <Link href="/staff" className="rounded-full bg-orange-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white transition hover:bg-orange-400">
+              Staff Login
             </Link>
-          </div>
+          </nav>
         </div>
       </header>
 
-      <section className="relative overflow-hidden border-b border-black/10 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.24),transparent_42%)]">
-        <div className="absolute -left-10 top-16 h-48 w-48 rounded-full bg-orange-400/20 blur-3xl" />
-        <div className="absolute right-2 top-24 h-56 w-56 rounded-full bg-black/10 blur-3xl" />
+      <section className="relative min-h-[92vh] overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=1800&q=80"
+          alt="Orange Hotel exterior and surroundings"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(130deg,rgba(0,0,0,0.58)_15%,rgba(0,0,0,0.25)_55%,rgba(245,124,0,0.32)_100%)]" />
 
-        <div className="relative mx-auto grid max-w-6xl gap-8 px-6 py-14 md:grid-cols-[1.1fr_1fr] md:py-20">
-          <div className="animate-in fade-in slide-in-from-left-4 duration-700">
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] backdrop-blur">
-              <ShieldCheck className="h-4 w-4 text-orange-500" /> Secure Online Booking
+        <div className="relative mx-auto flex min-h-[92vh] max-w-6xl items-end px-6 pb-16 pt-28">
+          <div className="max-w-2xl text-white animate-in fade-in slide-in-from-bottom-6 duration-700">
+            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/45 px-4 py-2 text-xs uppercase tracking-[0.16em]">
+              <ShieldCheck className="h-4 w-4 text-orange-300" /> Verified Secure Reservations
             </p>
-            <h1 className="text-4xl font-black uppercase leading-tight tracking-tight md:text-6xl">
-              Orange Hotel
-              <span className="block text-orange-500">World-Class Comfort In Tanzania</span>
-            </h1>
-            <p className="mt-6 max-w-xl text-sm leading-relaxed text-black/70 md:text-base">
-              A polished sanctuary for business and leisure travelers. Enjoy serene architecture, elevated room comfort, personalized service,
-              and a seamless reservation journey from your first click to your final checkout.
+            <h1 className="font-headline text-5xl leading-tight md:text-7xl">Orange Hotel</h1>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/85 md:text-base">
+              Elevated stays for business and leisure travelers in Tanzania, with quiet luxury interiors and seamless digital booking.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#book" className="rounded-xl bg-black/80 px-5 py-3 text-xs font-black uppercase tracking-[0.15em] text-white backdrop-blur transition hover:bg-orange-500/90">
-                Reserve Your Stay
-              </a>
-              <span className="rounded-xl border border-black/15 bg-white/65 px-5 py-3 text-xs font-bold uppercase tracking-[0.15em] backdrop-blur">53 Premium Rooms</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-right-4 duration-700">
-            <div className="col-span-2 overflow-hidden rounded-2xl border border-black/10 bg-white/50 shadow-xl backdrop-blur-sm">
-              <Image src={gallery[0].src} alt={gallery[0].alt} width={800} height={450} className="h-56 w-full object-cover" />
-            </div>
-            <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/50 shadow-lg backdrop-blur-sm">
-              <Image src={gallery[1].src} alt={gallery[1].alt} width={500} height={380} className="h-44 w-full object-cover" />
-            </div>
-            <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/50 shadow-lg backdrop-blur-sm">
-              <Image src={gallery[2].src} alt={gallery[2].alt} width={500} height={380} className="h-44 w-full object-cover" />
+            <div className="mt-7 flex flex-wrap gap-3 text-xs uppercase tracking-[0.16em]">
+              <span className="rounded-full bg-white/20 px-4 py-2 backdrop-blur">53 Premium Rooms</span>
+              <span className="rounded-full bg-orange-500/90 px-4 py-2">Standard + Platinum</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <article className="rounded-2xl border border-black/15 bg-white/70 p-5 shadow-lg backdrop-blur-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-black/60">Total Rooms</p>
-            <p className="mt-2 text-3xl font-black">{INVENTORY.total}</p>
-          </article>
-          <article className="rounded-2xl border border-orange-500/40 bg-orange-500/85 p-5 text-white shadow-lg backdrop-blur-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">Standard</p>
-            <p className="mt-2 text-3xl font-black">{INVENTORY.standard.count}</p>
-            <p className="mt-2 text-xs font-semibold">{formatTzs(INVENTORY.standard.price)} / night</p>
-          </article>
-          <article className="rounded-2xl border border-black/20 bg-black/75 p-5 text-white shadow-lg backdrop-blur-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Platinum</p>
-            <p className="mt-2 text-3xl font-black">{INVENTORY.platinum.count}</p>
-            <p className="mt-2 text-xs font-semibold">{formatTzs(INVENTORY.platinum.price)} / night</p>
-          </article>
+      <section className="mx-auto max-w-6xl px-6 py-14">
+        <div className="mb-8 text-center">
+          <h2 className="font-headline text-4xl">Destinations</h2>
+          <p className="mt-2 text-sm text-black/65">Where Orange Hotel connects you to work, culture, and escape.</p>
         </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-6 py-4">
-        <div className="grid gap-4 md:grid-cols-4">
-          {amenityCards.map((item) => (
-            <article key={item.title} className="rounded-2xl border border-black/10 bg-white/65 p-5 shadow-md backdrop-blur-md">
-              <item.icon className="h-5 w-5 text-orange-500" />
-              <h3 className="mt-3 text-lg font-black uppercase">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-black/65">{item.description}</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {destinationCards.map((card) => (
+            <article key={card.title} className="group overflow-hidden rounded-sm bg-white shadow-[0_18px_35px_rgba(0,0,0,0.08)]">
+              <div className="relative h-64">
+                <Image src={card.image} alt={card.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4 text-white">
+                  <h3 className="font-headline text-2xl leading-tight">{card.title}</h3>
+                  <p className="mt-2 text-xs text-white/80">{card.description}</p>
+                </div>
+              </div>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-12">
-        <div className="rounded-3xl border border-black/10 bg-black/70 p-8 text-white shadow-xl backdrop-blur-lg md:p-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">Guest Favorites</p>
-          <h2 className="mt-2 text-3xl font-black uppercase">Why Travelers Choose Orange Hotel</h2>
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/20 bg-white/5 p-5 backdrop-blur-sm">
-              <div className="mb-2 flex gap-1 text-orange-300">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className="h-4 w-4 fill-current" />)}</div>
-              <p className="text-sm text-white/90">"Elegant rooms, smooth booking, and excellent service. Exactly what I needed."</p>
-            </div>
-            <div className="rounded-2xl border border-white/20 bg-white/5 p-5 backdrop-blur-sm">
-              <div className="mb-2 flex gap-1 text-orange-300">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className="h-4 w-4 fill-current" />)}</div>
-              <p className="text-sm text-white/90">"Quiet, clean, and professional. Platinum room quality was outstanding."</p>
-            </div>
-            <div className="rounded-2xl border border-white/20 bg-white/5 p-5 backdrop-blur-sm">
-              <div className="mb-2 flex gap-1 text-orange-300">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className="h-4 w-4 fill-current" />)}</div>
-              <p className="text-sm text-white/90">"Fast reservation confirmation and friendly reception team throughout my stay."</p>
-            </div>
+      <section className="mx-auto max-w-6xl px-6 pb-14">
+        <div className="relative h-[360px] overflow-hidden rounded-sm">
+          <Image
+            src="https://images.unsplash.com/photo-1600617547577-a486a2dbaee2?auto=format&fit=crop&w=1800&q=80"
+            alt="Signature interior"
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
+          <div className="relative flex h-full max-w-xl flex-col justify-center px-8 text-white md:px-12">
+            <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Space</p>
+            <h2 className="mt-3 font-headline text-4xl">A Palace-Like Retreat For The Modern Traveler</h2>
+            <p className="mt-4 text-sm text-white/85">Refined textures, calm lighting, and carefully designed private areas for complete comfort.</p>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-2">
-        <div className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-2xl border border-black/10 bg-white/70 p-5 shadow-md backdrop-blur-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Experience</p>
-            <h3 className="mt-2 text-xl font-black uppercase">Designed For Calm</h3>
-            <p className="mt-2 text-sm leading-relaxed text-black/65">From your arrival welcome to evening turndown, every moment is tailored for ease and comfort.</p>
-          </article>
-          <article className="rounded-2xl border border-black/10 bg-white/70 p-5 shadow-md backdrop-blur-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Location</p>
-            <h3 className="mt-2 text-xl font-black uppercase">Connected Yet Quiet</h3>
-            <p className="mt-2 text-sm leading-relaxed text-black/65">Access business hubs, transport links, and key city attractions while staying in peaceful surroundings.</p>
-          </article>
-          <article className="rounded-2xl border border-black/10 bg-white/70 p-5 shadow-md backdrop-blur-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Promise</p>
-            <h3 className="mt-2 text-xl font-black uppercase">Trust Every Detail</h3>
-            <p className="mt-2 text-sm leading-relaxed text-black/65">Secure payments, validated reservations, transparent pricing, and attentive service standards.</p>
-          </article>
+      <section className="mx-auto max-w-6xl px-6 pb-14">
+        <h2 className="font-headline text-4xl">Our Stories</h2>
+        <div className="mt-6 grid gap-4 md:grid-cols-[1.3fr_0.8fr_0.9fr]">
+          {stories.map((story) => (
+            <article key={story.title} className="group relative min-h-[280px] overflow-hidden rounded-sm">
+              <Image src={story.image} alt={story.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+              <div className="absolute bottom-4 left-4 right-4 text-white">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200">{story.tag}</p>
+                <h3 className="mt-2 font-headline text-2xl leading-tight">{story.title}</h3>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-12">
-        <div className="rounded-3xl border border-orange-300/60 bg-orange-50/80 p-8 backdrop-blur-md md:p-10">
-          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-orange-700">
-            <Sparkles className="h-4 w-4" /> Signature Service
-          </p>
-          <h2 className="mt-3 text-3xl font-black uppercase leading-tight">A Premium Stay That Feels Personal</h2>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-black/70 md:text-base">
-            Whether you choose Standard or Platinum, your booking includes professional support, high hygiene standards, and an atmosphere crafted
-            for productivity and renewal. Our concierge can assist with transport, special room arrangements, and local recommendations.
-          </p>
+      <section className="mx-auto max-w-6xl px-6 pb-14">
+        <div className="rounded-sm bg-[#1c1c1c] px-6 py-16 text-center text-white md:px-10">
+          <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Premium Category</p>
+          <h2 className="mt-3 font-headline text-5xl">Sensational Suites</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Choose between Standard and Platinum categories, each designed for elegant rest and high-function travel.</p>
+          <a href="#book" className="mt-8 inline-block border-b border-orange-300 pb-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
+            Discover More
+          </a>
         </div>
       </section>
 
-      <section id="book" className="mx-auto grid max-w-6xl gap-8 px-6 pb-16 md:grid-cols-[1fr_1.1fr]">
-        <aside className="rounded-3xl border border-black/15 bg-black/70 p-7 text-white shadow-xl backdrop-blur-lg">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">Booking Preview</p>
-          <h2 className="mt-3 text-2xl font-black uppercase">Your Stay</h2>
-          <div className="mt-8 space-y-5 text-sm">
+      <section className="mx-auto max-w-6xl px-6 pb-14">
+        <div className="grid rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
+          <div className="px-8 py-12 text-center">
+            <h3 className="font-headline text-3xl">Instant Benefits</h3>
+          </div>
+          <div className="border-y border-white/20 px-8 py-12 text-center md:border-x md:border-y-0">
+            <h3 className="font-headline text-3xl">Discovery Deals</h3>
+          </div>
+          <div className="px-8 py-12 text-center">
+            <h3 className="font-headline text-3xl">Live Local</h3>
+          </div>
+        </div>
+      </section>
+
+      <section id="book" className="mx-auto grid max-w-6xl gap-8 px-6 pb-16 md:grid-cols-[0.95fr_1.05fr]">
+        <aside className="rounded-sm border border-black/15 bg-black p-8 text-white shadow-xl">
+          <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Booking Preview</p>
+          <h2 className="mt-3 font-headline text-4xl">Your Stay</h2>
+          <div className="mt-8 space-y-4 text-sm">
             <div className="flex items-center justify-between border-b border-white/15 pb-3">
-              <span className="text-white/70">Room type</span>
+              <span className="text-white/70">Room Type</span>
               <strong className="uppercase">{roomType}</strong>
             </div>
             <div className="flex items-center justify-between border-b border-white/15 pb-3">
@@ -308,28 +300,38 @@ export default function Home() {
               <strong className="text-orange-300">{formatTzs(total)}</strong>
             </div>
           </div>
+
+          <div className="mt-8 space-y-3 rounded-sm border border-white/10 bg-white/5 p-4 text-sm">
+            <p className="inline-flex items-center gap-2 text-orange-200"><MapPin className="h-4 w-4" /> Prime City Access</p>
+            <div className="flex items-center gap-1 text-orange-300">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className="h-4 w-4 fill-current" />
+              ))}
+            </div>
+            <p className="text-white/75">Guests highlight quiet spaces, smooth arrival process, and excellent room standards.</p>
+          </div>
         </aside>
 
-        <form onSubmit={handleSubmit} className="rounded-3xl border border-black/10 bg-white/80 p-7 shadow-[0_20px_45px_rgba(0,0,0,0.08)] backdrop-blur-xl">
-          <h2 className="text-2xl font-black uppercase">Book Your Room</h2>
-          <p className="mt-2 text-sm text-black/60">Secure reservation form. Instant submission to hotel booking backend.</p>
+        <form onSubmit={handleSubmit} className="rounded-sm border border-black/10 bg-white p-7 shadow-[0_16px_32px_rgba(0,0,0,0.08)] md:p-8">
+          <h2 className="font-headline text-4xl">Reserve Your Room</h2>
+          <p className="mt-2 text-sm text-black/60">Secure reservation form with instant submission to Orange Hotel booking backend.</p>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold">
               Full name
-              <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-2 w-full rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
+              <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
             </label>
             <label className="text-sm font-semibold">
               Email
-              <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
+              <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
             </label>
             <label className="text-sm font-semibold">
               Phone number
-              <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255..." className="mt-2 w-full rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
+              <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255..." className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
             </label>
             <label className="text-sm font-semibold">
               Guests
-              <select value={guests} onChange={(e) => setGuests(e.target.value)} className="mt-2 w-full rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2">
+              <select value={guests} onChange={(e) => setGuests(e.target.value)} className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2">
                 <option value="1">1 Guest</option>
                 <option value="2">2 Guests</option>
                 <option value="3">3 Guests</option>
@@ -339,25 +341,33 @@ export default function Home() {
             <label className="text-sm font-semibold sm:col-span-2">
               Room type
               <div className="mt-2 grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => setRoomType("standard")} className={`rounded-xl border px-4 py-3 text-sm font-bold uppercase transition ${roomType === "standard" ? "border-orange-500 bg-orange-500 text-white" : "border-black/20 bg-white/70 text-black hover:border-black"}`}>
+                <button
+                  type="button"
+                  onClick={() => setRoomType("standard")}
+                  className={`rounded-sm border px-4 py-3 text-sm font-bold uppercase transition ${roomType === "standard" ? "border-orange-500 bg-orange-500 text-white" : "border-black/20 bg-white text-black hover:border-black"}`}
+                >
                   Standard
                 </button>
-                <button type="button" onClick={() => setRoomType("platinum")} className={`rounded-xl border px-4 py-3 text-sm font-bold uppercase transition ${roomType === "platinum" ? "border-orange-500 bg-orange-500 text-white" : "border-black/20 bg-white/70 text-black hover:border-black"}`}>
+                <button
+                  type="button"
+                  onClick={() => setRoomType("platinum")}
+                  className={`rounded-sm border px-4 py-3 text-sm font-bold uppercase transition ${roomType === "platinum" ? "border-orange-500 bg-orange-500 text-white" : "border-black/20 bg-white text-black hover:border-black"}`}
+                >
                   Platinum
                 </button>
               </div>
             </label>
             <label className="text-sm font-semibold">
               Check-in
-              <input required type="date" min={minDate} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-2 w-full rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
+              <input required type="date" min={minDate} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
             </label>
             <label className="text-sm font-semibold">
               Check-out
-              <input required type="date" min={checkIn || minDate} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-2 w-full rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
+              <input required type="date" min={checkIn || minDate} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
             </label>
             <label className="text-sm font-semibold sm:col-span-2">
               Special request (optional)
-              <textarea rows={3} maxLength={400} value={specialRequest} onChange={(e) => setSpecialRequest(e.target.value)} className="mt-2 w-full resize-none rounded-xl border border-black/20 bg-white/70 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
+              <textarea rows={3} maxLength={400} value={specialRequest} onChange={(e) => setSpecialRequest(e.target.value)} className="mt-2 w-full resize-none rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2" />
             </label>
             <label className="hidden" aria-hidden="true">
               Website
@@ -365,43 +375,44 @@ export default function Home() {
             </label>
           </div>
 
-          {error ? <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+          {error ? <p className="mt-5 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
           {successRef ? (
-            <p className="mt-5 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            <p className="mt-5 flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               <CheckCircle2 className="h-4 w-4" /> Booking received. Reference: <strong>{successRef}</strong>
             </p>
           ) : null}
 
-          <button disabled={loading} type="submit" className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black/80 px-5 py-4 text-sm font-black uppercase tracking-[0.14em] text-white backdrop-blur transition hover:bg-orange-500/95 disabled:cursor-not-allowed disabled:opacity-70">
+          <button
+            disabled={loading}
+            type="submit"
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 bg-black px-5 py-4 text-sm font-bold uppercase tracking-[0.15em] text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-70"
+          >
             {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
             {loading ? "Submitting..." : "Securely Book Now"}
           </button>
         </form>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-16">
-        <div className="rounded-3xl border border-black/10 bg-white/70 p-8 shadow-md backdrop-blur-md">
-          <h3 className="text-2xl font-black uppercase">Frequently Asked Questions</h3>
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <article>
-              <p className="font-bold uppercase">What time is check-in/check-out?</p>
-              <p className="mt-1 text-sm text-black/65">Check-in starts at 2:00 PM and check-out is at 11:00 AM. Early check-in is based on availability.</p>
-            </article>
-            <article>
-              <p className="font-bold uppercase">How is my booking secured?</p>
-              <p className="mt-1 text-sm text-black/65">All submissions pass server-side validation and are forwarded directly to our booking backend.</p>
-            </article>
-            <article>
-              <p className="font-bold uppercase">Can I request special arrangements?</p>
-              <p className="mt-1 text-sm text-black/65">Yes. Use the special request field and our team will review it before confirmation.</p>
-            </article>
-            <article>
-              <p className="font-bold uppercase">Need assistance now?</p>
-              <p className="mt-1 text-sm text-black/65">Submit your booking and our front desk follows up quickly with confirmation details.</p>
-            </article>
+      <footer className="bg-[#0f0f0f] text-white">
+        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-12 md:grid-cols-3">
+          <div>
+            <h3 className="font-headline text-3xl">Orange Hotel</h3>
+            <p className="mt-3 text-sm text-white/70">A modern luxury stay shaped around comfort, precision service, and secure online booking.</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Contact</p>
+            <p className="mt-3 text-sm text-white/80">frontdesk@orangehotel.co.tz</p>
+            <p className="text-sm text-white/80">+255 700 000 000</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Quick Links</p>
+            <div className="mt-3 space-y-2 text-sm text-white/80">
+              <a href="#book" className="block hover:text-orange-300">Book Now</a>
+              <Link href="/staff" className="block hover:text-orange-300">Staff Login</Link>
+            </div>
           </div>
         </div>
-      </section>
+      </footer>
     </main>
   );
 }
