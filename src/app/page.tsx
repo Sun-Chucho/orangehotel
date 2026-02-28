@@ -44,7 +44,7 @@ const destinationCards = [
     title: "Cocktail Bar",
     description: "A refined evening bar experience with classic pours, mocktails, and lounge service.",
     image:
-      "https://images.unsplash.com/photo-1526481280695-3c469867e5f3?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=900&q=80",
   },
   {
     title: "Events & Private Dining",
@@ -59,7 +59,7 @@ const stories = [
     title: "Chef Specials This Week",
     tag: "Restaurant",
     image:
-      "https://images.unsplash.com/photo-1551776235-dde6d4829808?auto=format&fit=crop&w=900&q=80",
+      "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=900&q=80",
   },
   {
     title: "Platinum Room Experience",
@@ -223,7 +223,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="relative h-[360px] overflow-hidden rounded-sm">
           <Image
-            src="https://images.unsplash.com/photo-1600617547577-a486a2dbaee2?auto=format&fit=crop&w=1800&q=80"
+            src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1800&q=80"
             alt="Signature interior"
             fill
             className="object-cover"
