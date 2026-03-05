@@ -34,7 +34,7 @@ export default function RoomsPage() {
 
   const [newNumber, setNewNumber] = useState("");
   const [newType, setNewType] = useState<Room["type"]>("Standard");
-  const [newPrice, setNewPrice] = useState("150");
+  const [newPrice, setNewPrice] = useState("70000");
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
@@ -76,7 +76,7 @@ export default function RoomsPage() {
     setRooms((current) => [room, ...current]);
     setNewNumber("");
     setNewType("Standard");
-    setNewPrice("150");
+    setNewPrice("70000");
   };
 
   const getStatusIcon = (status: Room["status"]) => {
@@ -104,10 +104,17 @@ export default function RoomsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <Input value={newNumber} onChange={(event) => setNewNumber(event.target.value)} placeholder="Room #" className="h-10" />
-          <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={newType} onChange={(event) => setNewType(event.target.value as Room["type"])}>
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={newType}
+            onChange={(event) => {
+              const nextType = event.target.value as Room["type"];
+              setNewType(nextType);
+              setNewPrice(nextType === "Standard" ? "70000" : "100000");
+            }}
+          >
             <option value="Standard">Standard</option>
-            <option value="Deluxe">Deluxe</option>
-            <option value="Suite">Suite</option>
+            <option value="Platinum">Platinum</option>
           </select>
           <Input value={newPrice} onChange={(event) => setNewPrice(event.target.value)} type="number" min="1" placeholder="Price" className="h-10" />
           <Button className="bg-primary hover:bg-primary/90 font-black uppercase tracking-widest h-10" onClick={addRoom}>

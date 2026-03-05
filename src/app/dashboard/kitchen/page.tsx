@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { INVENTORY, InventoryItem } from "@/app/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ const KITCHEN_MENU: KitchenMenuItem[] = [
 
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
+const STORAGE_ITEMS = "orange-hotel-inventory-items";
 
 function formatAgo(timestamp: number): string {
   const elapsedMs = Date.now() - timestamp;
@@ -87,6 +89,9 @@ export default function KitchenPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [ticketSeq, setTicketSeq] = useState(300);
+  const [kitchenInventory, setKitchenInventory] = useState<InventoryItem[]>(
+    INVENTORY.filter((item) => item.category === "Kitchen"),
+  );
 
   useEffect(() => {
     const savedTickets = localStorage.getItem(STORAGE_TICKETS);
@@ -108,6 +113,19 @@ export default function KitchenPage() {
       if (!Number.isNaN(parsedSeq) && parsedSeq > 0) {
         setTicketSeq(parsedSeq);
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    const savedItems = localStorage.getItem(STORAGE_ITEMS);
+    if (!savedItems) return;
+    try {
+      const parsed = JSON.parse(savedItems) as InventoryItem[];
+      if (Array.isArray(parsed)) {
+        setKitchenInventory(parsed.filter((item) => item.category === "Kitchen"));
+      }
+    } catch {
+      setKitchenInventory(INVENTORY.filter((item) => item.category === "Kitchen"));
     }
   }, []);
 
@@ -447,6 +465,27 @@ export default function KitchenPage() {
             <CardDescription>Prepare and dispatch a kitchen order</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="rounded-xl border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+                Kitchen Inventory (Auto-filled)
+              </p>
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                {kitchenInventory.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-xs">
+                    <span className="font-bold">{item.name}</span>
+                    <span className="font-black uppercase tracking-wider">
+                      {item.stock} {item.unit}
+                    </span>
+                  </div>
+                ))}
+                {kitchenInventory.length === 0 && (
+                  <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
+                    No kitchen inventory items
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Destination</label>
               <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Table 1 or Room 204" />

@@ -15,6 +15,10 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: 'Orange Hotel | Secure Booking',
   description: 'Book Standard and Platinum rooms online at Orange Hotel.',
+  icons: {
+    icon: '/logo.jpeg',
+    shortcut: '/logo.jpeg',
+  },
 };
 
 export default function RootLayout({

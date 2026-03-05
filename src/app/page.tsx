@@ -165,9 +165,6 @@ export default function Home() {
             <a href="#book" className="rounded-full border border-white/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white">
               Reserve
             </a>
-            <Link href="/staff" className="rounded-full bg-orange-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white transition hover:bg-orange-400">
-              Staff Login
-            </Link>
           </nav>
         </div>
       </header>

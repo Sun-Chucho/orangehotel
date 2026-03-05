@@ -20,19 +20,47 @@ export const USERS: User[] = [
 export interface Room {
   id: string;
   number: string;
-  type: 'Standard' | 'Deluxe' | 'Suite';
+  type: 'Standard' | 'Platinum';
   status: 'available' | 'occupied' | 'cleaning' | 'maintenance';
   price: number;
 }
 
-export const ROOMS: Room[] = [
-  { id: 'r101', number: '101', type: 'Standard', status: 'occupied', price: 150 },
-  { id: 'r102', number: '102', type: 'Standard', status: 'available', price: 150 },
-  { id: 'r103', number: '103', type: 'Deluxe', status: 'cleaning', price: 250 },
-  { id: 'r104', number: '104', type: 'Suite', status: 'available', price: 450 },
-  { id: 'r201', number: '201', type: 'Deluxe', status: 'occupied', price: 250 },
-  { id: 'r202', number: '202', type: 'Suite', status: 'maintenance', price: 450 },
-];
+const STANDARD_ROOM_PRICE = 70000;
+const PLATINUM_ROOM_PRICE = 100000;
+
+const standardRooms: Room[] = Array.from({ length: 20 }, (_, index) => {
+  const number = String(101 + index);
+  let status: Room["status"] = "available";
+  if (index < 5) status = "occupied";
+  if (index >= 5 && index < 7) status = "cleaning";
+  if (index === 19) status = "maintenance";
+
+  return {
+    id: `r${number}`,
+    number,
+    type: "Standard",
+    status,
+    price: STANDARD_ROOM_PRICE,
+  };
+});
+
+const platinumRooms: Room[] = Array.from({ length: 33 }, (_, index) => {
+  const number = String(201 + index);
+  let status: Room["status"] = "available";
+  if (index < 8) status = "occupied";
+  if (index >= 8 && index < 11) status = "cleaning";
+  if (index === 32) status = "maintenance";
+
+  return {
+    id: `r${number}`,
+    number,
+    type: "Platinum",
+    status,
+    price: PLATINUM_ROOM_PRICE,
+  };
+});
+
+export const ROOMS: Room[] = [...standardRooms, ...platinumRooms];
 
 export interface InventoryItem {
   id: string;

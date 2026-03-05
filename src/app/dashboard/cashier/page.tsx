@@ -52,16 +52,15 @@ interface Transaction {
 }
 
 const SERVICES: ServiceItem[] = [
-  { id: "s1", name: "Standard Room Booking", price: 150000, category: "rooms" },
-  { id: "s2", name: "Deluxe Room Booking", price: 250000, category: "rooms" },
-  { id: "s3", name: "Suite Room Booking", price: 450000, category: "rooms" },
-  { id: "s4", name: "Late Checkout Fee", price: 50000, category: "fees" },
-  { id: "s5", name: "Airport Transfer", price: 35000, category: "transport" },
-  { id: "s6", name: "City Shuttle", price: 20000, category: "transport" },
-  { id: "s7", name: "Spa Day Pass", price: 80000, category: "wellness" },
-  { id: "s8", name: "Laundry Express", price: 20000, category: "fees" },
-  { id: "s9", name: "Dinner Buffet", price: 45000, category: "food" },
-  { id: "s10", name: "Breakfast Voucher", price: 25000, category: "food" },
+  { id: "s1", name: "Standard Room Booking", price: 70000, category: "rooms" },
+  { id: "s2", name: "Platinum Room Booking", price: 100000, category: "rooms" },
+  { id: "s3", name: "Late Checkout Fee", price: 50000, category: "fees" },
+  { id: "s4", name: "Airport Transfer", price: 35000, category: "transport" },
+  { id: "s5", name: "City Shuttle", price: 20000, category: "transport" },
+  { id: "s6", name: "Spa Day Pass", price: 80000, category: "wellness" },
+  { id: "s7", name: "Laundry Express", price: 20000, category: "fees" },
+  { id: "s8", name: "Dinner Buffet", price: 45000, category: "food" },
+  { id: "s9", name: "Breakfast Voucher", price: 25000, category: "food" },
 ];
 
 const STORAGE_TX = "orange-hotel-cashier-transactions";

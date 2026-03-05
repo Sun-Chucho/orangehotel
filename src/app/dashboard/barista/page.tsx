@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { INVENTORY, InventoryItem } from "@/app/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ const MENU: MenuItem[] = [
 
 const STORAGE_ORDERS = "orange-hotel-barista-orders";
 const STORAGE_SEQ = "orange-hotel-barista-seq";
+const STORAGE_ITEMS = "orange-hotel-inventory-items";
 
 function formatAgo(timestamp: number): string {
   const elapsedMs = Date.now() - timestamp;
@@ -94,6 +96,9 @@ export default function BaristaPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [orders, setOrders] = useState<BaristaOrder[]>([]);
   const [ticketSeq, setTicketSeq] = useState(490);
+  const [baristaInventory, setBaristaInventory] = useState<InventoryItem[]>(
+    INVENTORY.filter((item) => item.category === "Bar"),
+  );
 
   useEffect(() => {
     const savedOrders = localStorage.getItem(STORAGE_ORDERS);
@@ -115,6 +120,19 @@ export default function BaristaPage() {
       if (!Number.isNaN(parsedSeq) && parsedSeq > 0) {
         setTicketSeq(parsedSeq);
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    const savedItems = localStorage.getItem(STORAGE_ITEMS);
+    if (!savedItems) return;
+    try {
+      const parsed = JSON.parse(savedItems) as InventoryItem[];
+      if (Array.isArray(parsed)) {
+        setBaristaInventory(parsed.filter((item) => item.category === "Bar"));
+      }
+    } catch {
+      setBaristaInventory(INVENTORY.filter((item) => item.category === "Bar"));
     }
   }, []);
 
@@ -429,6 +447,27 @@ export default function BaristaPage() {
             <CardDescription>Build and submit a beverage order</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="rounded-xl border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+                Barista Inventory (Auto-filled)
+              </p>
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                {baristaInventory.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-xs">
+                    <span className="font-bold">{item.name}</span>
+                    <span className="font-black uppercase tracking-wider">
+                      {item.stock} {item.unit}
+                    </span>
+                  </div>
+                ))}
+                {baristaInventory.length === 0 && (
+                  <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
+                    No barista inventory items
+                  </p>
+                )}
+              </div>
+            </div>
+
             {cart.length === 0 ? (
               <div className="h-44 rounded-xl border border-dashed flex flex-col items-center justify-center text-center opacity-40">
                 <Receipt className="w-10 h-10 mb-2" />
