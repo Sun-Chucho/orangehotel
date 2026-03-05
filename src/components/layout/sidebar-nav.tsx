@@ -35,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'cashier'] },
   { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'inventory'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'cashier'] },
-  { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'cashier'] },
+  { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'cashier', 'kitchen'] },
   { label: 'Kitchen POS', href: '/dashboard/kitchen', icon: Utensils, roles: ['manager', 'kitchen'] },
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'kitchen'] },
   { label: 'Barista POS', href: '/dashboard/barista', icon: Coffee, roles: ['manager', 'barista'] },

@@ -10,7 +10,9 @@ import { Receipt } from "lucide-react";
 
 type PaymentsTab = "completed" | "credit";
 type PaymentMethod = "cash" | "card" | "mobile-money";
+type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type TransactionStatus = "completed" | "credit" | "checked-out";
+type KitchenPaymentStatus = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 
 interface BookingRecord {
@@ -30,7 +32,32 @@ interface BookingRecord {
   status: TransactionStatus;
 }
 
-const STORAGE_TX = "orange-hotel-cashier-transactions";
+interface KitchenPaymentRecord {
+  id: string;
+  ticketId: string;
+  code: string;
+  createdAt: number;
+  mode: "restaurant" | "room-service" | "take-away";
+  destination: string;
+  total: number;
+  status: KitchenPaymentStatus;
+  method: KitchenPaymentMethod;
+}
+
+interface PaymentRow {
+  source: "booking" | "kitchen";
+  id: string;
+  ref: string;
+  payer: string;
+  context: string;
+  method: string;
+  amount: number;
+  createdAt: number;
+  status: "completed" | "credit";
+}
+
+const STORAGE_BOOKING_TX = "orange-hotel-cashier-transactions";
+const STORAGE_KITCHEN_PAYMENTS = "orange-hotel-kitchen-payments";
 
 function formatAgo(timestamp: number): string {
   const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
@@ -42,48 +69,125 @@ function formatAgo(timestamp: number): string {
 
 export default function PaymentsPage() {
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("completed");
-  const [transactions, setTransactions] = useState<BookingRecord[]>([]);
+  const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
+  const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
+
+  const [selectedCredit, setSelectedCredit] = useState<{ source: "booking" | "kitchen"; id: string } | null>(null);
+  const [showMethodPopup, setShowMethodPopup] = useState(false);
 
   useEffect(() => {
-    const savedTx = localStorage.getItem(STORAGE_TX);
-    if (!savedTx) return;
+    const savedBookingTx = localStorage.getItem(STORAGE_BOOKING_TX);
+    const savedKitchenPayments = localStorage.getItem(STORAGE_KITCHEN_PAYMENTS);
 
-    try {
-      const parsed = JSON.parse(savedTx) as BookingRecord[];
-      if (Array.isArray(parsed)) {
-        setTransactions(
-          parsed.map((tx) => ({
-            ...tx,
-            status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
-          })),
-        );
+    if (savedBookingTx) {
+      try {
+        const parsed = JSON.parse(savedBookingTx) as BookingRecord[];
+        if (Array.isArray(parsed)) {
+          setBookingTransactions(
+            parsed.map((tx) => ({
+              ...tx,
+              status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
+            })),
+          );
+        }
+      } catch {
+        setBookingTransactions([]);
       }
-    } catch {
-      setTransactions([]);
+    }
+
+    if (savedKitchenPayments) {
+      try {
+        const parsed = JSON.parse(savedKitchenPayments) as KitchenPaymentRecord[];
+        if (Array.isArray(parsed)) {
+          setKitchenPayments(
+            parsed.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })),
+          );
+        }
+      } catch {
+        setKitchenPayments([]);
+      }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_TX, JSON.stringify(transactions));
-  }, [transactions]);
+    localStorage.setItem(STORAGE_BOOKING_TX, JSON.stringify(bookingTransactions));
+  }, [bookingTransactions]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KITCHEN_PAYMENTS, JSON.stringify(kitchenPayments));
+  }, [kitchenPayments]);
+
+  const bookingRows = useMemo<PaymentRow[]>(
+    () =>
+      bookingTransactions.map((tx) => ({
+        source: "booking",
+        id: tx.id,
+        ref: tx.receiptNo,
+        payer: tx.guestName,
+        context: `Room ${tx.roomNumber}`,
+        method: tx.payment,
+        amount: tx.total,
+        createdAt: tx.createdAt,
+        status: tx.status === "credit" ? "credit" : "completed",
+      })),
+    [bookingTransactions],
+  );
+
+  const kitchenRows = useMemo<PaymentRow[]>(
+    () =>
+      kitchenPayments.map((tx) => ({
+        source: "kitchen",
+        id: tx.id,
+        ref: tx.code,
+        payer: "Kitchen Order",
+        context: tx.destination,
+        method: tx.method,
+        amount: tx.total,
+        createdAt: tx.createdAt,
+        status: tx.status,
+      })),
+    [kitchenPayments],
+  );
+
+  const allRows = useMemo(() => [...bookingRows, ...kitchenRows], [bookingRows, kitchenRows]);
 
   const completedPayments = useMemo(
-    () => transactions.filter((tx) => tx.status === "completed" || tx.status === "checked-out"),
-    [transactions],
+    () => allRows.filter((tx) => tx.status === "completed").sort((a, b) => b.createdAt - a.createdAt),
+    [allRows],
   );
   const creditPayments = useMemo(
-    () => transactions.filter((tx) => tx.status === "credit"),
-    [transactions],
+    () => allRows.filter((tx) => tx.status === "credit").sort((a, b) => b.createdAt - a.createdAt),
+    [allRows],
   );
 
-  const totalCompleted = completedPayments.reduce((sum, tx) => sum + tx.total, 0);
-  const totalCredit = creditPayments.reduce((sum, tx) => sum + tx.total, 0);
+  const totalCompleted = completedPayments.reduce((sum, tx) => sum + tx.amount, 0);
+  const totalCredit = creditPayments.reduce((sum, tx) => sum + tx.amount, 0);
 
-  const clearCreditPayment = (id: string) => {
-    if (!window.confirm("Mark this credit payment as cleared?")) return;
-    setTransactions((current) =>
-      current.map((tx) => (tx.id === id ? { ...tx, status: "completed" } : tx)),
-    );
+  const openPaidFlow = (row: PaymentRow) => {
+    setSelectedCredit({ source: row.source, id: row.id });
+    setShowMethodPopup(true);
+  };
+
+  const applyPaidMethod = (method: "cash" | "card" | "mobile") => {
+    if (!selectedCredit) return;
+
+    if (selectedCredit.source === "booking") {
+      const mappedMethod: PaymentMethod = method === "mobile" ? "mobile-money" : method;
+      setBookingTransactions((current) =>
+        current.map((tx) =>
+          tx.id === selectedCredit.id ? { ...tx, status: "completed", payment: mappedMethod } : tx,
+        ),
+      );
+    } else {
+      setKitchenPayments((current) =>
+        current.map((tx) =>
+          tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
+        ),
+      );
+    }
+
+    setShowMethodPopup(false);
+    setSelectedCredit(null);
   };
 
   const rows = paymentsTab === "completed" ? completedPayments : creditPayments;
@@ -131,34 +235,34 @@ export default function PaymentsPage() {
           <Table>
             <TableHeader className="bg-muted/10">
               <TableRow>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Receipt</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Room</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Payment</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Reference</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Payer</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Context</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell className="font-black">{tx.receiptNo}</TableCell>
+                <TableRow key={`${tx.source}-${tx.id}`}>
+                  <TableCell className="font-black">{tx.ref}</TableCell>
                   <TableCell className="font-bold">
-                    <p>{tx.guestName}</p>
+                    <p>{tx.payer}</p>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
                       {formatAgo(tx.createdAt)}
                     </p>
                   </TableCell>
-                  <TableCell className="font-bold">{tx.roomNumber}</TableCell>
-                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{tx.payment}</TableCell>
-                  <TableCell className="font-black">TSh {tx.total.toLocaleString()}</TableCell>
+                  <TableCell className="font-bold">{tx.context}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{tx.method}</TableCell>
+                  <TableCell className="font-black">TSh {tx.amount.toLocaleString()}</TableCell>
                   <TableCell className="text-right">
                     {paymentsTab === "credit" ? (
                       <Button
-                        onClick={() => clearCreditPayment(tx.id)}
+                        onClick={() => openPaidFlow(tx)}
                         className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
                       >
-                        Cleared
+                        Paid
                       </Button>
                     ) : (
                       <Badge className="bg-blue-600 text-white border-blue-600 hover:bg-blue-600">Completed</Badge>
@@ -181,6 +285,31 @@ export default function PaymentsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {showMethodPopup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Select Paid Method</CardTitle>
+              <CardDescription>Choose how this credit was paid</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={() => applyPaidMethod("cash")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Cash
+              </Button>
+              <Button onClick={() => applyPaidMethod("card")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Card
+              </Button>
+              <Button onClick={() => applyPaidMethod("mobile")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Mobile
+              </Button>
+              <Button variant="outline" onClick={() => setShowMethodPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

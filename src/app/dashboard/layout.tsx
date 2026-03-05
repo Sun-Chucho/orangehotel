@@ -25,7 +25,7 @@ export default function DashboardLayout({
     manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/cashier', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
     inventory: ['/dashboard/inventory'],
     cashier: ['/dashboard/cashier', '/dashboard/payments', '/dashboard/rooms'],
-    kitchen: ['/dashboard/kitchen', '/dashboard/cancelled'],
+    kitchen: ['/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/payments'],
     barista: ['/dashboard/barista'],
   };
 

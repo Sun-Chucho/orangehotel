@@ -12,6 +12,8 @@ import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } 
 
 type KitchenCategory = "all" | "breakfast" | "lunch" | "dinner";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
+type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
+type KitchenPaymentStatus = "completed" | "credit";
 
 interface KitchenMenuItem {
   id: string;
@@ -40,6 +42,25 @@ interface CancelledKitchenTicket extends KitchenTicket {
   cancelledAt: number;
 }
 
+interface KitchenPaymentRecord {
+  id: string;
+  ticketId: string;
+  code: string;
+  createdAt: number;
+  mode: ServiceMode;
+  destination: string;
+  total: number;
+  status: KitchenPaymentStatus;
+  method: KitchenPaymentMethod;
+}
+
+interface PendingOrder {
+  mode: ServiceMode;
+  destination: string;
+  lines: Array<{ name: string; qty: number }>;
+  total: number;
+}
+
 const KITCHEN_MENU: KitchenMenuItem[] = [
   { id: "k1", name: "Pancake Platter", price: 22000, category: "breakfast", prepMinutes: 10 },
   { id: "k2", name: "Omelette Deluxe", price: 18000, category: "breakfast", prepMinutes: 8 },
@@ -53,6 +74,7 @@ const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
 const STORAGE_MENU = "orange-hotel-kitchen-menu";
 const STORAGE_CANCELLED = "orange-hotel-kitchen-cancelled-tickets";
+const STORAGE_PAYMENTS = "orange-hotel-kitchen-payments";
 
 const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
   if (value === "breakfast" || value === "lunch" || value === "dinner") return value;
@@ -72,10 +94,16 @@ export default function KitchenPage() {
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [ticketSeq, setTicketSeq] = useState(300);
   const [menuItems, setMenuItems] = useState<KitchenMenuItem[]>(KITCHEN_MENU);
+  const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
+
+  const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  const [showSettlementPopup, setShowSettlementPopup] = useState(false);
+  const [showPayNowPopup, setShowPayNowPopup] = useState(false);
 
   useEffect(() => {
     const savedTickets = localStorage.getItem(STORAGE_TICKETS);
     const savedSeq = localStorage.getItem(STORAGE_SEQ);
+    const savedPayments = localStorage.getItem(STORAGE_PAYMENTS);
 
     if (savedTickets) {
       try {
@@ -89,6 +117,15 @@ export default function KitchenPage() {
     if (savedSeq) {
       const parsedSeq = Number(savedSeq);
       if (!Number.isNaN(parsedSeq) && parsedSeq > 0) setTicketSeq(parsedSeq);
+    }
+
+    if (savedPayments) {
+      try {
+        const parsed = JSON.parse(savedPayments) as KitchenPaymentRecord[];
+        if (Array.isArray(parsed)) setKitchenPayments(parsed);
+      } catch {
+        setKitchenPayments([]);
+      }
     }
   }, []);
 
@@ -113,6 +150,10 @@ export default function KitchenPage() {
   useEffect(() => {
     localStorage.setItem(STORAGE_SEQ, String(ticketSeq));
   }, [ticketSeq]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_PAYMENTS, JSON.stringify(kitchenPayments));
+  }, [kitchenPayments]);
 
   const filteredMenu = useMemo(
     () =>
@@ -177,23 +218,53 @@ export default function KitchenPage() {
       return;
     }
 
-    if (!window.confirm("Place this kitchen order?")) return;
-
-    const nextSeq = ticketSeq + 1;
-    setTicketSeq(nextSeq);
-
-    const ticket: KitchenTicket = {
-      id: `kt-${Date.now()}`,
-      code: `K-${nextSeq}`,
-      createdAt: Date.now(),
+    setPendingOrder({
       mode: serviceMode,
       destination,
       lines: cart.map((line) => ({ name: line.item.name, qty: line.qty })),
       total: subtotal,
+    });
+    setShowSettlementPopup(true);
+  };
+
+  const finalizeOrder = (status: KitchenPaymentStatus, method: KitchenPaymentMethod) => {
+    if (!pendingOrder) return;
+
+    const nextSeq = ticketSeq + 1;
+    setTicketSeq(nextSeq);
+
+    const orderId = `kt-${Date.now()}`;
+    const code = `K-${nextSeq}`;
+
+    const ticket: KitchenTicket = {
+      id: orderId,
+      code,
+      createdAt: Date.now(),
+      mode: pendingOrder.mode,
+      destination: pendingOrder.destination,
+      lines: pendingOrder.lines,
+      total: pendingOrder.total,
+    };
+
+    const paymentRecord: KitchenPaymentRecord = {
+      id: `kp-${Date.now()}`,
+      ticketId: orderId,
+      code,
+      createdAt: Date.now(),
+      mode: pendingOrder.mode,
+      destination: pendingOrder.destination,
+      total: pendingOrder.total,
+      status,
+      method,
     };
 
     setTickets((current) => [ticket, ...current]);
+    setKitchenPayments((current) => [paymentRecord, ...current]);
+
     setCart([]);
+    setPendingOrder(null);
+    setShowSettlementPopup(false);
+    setShowPayNowPopup(false);
   };
 
   const deliverTicket = (id: string) => {
@@ -458,6 +529,69 @@ export default function KitchenPage() {
           </CardContent>
         </Card>
       </div>
+
+      {showSettlementPopup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Select Settlement</CardTitle>
+              <CardDescription>Choose Pay Now or Credit</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => {
+                  setShowSettlementPopup(false);
+                  setShowPayNowPopup(true);
+                }}
+                className="w-full h-11 font-black uppercase text-[10px] tracking-widest"
+              >
+                Paid Now
+              </Button>
+              <Button
+                onClick={() => finalizeOrder("credit", "credit")}
+                className="w-full h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white"
+              >
+                Credit
+              </Button>
+              <Button variant="outline" onClick={() => setShowSettlementPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showPayNowPopup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Pay Now Method</CardTitle>
+              <CardDescription>Select cash, card, or mobile</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={() => finalizeOrder("completed", "cash")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Cash
+              </Button>
+              <Button onClick={() => finalizeOrder("completed", "card")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Card
+              </Button>
+              <Button onClick={() => finalizeOrder("completed", "mobile")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Mobile
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPayNowPopup(false);
+                  setShowSettlementPopup(true);
+                }}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
+                Back
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
