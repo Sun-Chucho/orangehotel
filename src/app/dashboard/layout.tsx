@@ -26,7 +26,7 @@ export default function DashboardLayout({
     inventory: ['/dashboard/inventory'],
     cashier: ['/dashboard/cashier', '/dashboard/payments', '/dashboard/rooms'],
     kitchen: ['/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/payments'],
-    barista: ['/dashboard/barista'],
+    barista: ['/dashboard/barista', '/dashboard/payments', '/dashboard/cancelled'],
   };
 
   const defaultByRole: Record<Role, string> = {
