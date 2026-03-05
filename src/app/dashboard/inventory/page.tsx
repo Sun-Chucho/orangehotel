@@ -106,6 +106,7 @@ export default function InventoryPage() {
   const runAdjustment = () => {
     const qty = Number(adjustQty);
     if (selectedItemId.length === 0 || Number.isNaN(qty) || qty <= 0) return;
+    if (!window.confirm("Apply this stock adjustment?")) return;
     const signedQty = adjustMode === "add" ? qty : -qty;
     adjustStock(selectedItemId, signedQty);
     setAdjustQty("1");
@@ -124,6 +125,7 @@ export default function InventoryPage() {
     ) {
       return;
     }
+    if (!window.confirm("Add this item and sync it to POS menu?")) return;
 
     const newItem: InventoryItem = {
       id: `i-${Date.now()}`,

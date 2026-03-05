@@ -22,6 +22,7 @@ import {
 
 interface CashierTransaction {
   total: number;
+  status?: "completed" | "checked-out" | "credit";
 }
 
 interface QueueTicket {
@@ -52,7 +53,11 @@ export default function OverviewPage() {
       try {
         const parsed = JSON.parse(savedTx) as CashierTransaction[];
         if (Array.isArray(parsed)) {
-          setBookingRevenue(parsed.reduce((sum, tx) => sum + (tx.total || 0), 0));
+          setBookingRevenue(
+            parsed
+              .filter((tx) => tx.status !== "credit")
+              .reduce((sum, tx) => sum + (tx.total || 0), 0),
+          );
         }
       } catch {
         setBookingRevenue(0);
