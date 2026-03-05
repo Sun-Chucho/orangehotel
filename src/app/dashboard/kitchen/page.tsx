@@ -1,30 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { INVENTORY, InventoryItem } from "@/app/lib/mock-data";
+import { ROOMS } from "@/app/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChefHat,
-  Clock,
-  Minus,
-  Plus,
-  Receipt,
-  Search,
-  ShoppingBag,
-  Trash2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } from "lucide-react";
 
 type KitchenCategory = "all" | "breakfast" | "lunch" | "dinner";
-type ServiceMode = "restaurant" | "room-service" | "poolside";
-type TicketStatus = "new" | "preparing" | "plated" | "delayed";
-type QueueFilter = "all" | TicketStatus;
+type ServiceMode = "restaurant" | "room-service" | "take-away";
 
 interface KitchenMenuItem {
   id: string;
@@ -43,13 +30,14 @@ interface KitchenTicket {
   id: string;
   code: string;
   createdAt: number;
-  status: TicketStatus;
   mode: ServiceMode;
-  location: string;
+  destination: string;
   lines: Array<{ name: string; qty: number }>;
-  subtotal: number;
-  tax: number;
   total: number;
+}
+
+interface CancelledKitchenTicket extends KitchenTicket {
+  cancelledAt: number;
 }
 
 const KITCHEN_MENU: KitchenMenuItem[] = [
@@ -63,8 +51,8 @@ const KITCHEN_MENU: KitchenMenuItem[] = [
 
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
-const STORAGE_ITEMS = "orange-hotel-inventory-items";
 const STORAGE_MENU = "orange-hotel-kitchen-menu";
+const STORAGE_CANCELLED = "orange-hotel-kitchen-cancelled-tickets";
 
 const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
   if (value === "breakfast" || value === "lunch" || value === "dinner") return value;
@@ -73,30 +61,17 @@ const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
   return "lunch";
 };
 
-function formatAgo(timestamp: number): string {
-  const elapsedMs = Date.now() - timestamp;
-  const elapsedMins = Math.max(0, Math.floor(elapsedMs / 60000));
-
-  if (elapsedMins < 1) return "Just now";
-  if (elapsedMins < 60) return `${elapsedMins}m ago`;
-
-  const hours = Math.floor(elapsedMins / 60);
-  return `${hours}h ${elapsedMins % 60}m ago`;
-}
-
 export default function KitchenPage() {
   const [category, setCategory] = useState<KitchenCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
-  const [queueFilter, setQueueFilter] = useState<QueueFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [location, setLocation] = useState("Table 1");
+  const [roomServiceRoom, setRoomServiceRoom] = useState("");
+
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [ticketSeq, setTicketSeq] = useState(300);
   const [menuItems, setMenuItems] = useState<KitchenMenuItem[]>(KITCHEN_MENU);
-  const [kitchenInventory, setKitchenInventory] = useState<InventoryItem[]>(
-    INVENTORY.filter((item) => item.category === "Kitchen"),
-  );
 
   useEffect(() => {
     const savedTickets = localStorage.getItem(STORAGE_TICKETS);
@@ -105,9 +80,7 @@ export default function KitchenPage() {
     if (savedTickets) {
       try {
         const parsed = JSON.parse(savedTickets) as KitchenTicket[];
-        if (Array.isArray(parsed)) {
-          setTickets(parsed);
-        }
+        if (Array.isArray(parsed)) setTickets(parsed);
       } catch {
         setTickets([]);
       }
@@ -115,9 +88,7 @@ export default function KitchenPage() {
 
     if (savedSeq) {
       const parsedSeq = Number(savedSeq);
-      if (!Number.isNaN(parsedSeq) && parsedSeq > 0) {
-        setTicketSeq(parsedSeq);
-      }
+      if (!Number.isNaN(parsedSeq) && parsedSeq > 0) setTicketSeq(parsedSeq);
     }
   }, []);
 
@@ -127,27 +98,11 @@ export default function KitchenPage() {
     try {
       const parsed = JSON.parse(savedMenu) as KitchenMenuItem[];
       if (Array.isArray(parsed)) {
-        const normalized = parsed.map((item) => ({
-          ...item,
-          category: normalizeCategory(String(item.category)),
-        }));
+        const normalized = parsed.map((item) => ({ ...item, category: normalizeCategory(String(item.category)) }));
         setMenuItems([...normalized, ...KITCHEN_MENU]);
       }
     } catch {
       setMenuItems(KITCHEN_MENU);
-    }
-  }, []);
-
-  useEffect(() => {
-    const savedItems = localStorage.getItem(STORAGE_ITEMS);
-    if (!savedItems) return;
-    try {
-      const parsed = JSON.parse(savedItems) as InventoryItem[];
-      if (Array.isArray(parsed)) {
-        setKitchenInventory(parsed.filter((item) => item.category === "Kitchen"));
-      }
-    } catch {
-      setKitchenInventory(INVENTORY.filter((item) => item.category === "Kitchen"));
     }
   }, []);
 
@@ -159,53 +114,41 @@ export default function KitchenPage() {
     localStorage.setItem(STORAGE_SEQ, String(ticketSeq));
   }, [ticketSeq]);
 
-  const filteredMenu = useMemo(() => {
-    return menuItems.filter((item) => {
-      const inCategory = category === "all" || item.category === category;
-      const inSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-      return inCategory && inSearch;
-    });
-  }, [category, menuItems, searchTerm]);
-
-  const filteredTickets = useMemo(() => {
-    if (queueFilter === "all") return tickets;
-    return tickets.filter((ticket) => ticket.status === queueFilter);
-  }, [tickets, queueFilter]);
-
-  const subtotal = useMemo(
-    () => cart.reduce((sum, line) => sum + line.item.price * line.qty, 0),
-    [cart],
+  const filteredMenu = useMemo(
+    () =>
+      menuItems.filter((item) => {
+        const inCategory = category === "all" || item.category === category;
+        const inSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+        return inCategory && inSearch;
+      }),
+    [category, menuItems, searchTerm],
   );
-  const tax = Math.round(subtotal * 0.05);
-  const total = subtotal + tax;
+
+  const serviceRooms = useMemo(
+    () => ROOMS.filter((room) => room.status === "available" || room.status === "occupied"),
+    [],
+  );
+
+  const subtotal = useMemo(() => cart.reduce((sum, line) => sum + line.item.price * line.qty, 0), [cart]);
 
   const addToCart = (item: KitchenMenuItem) => {
     setCart((current) => {
       const existing = current.find((line) => line.item.id === item.id);
       if (existing) {
-        return current.map((line) =>
-          line.item.id === item.id ? { ...line, qty: line.qty + 1 } : line,
-        );
+        return current.map((line) => (line.item.id === item.id ? { ...line, qty: line.qty + 1 } : line));
       }
-
       return [...current, { item, qty: 1 }];
     });
   };
 
   const increaseQty = (itemId: string) => {
-    setCart((current) =>
-      current.map((line) =>
-        line.item.id === itemId ? { ...line, qty: line.qty + 1 } : line,
-      ),
-    );
+    setCart((current) => current.map((line) => (line.item.id === itemId ? { ...line, qty: line.qty + 1 } : line)));
   };
 
   const decreaseQty = (itemId: string) => {
     setCart((current) =>
       current
-        .map((line) =>
-          line.item.id === itemId ? { ...line, qty: Math.max(0, line.qty - 1) } : line,
-        )
+        .map((line) => (line.item.id === itemId ? { ...line, qty: Math.max(0, line.qty - 1) } : line))
         .filter((line) => line.qty > 0),
     );
   };
@@ -215,11 +158,26 @@ export default function KitchenPage() {
   };
 
   const clearCart = () => {
+    if (!window.confirm("Clear current ticket?")) return;
     setCart([]);
   };
 
   const placeTicket = () => {
     if (cart.length === 0) return;
+
+    const destination =
+      serviceMode === "room-service"
+        ? roomServiceRoom || "Room not selected"
+        : serviceMode === "restaurant"
+        ? location.trim() || "Restaurant"
+        : "Take Away";
+
+    if (serviceMode === "room-service" && !roomServiceRoom) {
+      window.alert("Select a room for room service.");
+      return;
+    }
+
+    if (!window.confirm("Place this kitchen order?")) return;
 
     const nextSeq = ticketSeq + 1;
     setTicketSeq(nextSeq);
@@ -228,50 +186,37 @@ export default function KitchenPage() {
       id: `kt-${Date.now()}`,
       code: `K-${nextSeq}`,
       createdAt: Date.now(),
-      status: "new",
       mode: serviceMode,
-      location: location.trim() || "General",
+      destination,
       lines: cart.map((line) => ({ name: line.item.name, qty: line.qty })),
-      subtotal,
-      tax,
-      total,
+      total: subtotal,
     };
 
     setTickets((current) => [ticket, ...current]);
     setCart([]);
   };
 
-  const advanceTicket = (id: string) => {
-    setTickets((current) =>
-      current.map((ticket) => {
-        if (ticket.id !== id) return ticket;
-        if (ticket.status === "new" || ticket.status === "delayed") {
-          return { ...ticket, status: "preparing" };
-        }
-        if (ticket.status === "preparing") {
-          return { ...ticket, status: "plated" };
-        }
-        return ticket;
-      }),
-    );
-  };
-
-  const markDelayed = (id: string) => {
-    setTickets((current) =>
-      current.map((ticket) =>
-        ticket.id === id && ticket.status !== "plated" ? { ...ticket, status: "delayed" } : ticket,
-      ),
-    );
-  };
-
-  const completeTicket = (id: string) => {
+  const deliverTicket = (id: string) => {
+    if (!window.confirm("Mark this order as delivered?")) return;
     setTickets((current) => current.filter((ticket) => ticket.id !== id));
   };
 
-  const activeCount = tickets.length;
-  const newCount = tickets.filter((ticket) => ticket.status === "new").length;
-  const prepCount = tickets.filter((ticket) => ticket.status === "preparing").length;
-  const platedCount = tickets.filter((ticket) => ticket.status === "plated").length;
+  const cancelTicket = (id: string) => {
+    const ticket = tickets.find((t) => t.id === id);
+    if (!ticket) return;
+    if (!window.confirm("Cancel this order?")) return;
+
+    const cancelled: CancelledKitchenTicket = {
+      ...ticket,
+      cancelledAt: Date.now(),
+    };
+
+    const existingRaw = localStorage.getItem(STORAGE_CANCELLED);
+    const existing = existingRaw ? (JSON.parse(existingRaw) as CancelledKitchenTicket[]) : [];
+    localStorage.setItem(STORAGE_CANCELLED, JSON.stringify([cancelled, ...existing]));
+
+    setTickets((current) => current.filter((t) => t.id !== id));
+  };
 
   return (
     <div className="space-y-8">
@@ -283,25 +228,14 @@ export default function KitchenPage() {
           <div>
             <h1 className="text-3xl font-black tracking-tight">Kitchen POS</h1>
             <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-              Order intake, preparation flow, and pass-off
+              Order intake and delivery control
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full lg:w-auto">
-          <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
-            {activeCount} Active
-          </Badge>
-          <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
-            {newCount} New
-          </Badge>
-          <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
-            {prepCount} Preparing
-          </Badge>
-          <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
-            {platedCount} Plated
-          </Badge>
-        </div>
+        <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
+          {tickets.length} Active Orders
+        </Badge>
       </header>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -331,7 +265,7 @@ export default function KitchenPage() {
                 <TabsList className="w-full grid grid-cols-3 h-11 bg-muted/30 rounded-xl">
                   <TabsTrigger value="restaurant" className="font-black uppercase text-[10px] tracking-widest">Restaurant</TabsTrigger>
                   <TabsTrigger value="room-service" className="font-black uppercase text-[10px] tracking-widest">Room Service</TabsTrigger>
-                  <TabsTrigger value="poolside" className="font-black uppercase text-[10px] tracking-widest">Poolside</TabsTrigger>
+                  <TabsTrigger value="take-away" className="font-black uppercase text-[10px] tracking-widest">Take Away</TabsTrigger>
                 </TabsList>
               </Tabs>
             </CardHeader>
@@ -372,103 +306,55 @@ export default function KitchenPage() {
 
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Queue</CardTitle>
-                  <CardDescription>Monitor prep pipeline by status</CardDescription>
-                </div>
-                <Tabs value={queueFilter} onValueChange={(value) => setQueueFilter(value as QueueFilter)}>
-                  <TabsList className="h-10">
-                    <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
-                    <TabsTrigger value="new" className="text-[10px] font-black uppercase tracking-widest">New</TabsTrigger>
-                    <TabsTrigger value="preparing" className="text-[10px] font-black uppercase tracking-widest">Preparing</TabsTrigger>
-                    <TabsTrigger value="plated" className="text-[10px] font-black uppercase tracking-widest">Plated</TabsTrigger>
-                    <TabsTrigger value="delayed" className="text-[10px] font-black uppercase tracking-widest">Delayed</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Queue</CardTitle>
+              <CardDescription>Placed orders with delivery and cancellation actions</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {filteredTickets.map((ticket) => (
-                <div key={ticket.id} className="border rounded-2xl p-4 bg-white">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-black text-lg tracking-tight">{ticket.code}</h3>
-                        <Badge
-                          className={cn(
-                            "uppercase text-[9px] font-black tracking-widest border-none",
-                            ticket.status === "new" && "bg-orange-100 text-orange-700",
-                            ticket.status === "preparing" && "bg-blue-100 text-blue-700",
-                            ticket.status === "plated" && "bg-green-100 text-green-700",
-                            ticket.status === "delayed" && "bg-destructive/15 text-destructive",
-                          )}
-                        >
-                          {ticket.status}
-                        </Badge>
-                      </div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                        {ticket.mode} | {ticket.location} | {formatAgo(ticket.createdAt)}
-                      </p>
-                    </div>
-                    <div className="font-black text-sm">TSh {ticket.total.toLocaleString()}</div>
-                  </div>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/10">
+                  <TableRow>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Ticket</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Details</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Total</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tickets.map((ticket) => (
+                    <TableRow key={ticket.id}>
+                      <TableCell className="font-black">
+                        <p>{ticket.code}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                          {ticket.mode} | {ticket.destination}
+                        </p>
+                      </TableCell>
+                      <TableCell className="font-bold text-sm">
+                        {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
+                      </TableCell>
+                      <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button onClick={() => deliverTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
+                            <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
+                          </Button>
+                          <Button onClick={() => cancelTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
+                            <XCircle className="w-4 h-4 mr-1" /> Cancelled
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
 
-                  <div className="space-y-2 mb-4">
-                    {ticket.lines.map((line) => (
-                      <div key={`${ticket.id}-${line.name}`} className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{line.name}</span>
-                        <span className="font-black text-xs uppercase tracking-wider">x{line.qty}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {ticket.status !== "plated" && (
-                      <Button
-                        onClick={() => advanceTicket(ticket.id)}
-                        className="h-10 font-black uppercase tracking-widest text-[10px]"
-                      >
-                        {ticket.status === "new" || ticket.status === "delayed" ? (
-                          <>
-                            <Clock className="w-4 h-4 mr-2" /> Start Prep
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 mr-2" /> Mark Plated
-                          </>
-                        )}
-                      </Button>
-                    )}
-
-                    {ticket.status !== "plated" && ticket.status !== "delayed" && (
-                      <Button
-                        onClick={() => markDelayed(ticket.id)}
-                        variant="outline"
-                        className="h-10 font-black uppercase tracking-widest text-[10px]"
-                      >
-                        <AlertTriangle className="w-4 h-4 mr-2" /> Delay
-                      </Button>
-                    )}
-
-                    {ticket.status === "plated" && (
-                      <Button
-                        onClick={() => completeTicket(ticket.id)}
-                        className="h-10 font-black uppercase tracking-widest text-[10px] bg-green-600 hover:bg-green-600/90"
-                      >
-                        <ShoppingBag className="w-4 h-4 mr-2" /> Served
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {filteredTickets.length === 0 && (
-                <div className="py-12 text-center opacity-40">
-                  <ChefHat className="w-12 h-12 mx-auto mb-3" />
-                  <p className="font-black uppercase tracking-widest text-xs">No tickets in this queue</p>
-                </div>
-              )}
+                  {tickets.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-12 text-center opacity-40">
+                        <ChefHat className="w-12 h-12 mx-auto mb-3" />
+                        <p className="font-black uppercase tracking-widest text-xs">No orders in queue</p>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
@@ -482,34 +368,36 @@ export default function KitchenPage() {
                 {cart.reduce((count, line) => count + line.qty, 0)} items
               </Badge>
             </div>
-            <CardDescription>Prepare and dispatch a kitchen order</CardDescription>
+            <CardDescription>Prepare and place a kitchen order</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="rounded-xl border p-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
-                Kitchen Inventory (Auto-filled)
-              </p>
-              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                {kitchenInventory.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between text-xs">
-                    <span className="font-bold">{item.name}</span>
-                    <span className="font-black uppercase tracking-wider">
-                      {item.stock} {item.unit}
-                    </span>
-                  </div>
-                ))}
-                {kitchenInventory.length === 0 && (
-                  <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
-                    No kitchen inventory items
-                  </p>
-                )}
+            {serviceMode === "room-service" ? (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room (Available & Booked-In)</label>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={roomServiceRoom}
+                  onChange={(event) => setRoomServiceRoom(event.target.value)}
+                >
+                  <option value="">Select room</option>
+                  {serviceRooms.map((room) => (
+                    <option key={room.id} value={`Room ${room.number}`}>
+                      Room {room.number} - {room.status === "occupied" ? "Booked-In" : "Available"}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Destination</label>
-              <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Table 1 or Room 204" />
-            </div>
+            ) : serviceMode === "restaurant" ? (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Destination</label>
+                <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Table 1" />
+              </div>
+            ) : (
+              <div className="rounded-xl border p-3 bg-muted/20">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Destination</p>
+                <p className="font-bold">Take Away</p>
+              </div>
+            )}
 
             {cart.length === 0 ? (
               <div className="h-44 rounded-xl border border-dashed flex flex-col items-center justify-center text-center opacity-40">
@@ -553,35 +441,18 @@ export default function KitchenPage() {
             )}
 
             <div className="space-y-2 border-t pt-4">
-              <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
-                <span>Subtotal</span>
-                <span>TSh {subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
-                <span>Tax (5%)</span>
-                <span>TSh {tax.toLocaleString()}</span>
-              </div>
               <div className="flex justify-between text-lg font-black pt-2">
                 <span>Total</span>
-                <span className="text-primary">TSh {total.toLocaleString()}</span>
+                <span className="text-primary">TSh {subtotal.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                onClick={clearCart}
-                disabled={cart.length === 0}
-                className="h-11 font-black uppercase text-[10px] tracking-widest"
-              >
+              <Button variant="outline" onClick={clearCart} disabled={cart.length === 0} className="h-11 font-black uppercase text-[10px] tracking-widest">
                 Clear Ticket
               </Button>
-              <Button
-                onClick={placeTicket}
-                disabled={cart.length === 0}
-                className="h-11 font-black uppercase text-[10px] tracking-widest"
-              >
-                Send To Kitchen
+              <Button onClick={placeTicket} disabled={cart.length === 0} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                Place Order
               </Button>
             </div>
           </CardContent>
