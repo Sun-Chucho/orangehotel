@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type KitchenCategory = "all" | "grill" | "pasta" | "salad" | "sides" | "dessert";
+type KitchenCategory = "all" | "breakfast" | "lunch" | "dinner";
 type ServiceMode = "restaurant" | "room-service" | "poolside";
 type TicketStatus = "new" | "preparing" | "plated" | "delayed";
 type QueueFilter = "all" | TicketStatus;
@@ -53,22 +53,25 @@ interface KitchenTicket {
 }
 
 const KITCHEN_MENU: KitchenMenuItem[] = [
-  { id: "k1", name: "Grilled Salmon", price: 42000, category: "grill", prepMinutes: 14 },
-  { id: "k2", name: "Steak Frites", price: 58000, category: "grill", prepMinutes: 16 },
-  { id: "k3", name: "Chicken Alfredo", price: 36000, category: "pasta", prepMinutes: 12 },
-  { id: "k4", name: "Beef Lasagna", price: 39000, category: "pasta", prepMinutes: 13 },
-  { id: "k5", name: "Caesar Salad", price: 24000, category: "salad", prepMinutes: 7 },
-  { id: "k6", name: "Greek Salad", price: 23000, category: "salad", prepMinutes: 7 },
-  { id: "k7", name: "Truffle Fries", price: 15000, category: "sides", prepMinutes: 5 },
-  { id: "k8", name: "Garlic Bread", price: 12000, category: "sides", prepMinutes: 4 },
-  { id: "k9", name: "Chocolate Lava Cake", price: 20000, category: "dessert", prepMinutes: 8 },
-  { id: "k10", name: "Cheesecake", price: 18000, category: "dessert", prepMinutes: 6 },
+  { id: "k1", name: "Pancake Platter", price: 22000, category: "breakfast", prepMinutes: 10 },
+  { id: "k2", name: "Omelette Deluxe", price: 18000, category: "breakfast", prepMinutes: 8 },
+  { id: "k3", name: "Chicken Alfredo", price: 36000, category: "lunch", prepMinutes: 12 },
+  { id: "k4", name: "Beef Lasagna", price: 39000, category: "lunch", prepMinutes: 13 },
+  { id: "k5", name: "Grilled Salmon", price: 42000, category: "dinner", prepMinutes: 14 },
+  { id: "k6", name: "Steak Frites", price: 58000, category: "dinner", prepMinutes: 16 },
 ];
 
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
 const STORAGE_ITEMS = "orange-hotel-inventory-items";
 const STORAGE_MENU = "orange-hotel-kitchen-menu";
+
+const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
+  if (value === "breakfast" || value === "lunch" || value === "dinner") return value;
+  if (value === "grill" || value === "pasta") return "lunch";
+  if (value === "salad" || value === "sides" || value === "dessert") return "dinner";
+  return "lunch";
+};
 
 function formatAgo(timestamp: number): string {
   const elapsedMs = Date.now() - timestamp;
@@ -124,7 +127,11 @@ export default function KitchenPage() {
     try {
       const parsed = JSON.parse(savedMenu) as KitchenMenuItem[];
       if (Array.isArray(parsed)) {
-        setMenuItems([...parsed, ...KITCHEN_MENU]);
+        const normalized = parsed.map((item) => ({
+          ...item,
+          category: normalizeCategory(String(item.category)),
+        }));
+        setMenuItems([...normalized, ...KITCHEN_MENU]);
       }
     } catch {
       setMenuItems(KITCHEN_MENU);
@@ -312,13 +319,11 @@ export default function KitchenPage() {
               </div>
 
               <Tabs value={category} onValueChange={(value) => setCategory(value as KitchenCategory)}>
-                <TabsList className="w-full grid grid-cols-3 md:grid-cols-6 h-auto gap-1 bg-muted/30 p-1.5 rounded-xl">
+                <TabsList className="w-full grid grid-cols-2 md:grid-cols-4 h-auto gap-1 bg-muted/30 p-1.5 rounded-xl">
                   <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest rounded-lg">All</TabsTrigger>
-                  <TabsTrigger value="grill" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Grill</TabsTrigger>
-                  <TabsTrigger value="pasta" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Pasta</TabsTrigger>
-                  <TabsTrigger value="salad" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Salad</TabsTrigger>
-                  <TabsTrigger value="sides" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Sides</TabsTrigger>
-                  <TabsTrigger value="dessert" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Dessert</TabsTrigger>
+                  <TabsTrigger value="breakfast" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Breakfast</TabsTrigger>
+                  <TabsTrigger value="lunch" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Lunch</TabsTrigger>
+                  <TabsTrigger value="dinner" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Dinner</TabsTrigger>
                 </TabsList>
               </Tabs>
 

@@ -18,7 +18,7 @@ import { Minus, Package, Plus } from "lucide-react";
 
 type InventoryTab = "kitchen" | "barista";
 type ItemCategory = "Kitchen" | "Bar";
-type KitchenMenuCategory = "grill" | "pasta" | "salad" | "sides" | "dessert";
+type KitchenMenuCategory = "breakfast" | "lunch" | "dinner";
 
 interface KitchenMenuItem {
   id: string;
@@ -45,7 +45,7 @@ export default function InventoryPage() {
   const [newStock, setNewStock] = useState("0");
   const [menuName, setMenuName] = useState("");
   const [menuPrice, setMenuPrice] = useState("0");
-  const [menuCategory, setMenuCategory] = useState<KitchenMenuCategory>("grill");
+  const [menuCategory, setMenuCategory] = useState<KitchenMenuCategory>("breakfast");
   const [menuPrepMinutes, setMenuPrepMinutes] = useState("10");
 
   useEffect(() => {
@@ -158,7 +158,7 @@ export default function InventoryPage() {
 
     setMenuName("");
     setMenuPrice("0");
-    setMenuCategory("grill");
+    setMenuCategory("breakfast");
     setMenuPrepMinutes("10");
     setShowCreateMenuForm(false);
   };
@@ -345,11 +345,9 @@ export default function InventoryPage() {
                   value={menuCategory}
                   onChange={(event) => setMenuCategory(event.target.value as KitchenMenuCategory)}
                 >
-                  <option value="grill">Grill</option>
-                  <option value="pasta">Pasta</option>
-                  <option value="salad">Salad</option>
-                  <option value="sides">Sides</option>
-                  <option value="dessert">Dessert</option>
+                  <option value="breakfast">Breakfast</option>
+                  <option value="lunch">Lunch</option>
+                  <option value="dinner">Dinner</option>
                 </select>
                 <Button className="w-full bg-primary hover:bg-primary/90 font-black uppercase tracking-widest text-xs h-11" onClick={createKitchenMenuItem}>
                   <Plus className="w-4 h-4 mr-2" /> Save Menu Item
