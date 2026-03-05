@@ -31,17 +31,22 @@ const PLATINUM_ROOM_PRICE = 100000;
 const FIRST_FLOOR_PLATINUM = ["1001", "1002", "1003", "1004", "1005", "1006"] as const;
 const FIRST_FLOOR_STANDARD = ["1007", "1008", "1009"] as const;
 
-const generateRoomNumbers = (start: number, count: number) =>
-  Array.from({ length: count }, (_, index) => String(start + index));
+const UPPER_FLOOR_PLATINUM_SUFFIXES = ["003", "004", "005", "006", "007", "008"] as const;
+const UPPER_FLOOR_STANDARD_SUFFIXES = ["001", "002", "009", "010", "011"] as const;
+const UPPER_FLOORS = [2, 3, 4, 5] as const;
 
 const allPlatinumNumbers = [
   ...FIRST_FLOOR_PLATINUM,
-  ...generateRoomNumbers(2001, 33 - FIRST_FLOOR_PLATINUM.length),
+  ...UPPER_FLOORS.flatMap((floor) =>
+    UPPER_FLOOR_PLATINUM_SUFFIXES.map((suffix) => `${floor}${suffix}`)
+  ),
 ];
 
 const allStandardNumbers = [
   ...FIRST_FLOOR_STANDARD,
-  ...generateRoomNumbers(3001, 20 - FIRST_FLOOR_STANDARD.length),
+  ...UPPER_FLOORS.flatMap((floor) =>
+    UPPER_FLOOR_STANDARD_SUFFIXES.map((suffix) => `${floor}${suffix}`)
+  ),
 ];
 
 const standardRooms: Room[] = allStandardNumbers.map((number, index) => {
