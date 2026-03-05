@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Banknote, CalendarCheck2, Clock, CreditCard, Phone, Receipt, User } from "lucide-react";
+import { Clock, Phone, Receipt, User } from "lucide-react";
 
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type TransactionTab = "completed" | "credit";
@@ -48,14 +48,6 @@ const ROOM_RATE: Record<RoomType, number> = {
 const STORAGE_TX = "orange-hotel-cashier-transactions";
 const STORAGE_SEQ = "orange-hotel-cashier-seq";
 
-function formatAgo(timestamp: number): string {
-  const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  return `${hours}h ${mins % 60}m ago`;
-}
-
 function daysBetween(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 0;
   const inDate = new Date(`${checkIn}T00:00:00`);
@@ -63,15 +55,6 @@ function daysBetween(checkIn: string, checkOut: string): number {
   const ms = outDate.getTime() - inDate.getTime();
   if (!Number.isFinite(ms) || ms <= 0) return 0;
   return Math.ceil(ms / 86400000);
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function isOverstay(record: BookingRecord): boolean {
@@ -84,7 +67,6 @@ export default function BookingPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
-  const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [roomPickerOpen, setRoomPickerOpen] = useState(false);
 
@@ -95,7 +77,9 @@ export default function BookingPage() {
   const [checkOutDate, setCheckOutDate] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("12:00");
   const [selectedRoomNumber, setSelectedRoomNumber] = useState("");
-  const [showPaymentChoices, setShowPaymentChoices] = useState(false);
+
+  const [showSettlementPopup, setShowSettlementPopup] = useState(false);
+  const [showPayNowPopup, setShowPayNowPopup] = useState(false);
 
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
@@ -167,21 +151,17 @@ export default function BookingPage() {
     setCheckOutDate("");
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
-    setPayment("cash");
     setRoomType("standard");
-    setShowPaymentChoices(false);
+    setShowSettlementPopup(false);
+    setShowPayNowPopup(false);
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
-    setRooms((current) =>
-      current.map((room) => (room.number === roomNumber ? { ...room, status } : room)),
-    );
+    setRooms((current) => current.map((room) => (room.number === roomNumber ? { ...room, status } : room)));
   };
 
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
     if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
-    const confirmText = status === "credit" ? "Save this as CREDIT booking?" : "Complete this booking?";
-    if (!window.confirm(confirmText)) return;
 
     const nextReceipt = receiptSeq + 1;
     setReceiptSeq(nextReceipt);
@@ -214,66 +194,14 @@ export default function BookingPage() {
     setCheckOutDate("");
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
-    setPayment("cash");
     setRoomType("standard");
-    setShowPaymentChoices(false);
+    setShowSettlementPopup(false);
+    setShowPayNowPopup(false);
   };
 
-  const startCompleteBooking = () => {
+  const openSettlementPopup = () => {
     if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
-    setShowPaymentChoices(true);
-  };
-
-  const finalizeCashBooking = () => saveBooking("completed", "cash");
-  const finalizeMobileBooking = () => saveBooking("completed", "mobile-money");
-  const finalizeCreditBooking = () => saveBooking("credit", "cash");
-
-  const clearCreditTransaction = (id: string) => {
-    if (!window.confirm("Mark this credit transaction as cleared?")) return;
-    setTransactions((current) =>
-      current.map((tx) => (tx.id === id ? { ...tx, status: "completed" } : tx)),
-    );
-  };
-
-  const checkOutBooking = (id: string) => {
-    const booking = transactions.find((tx) => tx.id === id);
-    if (!booking) return;
-    if (!window.confirm(`Check out room ${booking.roomNumber} and free it?`)) return;
-
-    setTransactions((current) =>
-      current.map((tx) => (tx.id === id ? { ...tx, status: "checked-out" } : tx)),
-    );
-    markRoomStatus(booking.roomNumber, "available");
-  };
-
-  const extendStay = (id: string) => {
-    const booking = transactions.find((tx) => tx.id === id);
-    if (!booking || booking.status === "checked-out") return;
-
-    const raw = window.prompt("How many extra days to extend?", "1");
-    const extraDays = Number(raw);
-    if (!Number.isFinite(extraDays) || extraDays < 1) return;
-    if (!window.confirm(`Create extension booking for ${extraDays} day(s)?`)) return;
-
-    const nextReceipt = receiptSeq + 1;
-    setReceiptSeq(nextReceipt);
-
-    const extension: BookingRecord = {
-      ...booking,
-      id: `tx-${Date.now()}`,
-      receiptNo: `#${nextReceipt}`,
-      createdAt: Date.now(),
-      checkInDate: booking.checkOutDate,
-      checkInTime: booking.checkInTime || "14:00",
-      checkOutDate: addDays(booking.checkOutDate, extraDays),
-      nights: extraDays,
-      total: extraDays * ROOM_RATE[booking.roomType],
-      status: booking.status === "credit" ? "credit" : "completed",
-    };
-
-    setTransactions((current) =>
-      current.map((tx) => (tx.id === id ? { ...tx, status: "checked-out" as const } : tx)).concat(extension),
-    );
+    setShowSettlementPopup(true);
   };
 
   return (
@@ -342,9 +270,7 @@ export default function BookingPage() {
               </button>
             </div>
             {selectedRoomNumber && (
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                Selected Room: {selectedRoomNumber}
-              </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Selected Room: {selectedRoomNumber}</p>
             )}
           </div>
 
@@ -376,47 +302,6 @@ export default function BookingPage() {
             </div>
           </div>
 
-          {!showPaymentChoices && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
-                Clear
-              </Button>
-              <Button
-                onClick={startCompleteBooking}
-                disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber}
-                className="h-11 font-black uppercase text-[10px] tracking-widest"
-              >
-                Complete Booking
-              </Button>
-            </div>
-          )}
-
-          {showPaymentChoices && (
-            <div className="space-y-3 rounded-xl border border-primary/20 p-4 bg-primary/5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                Choose Payment Method To Finalize
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <Button onClick={finalizeCashBooking} className="h-11 font-black uppercase text-[10px] tracking-widest">
-                  Cash
-                </Button>
-                <Button onClick={finalizeMobileBooking} className="h-11 font-black uppercase text-[10px] tracking-widest">
-                  Mobile
-                </Button>
-                <Button onClick={finalizeCreditBooking} className="h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
-                  Credit
-                </Button>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setShowPaymentChoices(false)}
-                className="h-10 font-black uppercase text-[10px] tracking-widest"
-              >
-                Back
-              </Button>
-            </div>
-          )}
-
           <div className="space-y-2 border-t pt-4">
             <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
               <span>Rate / Night</span>
@@ -432,6 +317,18 @@ export default function BookingPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
+              Clear
+            </Button>
+            <Button
+              onClick={openSettlementPopup}
+              disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber}
+              className="h-11 font-black uppercase text-[10px] tracking-widest"
+            >
+              Complete Booking
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -440,7 +337,7 @@ export default function BookingPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Booked Rooms</CardTitle>
-              <CardDescription>Manage completed and credit bookings</CardDescription>
+              <CardDescription>Completed and credit booking records</CardDescription>
             </div>
             <Tabs value={transactionTab} onValueChange={(value) => setTransactionTab(value as TransactionTab)}>
               <TabsList className="h-10">
@@ -459,7 +356,6 @@ export default function BookingPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-In Date</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-Out Time</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -470,43 +366,25 @@ export default function BookingPage() {
                   <TableCell className="font-bold">{tx.checkInDate}</TableCell>
                   <TableCell className="font-bold">{tx.checkOutTime}</TableCell>
                   <TableCell>
-                    {isOverstay(tx) ? (
-                      <Badge className="bg-red-600 text-white border-red-600 hover:bg-red-600">Overstay</Badge>
-                    ) : tx.status === "checked-out" ? (
-                      <Badge className="bg-green-600 text-white border-green-600 hover:bg-green-600">Checked Out</Badge>
-                    ) : tx.status === "credit" ? (
-                      <Badge className="bg-orange-500 text-white border-orange-500 hover:bg-orange-500">Credit</Badge>
-                    ) : (
-                      <Badge className="bg-blue-600 text-white border-blue-600 hover:bg-blue-600">Active</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {tx.status !== "checked-out" && (
-                        <Button
-                          onClick={() => checkOutBooking(tx.id)}
-                          className="h-9 font-black uppercase text-[10px] tracking-widest"
-                        >
-                          Check Out
-                        </Button>
-                      )}
-                      {tx.status !== "checked-out" && (
-                        <Button
-                          onClick={() => extendStay(tx.id)}
-                          variant="outline"
-                          className="h-9 font-black uppercase text-[10px] tracking-widest"
-                        >
-                          Extend Stay
-                        </Button>
-                      )}
-                      {transactionTab === "credit" && tx.status === "credit" && (
-                        <Button
-                          onClick={() => clearCreditTransaction(tx.id)}
-                          className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
-                        >
-                          Cleared
-                        </Button>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={
+                          tx.status !== "checked-out" && !isOverstay(tx)
+                            ? "bg-green-600 text-white border-green-600 hover:bg-green-600"
+                            : "bg-gray-200 text-gray-600 border-gray-200 hover:bg-gray-200"
+                        }
+                      >
+                        Occupied
+                      </Badge>
+                      <Badge
+                        className={
+                          tx.status !== "checked-out" && isOverstay(tx)
+                            ? "bg-red-600 text-white border-red-600 hover:bg-red-600"
+                            : "bg-gray-200 text-gray-600 border-gray-200 hover:bg-gray-200"
+                        }
+                      >
+                        Overstay
+                      </Badge>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -514,7 +392,7 @@ export default function BookingPage() {
 
               {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center">
+                  <TableCell colSpan={5} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">No bookings found</p>
@@ -562,6 +440,69 @@ export default function BookingPage() {
                   Close
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showSettlementPopup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Select Settlement</CardTitle>
+              <CardDescription>Choose Pay Now or Credit</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => {
+                  setShowSettlementPopup(false);
+                  setShowPayNowPopup(true);
+                }}
+                className="w-full h-11 font-black uppercase text-[10px] tracking-widest"
+              >
+                Pay Now
+              </Button>
+              <Button
+                onClick={() => saveBooking("credit", "cash")}
+                className="w-full h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white"
+              >
+                Credit
+              </Button>
+              <Button variant="outline" onClick={() => setShowSettlementPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showPayNowPopup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Pay Now Method</CardTitle>
+              <CardDescription>Select cash, card, or mobile</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={() => saveBooking("completed", "cash")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Cash
+              </Button>
+              <Button onClick={() => saveBooking("completed", "card")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Card
+              </Button>
+              <Button onClick={() => saveBooking("completed", "mobile-money")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Mobile
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPayNowPopup(false);
+                  setShowSettlementPopup(true);
+                }}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
+                Back
+              </Button>
             </CardContent>
           </Card>
         </div>
