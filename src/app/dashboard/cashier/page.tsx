@@ -9,9 +9,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Banknote, CalendarCheck2, Clock, CreditCard, Phone, Receipt, User } from "lucide-react";
 
 type PaymentMethod = "cash" | "card" | "mobile-money";
-type TxFilter = "all" | PaymentMethod;
+type TransactionTab = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 type StayMode = "days" | "calendar";
+type TransactionStatus = "completed" | "credit";
 
 interface Transaction {
   id: string;
@@ -22,6 +23,7 @@ interface Transaction {
   roomType: RoomType;
   nights: number;
   payment: PaymentMethod;
+  status: TransactionStatus;
   bookingTime: string;
   checkIn?: string;
   checkOut?: string;
@@ -54,7 +56,7 @@ function daysBetween(checkIn: string, checkOut: string): number {
 }
 
 export default function BookingPage() {
-  const [txFilter, setTxFilter] = useState<TxFilter>("all");
+  const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [stayMode, setStayMode] = useState<StayMode>("days");
@@ -76,7 +78,14 @@ export default function BookingPage() {
     if (savedTx) {
       try {
         const parsed = JSON.parse(savedTx) as Transaction[];
-        if (Array.isArray(parsed)) setTransactions(parsed);
+        if (Array.isArray(parsed)) {
+          setTransactions(
+            parsed.map((tx) => ({
+              ...tx,
+              status: tx.status === "credit" ? "credit" : "completed",
+            })),
+          );
+        }
       } catch {
         setTransactions([]);
       }
@@ -107,10 +116,14 @@ export default function BookingPage() {
   const rate = ROOM_RATE[roomType];
   const total = nights * rate;
 
-  const filteredTransactions = useMemo(() => {
-    if (txFilter === "all") return transactions;
-    return transactions.filter((tx) => tx.payment === txFilter);
-  }, [transactions, txFilter]);
+  const completedTransactions = useMemo(
+    () => transactions.filter((tx) => tx.status === "completed"),
+    [transactions],
+  );
+  const creditTransactions = useMemo(
+    () => transactions.filter((tx) => tx.status === "credit"),
+    [transactions],
+  );
 
   const totalTransactions = transactions.length;
   const todayRevenue = transactions.reduce((sum, tx) => sum + tx.total, 0);
@@ -127,7 +140,7 @@ export default function BookingPage() {
     setStayMode("days");
   };
 
-  const completeBooking = () => {
+  const saveBooking = (status: TransactionStatus) => {
     if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1) return;
 
     const nextReceipt = receiptSeq + 1;
@@ -142,6 +155,7 @@ export default function BookingPage() {
       roomType,
       nights,
       payment,
+      status,
       bookingTime,
       checkIn: stayMode === "calendar" ? checkIn : undefined,
       checkOut: stayMode === "calendar" ? checkOut : undefined,
@@ -150,6 +164,15 @@ export default function BookingPage() {
 
     setTransactions((current) => [tx, ...current]);
     clearBookingForm();
+  };
+
+  const completeBooking = () => saveBooking("completed");
+  const createCreditBooking = () => saveBooking("credit");
+
+  const clearCreditTransaction = (id: string) => {
+    setTransactions((current) =>
+      current.map((tx) => (tx.id === id ? { ...tx, status: "completed" } : tx)),
+    );
   };
 
   return (
@@ -258,9 +281,16 @@ export default function BookingPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
                 Clear
+              </Button>
+              <Button
+                onClick={createCreditBooking}
+                disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1}
+                className="h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white"
+              >
+                Credit Payment
               </Button>
               <Button
                 onClick={completeBooking}
@@ -278,34 +308,44 @@ export default function BookingPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Transactions</CardTitle>
-                <CardDescription>Completed booking transactions</CardDescription>
+                <CardDescription>Completed and credit booking transactions</CardDescription>
               </div>
-              <Tabs value={txFilter} onValueChange={(value) => setTxFilter(value as TxFilter)}>
+              <Tabs value={transactionTab} onValueChange={(value) => setTransactionTab(value as TransactionTab)}>
                 <TabsList className="h-10">
-                  <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
-                  <TabsTrigger value="cash" className="text-[10px] font-black uppercase tracking-widest">Cash</TabsTrigger>
-                  <TabsTrigger value="card" className="text-[10px] font-black uppercase tracking-widest">Card</TabsTrigger>
-                  <TabsTrigger value="mobile-money" className="text-[10px] font-black uppercase tracking-widest">Mobile</TabsTrigger>
+                  <TabsTrigger value="completed" className="text-[10px] font-black uppercase tracking-widest">Completed</TabsTrigger>
+                  <TabsTrigger value="credit" className="text-[10px] font-black uppercase tracking-widest">Credit</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {filteredTransactions.slice(0, 10).map((tx) => (
-              <div key={tx.id} className="border rounded-2xl p-4 bg-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-black text-sm">{tx.receiptNo}</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                      {tx.guestName} | {tx.phone} | {tx.roomType} | {tx.nights} days | {tx.payment} | {tx.bookingTime} | {formatAgo(tx.createdAt)}
-                    </p>
+            {(transactionTab === "completed" ? completedTransactions : creditTransactions)
+              .slice(0, 10)
+              .map((tx) => (
+                <div key={tx.id} className="border rounded-2xl p-4 bg-white">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-black text-sm">{tx.receiptNo}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                        {tx.guestName} | {tx.phone} | {tx.roomType} | {tx.nights} days | {tx.payment} | {tx.bookingTime} | {formatAgo(tx.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-black text-sm">TSh {tx.total.toLocaleString()}</p>
+                      {transactionTab === "credit" && (
+                        <Button
+                          onClick={() => clearCreditTransaction(tx.id)}
+                          className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
+                        >
+                          Cleared
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <p className="font-black text-sm">TSh {tx.total.toLocaleString()}</p>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {filteredTransactions.length === 0 && (
+            {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
               <div className="py-10 text-center opacity-40">
                 <Receipt className="w-10 h-10 mx-auto mb-2" />
                 <p className="font-black uppercase tracking-widest text-xs">No transactions yet</p>
