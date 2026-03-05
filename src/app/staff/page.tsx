@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const ROLES: { id: Role; label: string; icon: any; color: string; desc: string }[] = [
   { id: 'manager', label: 'Hotel Manager', icon: ShieldCheck, color: 'bg-orange-500', desc: 'Full system oversight & analytics' },
   { id: 'inventory', label: 'Inventory Manager', icon: Package, color: 'bg-black', desc: 'Stock control & procurement' },
-  { id: 'cashier', label: 'Receptionist / Cashier', icon: ShoppingCart, color: 'bg-orange-600', desc: 'Bookings, payments & shifts' },
+  { id: 'cashier', label: 'Reception Booking', icon: ShoppingCart, color: 'bg-orange-600', desc: 'Bookings, payments & shifts' },
   { id: 'kitchen', label: 'Kitchen POS', icon: Utensils, color: 'bg-orange-700', desc: 'Food orders & prep status' },
   { id: 'barista', label: 'Barista POS', icon: Coffee, color: 'bg-orange-400', desc: 'Drink service & beverage sales' },
 ];

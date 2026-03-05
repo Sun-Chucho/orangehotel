@@ -275,7 +275,7 @@ export default function CashierPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Transactions</CardTitle>
-                  <CardDescription>Completed cashier transactions</CardDescription>
+                  <CardDescription>Completed booking transactions</CardDescription>
                 </div>
                 <Tabs value={txFilter} onValueChange={(value) => setTxFilter(value as TxFilter)}>
                   <TabsList className="h-10">

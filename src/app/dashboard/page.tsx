@@ -34,7 +34,7 @@ export default function OverviewPage() {
   const [mounted, setMounted] = useState(false);
   const [reportText, setReportText] = useState("");
 
-  const [cashierRevenue, setCashierRevenue] = useState(0);
+  const [bookingRevenue, setBookingRevenue] = useState(0);
   const [activeKitchen, setActiveKitchen] = useState(0);
   const [activeBarista, setActiveBarista] = useState(0);
 
@@ -52,10 +52,10 @@ export default function OverviewPage() {
       try {
         const parsed = JSON.parse(savedTx) as CashierTransaction[];
         if (Array.isArray(parsed)) {
-          setCashierRevenue(parsed.reduce((sum, tx) => sum + (tx.total || 0), 0));
+          setBookingRevenue(parsed.reduce((sum, tx) => sum + (tx.total || 0), 0));
         }
       } catch {
-        setCashierRevenue(0);
+        setBookingRevenue(0);
       }
     }
 
@@ -86,19 +86,19 @@ export default function OverviewPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Cashier Revenue", value: `TSh ${cashierRevenue.toLocaleString()}`, icon: DollarSign, trend: "+12%", trendUp: true, color: "text-green-500" },
+      { label: "Booking Revenue", value: `TSh ${bookingRevenue.toLocaleString()}`, icon: DollarSign, trend: "+12%", trendUp: true, color: "text-green-500" },
       { label: "Room Occupancy", value: `${Math.round((occupiedRooms / ROOMS.length) * 100)}%`, icon: BedDouble, trend: "+5%", trendUp: true, color: "text-blue-500" },
       { label: "Kitchen Queue", value: `${activeKitchen}`, icon: TrendingUp, trend: activeKitchen > 5 ? "High" : "Stable", trendUp: activeKitchen <= 5, color: "text-orange-500" },
       { label: "Barista Queue", value: `${activeBarista}`, icon: Users, trend: activeBarista > 5 ? "High" : "Stable", trendUp: activeBarista <= 5, color: "text-purple-500" },
     ],
-    [activeBarista, activeKitchen, cashierRevenue, occupiedRooms],
+    [activeBarista, activeKitchen, bookingRevenue, occupiedRooms],
   );
 
   const generateReport = () => {
     const text = [
       `Operations Report (${new Date().toLocaleString()})`,
       `Role: ${role}${shift ? ` (${shift} shift)` : ""}`,
-      `Cashier Revenue: TSh ${cashierRevenue.toLocaleString()}`,
+      `Booking Revenue: TSh ${bookingRevenue.toLocaleString()}`,
       `Occupied Rooms: ${occupiedRooms}/${ROOMS.length}`,
       `Low Stock Items: ${lowStock.length}`,
       `Active Kitchen Tickets: ${activeKitchen}`,
