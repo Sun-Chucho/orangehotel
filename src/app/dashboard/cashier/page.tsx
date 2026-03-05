@@ -31,7 +31,6 @@ interface BookingRecord {
   roomType: RoomType;
   roomNumber: string;
   payment: PaymentMethod;
-  entryDate: string;
   checkInDate: string;
   checkInTime: string;
   checkOutDate: string;
@@ -91,7 +90,6 @@ export default function BookingPage() {
 
   const [guestName, setGuestName] = useState("");
   const [phone, setPhone] = useState("");
-  const [entryDate, setEntryDate] = useState(today);
   const [checkInDate, setCheckInDate] = useState(today);
   const [checkInTime, setCheckInTime] = useState("14:00");
   const [checkOutDate, setCheckOutDate] = useState("");
@@ -164,7 +162,6 @@ export default function BookingPage() {
     if (!window.confirm("Clear this booking form?")) return;
     setGuestName("");
     setPhone("");
-    setEntryDate(today);
     setCheckInDate(today);
     setCheckInTime("14:00");
     setCheckOutDate("");
@@ -198,7 +195,6 @@ export default function BookingPage() {
       roomType,
       roomNumber: selectedRoomNumber,
       payment: paymentMethod,
-      entryDate,
       checkInDate,
       checkInTime,
       checkOutDate,
@@ -213,7 +209,6 @@ export default function BookingPage() {
 
     setGuestName("");
     setPhone("");
-    setEntryDate(today);
     setCheckInDate(today);
     setCheckInTime("14:00");
     setCheckOutDate("");
@@ -268,7 +263,6 @@ export default function BookingPage() {
       id: `tx-${Date.now()}`,
       receiptNo: `#${nextReceipt}`,
       createdAt: Date.now(),
-      entryDate: booking.checkOutDate,
       checkInDate: booking.checkOutDate,
       checkInTime: booking.checkInTime || "14:00",
       checkOutDate: addDays(booking.checkOutDate, extraDays),
@@ -354,11 +348,7 @@ export default function BookingPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Entry Date</p>
-              <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Check-In Date</p>
               <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
