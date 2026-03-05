@@ -56,6 +56,17 @@ export default function RoomsPage() {
     setRooms((current) => current.map((room) => (room.id === roomId ? { ...room, status } : room)));
   };
 
+  const confirmAndSetRoomStatus = (roomId: string, roomNumber: string, status: Room["status"]) => {
+    const labels: Record<Room["status"], string> = {
+      available: "available",
+      occupied: "occupied",
+      cleaning: "cleaning",
+      maintenance: "maintenance",
+    };
+    if (!window.confirm(`Do you wish to mark room ${roomNumber} as ${labels[status]}?`)) return;
+    setRoomStatus(roomId, status);
+  };
+
   const getStatusIcon = (status: Room["status"]) => {
     switch (status) {
       case "available":
@@ -204,10 +215,10 @@ export default function RoomsPage() {
                   <TableCell className="text-right font-black text-lg">TSh {room.price.toLocaleString()}/night</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => setRoomStatus(room.id, "occupied")}>Occ</Button>
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => setRoomStatus(room.id, "cleaning")}>Clean</Button>
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => setRoomStatus(room.id, "available")}>Free</Button>
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => setRoomStatus(room.id, "maintenance")}>Fix</Button>
+                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "occupied")}>Occ</Button>
+                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "cleaning")}>Clean</Button>
+                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "available")}>Free</Button>
+                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "maintenance")}>Fix</Button>
                     </div>
                   </TableCell>
                 </TableRow>
