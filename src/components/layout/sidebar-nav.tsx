@@ -44,12 +44,28 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager'] },
 ];
 
+const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
+  cashier: ['/dashboard/cashier'],
+  kitchen: ['/dashboard/kitchen'],
+  barista: ['/dashboard/barista'],
+};
+
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
   
-  const filteredNav = useMemo(() => 
-    NAV_ITEMS.filter(item => item.roles.includes(role)), 
-  [role]);
+  const filteredNav = useMemo(() => {
+    const visible = NAV_ITEMS.filter(item => item.roles.includes(role));
+    const priority = ROLE_NAV_PRIORITY[role];
+    if (!priority || priority.length === 0) return visible;
+
+    return [...visible].sort((a, b) => {
+      const aIndex = priority.indexOf(a.href);
+      const bIndex = priority.indexOf(b.href);
+      const aRank = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+      const bRank = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+      return aRank - bRank;
+    });
+  }, [role]);
 
   const logo = useMemo(() => 
     PlaceHolderImages.find(img => img.id === 'app-logo'), 
