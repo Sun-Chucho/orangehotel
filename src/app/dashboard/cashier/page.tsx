@@ -33,6 +33,7 @@ interface BookingRecord {
   payment: PaymentMethod;
   entryDate: string;
   checkInDate: string;
+  checkInTime: string;
   checkOutDate: string;
   checkOutTime: string;
   nights: number;
@@ -92,9 +93,11 @@ export default function BookingPage() {
   const [phone, setPhone] = useState("");
   const [entryDate, setEntryDate] = useState(today);
   const [checkInDate, setCheckInDate] = useState(today);
+  const [checkInTime, setCheckInTime] = useState("14:00");
   const [checkOutDate, setCheckOutDate] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("12:00");
   const [selectedRoomNumber, setSelectedRoomNumber] = useState("");
+  const [showPaymentChoices, setShowPaymentChoices] = useState(false);
 
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
@@ -163,11 +166,13 @@ export default function BookingPage() {
     setPhone("");
     setEntryDate(today);
     setCheckInDate(today);
+    setCheckInTime("14:00");
     setCheckOutDate("");
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
     setPayment("cash");
     setRoomType("standard");
+    setShowPaymentChoices(false);
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
@@ -176,7 +181,7 @@ export default function BookingPage() {
     );
   };
 
-  const saveBooking = (status: "completed" | "credit") => {
+  const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
     if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
     const confirmText = status === "credit" ? "Save this as CREDIT booking?" : "Complete this booking?";
     if (!window.confirm(confirmText)) return;
@@ -192,9 +197,10 @@ export default function BookingPage() {
       phone: phone.trim(),
       roomType,
       roomNumber: selectedRoomNumber,
-      payment,
+      payment: paymentMethod,
       entryDate,
       checkInDate,
+      checkInTime,
       checkOutDate,
       checkOutTime,
       nights,
@@ -209,15 +215,23 @@ export default function BookingPage() {
     setPhone("");
     setEntryDate(today);
     setCheckInDate(today);
+    setCheckInTime("14:00");
     setCheckOutDate("");
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
     setPayment("cash");
     setRoomType("standard");
+    setShowPaymentChoices(false);
   };
 
-  const completeBooking = () => saveBooking("completed");
-  const createCreditBooking = () => saveBooking("credit");
+  const startCompleteBooking = () => {
+    if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
+    setShowPaymentChoices(true);
+  };
+
+  const finalizeCashBooking = () => saveBooking("completed", "cash");
+  const finalizeMobileBooking = () => saveBooking("completed", "mobile-money");
+  const finalizeCreditBooking = () => saveBooking("credit", "cash");
 
   const clearCreditTransaction = (id: string) => {
     if (!window.confirm("Mark this credit transaction as cleared?")) return;
@@ -256,6 +270,7 @@ export default function BookingPage() {
       createdAt: Date.now(),
       entryDate: booking.checkOutDate,
       checkInDate: booking.checkOutDate,
+      checkInTime: booking.checkInTime || "14:00",
       checkOutDate: addDays(booking.checkOutDate, extraDays),
       nights: extraDays,
       total: extraDays * ROOM_RATE[booking.roomType],
@@ -340,28 +355,77 @@ export default function BookingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
-            <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
-            <Input type="date" value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} />
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="pl-10" />
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Entry Date</p>
+              <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Check-In Date</p>
+              <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Check-In Time</p>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="pl-10" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Check-Out Date</p>
+              <Input type="date" value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} />
             </div>
           </div>
 
-          <Tabs value={payment} onValueChange={(value) => setPayment(value as PaymentMethod)}>
-            <TabsList className="w-full grid grid-cols-3 h-11 bg-muted/30 rounded-xl">
-              <TabsTrigger value="cash" className="text-[10px] font-black uppercase tracking-widest">
-                <Banknote className="w-3.5 h-3.5 mr-1" /> Cash
-              </TabsTrigger>
-              <TabsTrigger value="card" className="text-[10px] font-black uppercase tracking-widest">
-                <CreditCard className="w-3.5 h-3.5 mr-1" /> Card
-              </TabsTrigger>
-              <TabsTrigger value="mobile-money" className="text-[10px] font-black uppercase tracking-widest">
-                <CalendarCheck2 className="w-3.5 h-3.5 mr-1" /> Mobile
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1 md:col-span-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Check-Out Time</p>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="pl-10" />
+              </div>
+            </div>
+          </div>
+
+          {!showPaymentChoices && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                Clear
+              </Button>
+              <Button
+                onClick={startCompleteBooking}
+                disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber}
+                className="h-11 font-black uppercase text-[10px] tracking-widest"
+              >
+                Complete Booking
+              </Button>
+            </div>
+          )}
+
+          {showPaymentChoices && (
+            <div className="space-y-3 rounded-xl border border-primary/20 p-4 bg-primary/5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                Choose Payment Method To Finalize
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Button onClick={finalizeCashBooking} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                  Cash
+                </Button>
+                <Button onClick={finalizeMobileBooking} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                  Mobile
+                </Button>
+                <Button onClick={finalizeCreditBooking} className="h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
+                  Credit
+                </Button>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowPaymentChoices(false)}
+                className="h-10 font-black uppercase text-[10px] tracking-widest"
+              >
+                Back
+              </Button>
+            </div>
+          )}
 
           <div className="space-y-2 border-t pt-4">
             <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
@@ -378,25 +442,6 @@ export default function BookingPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
-              Clear
-            </Button>
-            <Button
-              onClick={completeBooking}
-              disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber}
-              className="h-11 font-black uppercase text-[10px] tracking-widest"
-            >
-              Complete Booking
-            </Button>
-            <Button
-              onClick={createCreditBooking}
-              disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber}
-              className="h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white"
-            >
-              Credit Booking
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
