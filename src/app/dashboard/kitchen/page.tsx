@@ -39,6 +39,7 @@ interface KitchenTicket {
 }
 
 interface CancelledKitchenTicket extends KitchenTicket {
+  source?: "kitchen" | "barista";
   cancelledAt: number;
 }
 
@@ -73,7 +74,7 @@ const KITCHEN_MENU: KitchenMenuItem[] = [
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
 const STORAGE_MENU = "orange-hotel-kitchen-menu";
-const STORAGE_CANCELLED = "orange-hotel-kitchen-cancelled-tickets";
+const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 const STORAGE_PAYMENTS = "orange-hotel-kitchen-payments";
 
 const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
@@ -279,6 +280,7 @@ export default function KitchenPage() {
 
     const cancelled: CancelledKitchenTicket = {
       ...ticket,
+      source: "kitchen",
       cancelledAt: Date.now(),
     };
 

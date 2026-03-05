@@ -15,10 +15,12 @@ interface CancelledKitchenTicket {
   destination: string;
   lines: Array<{ name: string; qty: number }>;
   total: number;
+  source?: "kitchen" | "barista";
   cancelledAt: number;
 }
 
-const STORAGE_CANCELLED = "orange-hotel-kitchen-cancelled-tickets";
+const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
+const LEGACY_STORAGE_CANCELLED = "orange-hotel-kitchen-cancelled-tickets";
 
 function formatAgo(timestamp: number): string {
   const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
@@ -32,7 +34,7 @@ export default function CancelledPage() {
   const [cancelled, setCancelled] = useState<CancelledKitchenTicket[]>([]);
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_CANCELLED);
+    const raw = localStorage.getItem(STORAGE_CANCELLED) ?? localStorage.getItem(LEGACY_STORAGE_CANCELLED);
     if (!raw) return;
     try {
       const parsed = JSON.parse(raw) as CancelledKitchenTicket[];
@@ -62,7 +64,7 @@ export default function CancelledPage() {
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Cancelled Orders</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-            Orders moved here from Kitchen queue
+            Orders moved here from Kitchen and Barista queues
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -81,13 +83,14 @@ export default function CancelledPage() {
       <Card className="border-none shadow-sm">
         <CardHeader>
           <CardTitle className="text-xl font-black uppercase tracking-tight">Cancelled Queue</CardTitle>
-          <CardDescription>Kitchen orders that were cancelled</CardDescription>
+          <CardDescription>Kitchen and barista orders that were cancelled</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-muted/10">
               <TableRow>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Ticket</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Source</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Details</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Cancelled</TableHead>
@@ -101,6 +104,9 @@ export default function CancelledPage() {
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
                       {ticket.mode} | {ticket.destination}
                     </p>
+                  </TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">
+                    {ticket.source ?? "kitchen"}
                   </TableCell>
                   <TableCell className="font-bold text-sm">
                     {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
@@ -116,7 +122,7 @@ export default function CancelledPage() {
 
               {cancelled.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-12 text-center opacity-40">
+                  <TableCell colSpan={5} className="py-12 text-center opacity-40">
                     <XCircle className="w-12 h-12 mx-auto mb-3" />
                     <p className="font-black uppercase tracking-widest text-xs">No cancelled orders</p>
                   </TableCell>

@@ -11,8 +11,10 @@ import { Receipt } from "lucide-react";
 type PaymentsTab = "completed" | "credit";
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
+type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type TransactionStatus = "completed" | "credit" | "checked-out";
 type KitchenPaymentStatus = "completed" | "credit";
+type BaristaPaymentStatus = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 
 interface BookingRecord {
@@ -44,8 +46,20 @@ interface KitchenPaymentRecord {
   method: KitchenPaymentMethod;
 }
 
+interface BaristaPaymentRecord {
+  id: string;
+  ticketId: string;
+  code: string;
+  createdAt: number;
+  mode: "restaurant" | "room-service" | "take-away";
+  destination: string;
+  total: number;
+  status: BaristaPaymentStatus;
+  method: BaristaPaymentMethod;
+}
+
 interface PaymentRow {
-  source: "booking" | "kitchen";
+  source: "booking" | "kitchen" | "barista";
   id: string;
   ref: string;
   payer: string;
@@ -58,6 +72,7 @@ interface PaymentRow {
 
 const STORAGE_BOOKING_TX = "orange-hotel-cashier-transactions";
 const STORAGE_KITCHEN_PAYMENTS = "orange-hotel-kitchen-payments";
+const STORAGE_BARISTA_PAYMENTS = "orange-hotel-barista-payments";
 
 function formatAgo(timestamp: number): string {
   const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
@@ -71,13 +86,15 @@ export default function PaymentsPage() {
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("completed");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
+  const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
 
-  const [selectedCredit, setSelectedCredit] = useState<{ source: "booking" | "kitchen"; id: string } | null>(null);
+  const [selectedCredit, setSelectedCredit] = useState<{ source: "booking" | "kitchen" | "barista"; id: string } | null>(null);
   const [showMethodPopup, setShowMethodPopup] = useState(false);
 
   useEffect(() => {
     const savedBookingTx = localStorage.getItem(STORAGE_BOOKING_TX);
     const savedKitchenPayments = localStorage.getItem(STORAGE_KITCHEN_PAYMENTS);
+    const savedBaristaPayments = localStorage.getItem(STORAGE_BARISTA_PAYMENTS);
 
     if (savedBookingTx) {
       try {
@@ -107,6 +124,19 @@ export default function PaymentsPage() {
         setKitchenPayments([]);
       }
     }
+
+    if (savedBaristaPayments) {
+      try {
+        const parsed = JSON.parse(savedBaristaPayments) as BaristaPaymentRecord[];
+        if (Array.isArray(parsed)) {
+          setBaristaPayments(
+            parsed.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })),
+          );
+        }
+      } catch {
+        setBaristaPayments([]);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -116,6 +146,10 @@ export default function PaymentsPage() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KITCHEN_PAYMENTS, JSON.stringify(kitchenPayments));
   }, [kitchenPayments]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_BARISTA_PAYMENTS, JSON.stringify(baristaPayments));
+  }, [baristaPayments]);
 
   const bookingRows = useMemo<PaymentRow[]>(
     () =>
@@ -149,7 +183,23 @@ export default function PaymentsPage() {
     [kitchenPayments],
   );
 
-  const allRows = useMemo(() => [...bookingRows, ...kitchenRows], [bookingRows, kitchenRows]);
+  const baristaRows = useMemo<PaymentRow[]>(
+    () =>
+      baristaPayments.map((tx) => ({
+        source: "barista",
+        id: tx.id,
+        ref: tx.code,
+        payer: "Barista Order",
+        context: tx.destination,
+        method: tx.method,
+        amount: tx.total,
+        createdAt: tx.createdAt,
+        status: tx.status,
+      })),
+    [baristaPayments],
+  );
+
+  const allRows = useMemo(() => [...bookingRows, ...kitchenRows, ...baristaRows], [bookingRows, kitchenRows, baristaRows]);
 
   const completedPayments = useMemo(
     () => allRows.filter((tx) => tx.status === "completed").sort((a, b) => b.createdAt - a.createdAt),
@@ -178,8 +228,14 @@ export default function PaymentsPage() {
           tx.id === selectedCredit.id ? { ...tx, status: "completed", payment: mappedMethod } : tx,
         ),
       );
-    } else {
+    } else if (selectedCredit.source === "kitchen") {
       setKitchenPayments((current) =>
+        current.map((tx) =>
+          tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
+        ),
+      );
+    } else {
+      setBaristaPayments((current) =>
         current.map((tx) =>
           tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
         ),

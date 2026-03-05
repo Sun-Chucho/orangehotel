@@ -50,6 +50,11 @@ interface BaristaPaymentRecord {
   method: BaristaPaymentMethod;
 }
 
+interface CancelledBaristaTicket extends BaristaTicket {
+  source?: "kitchen" | "barista";
+  cancelledAt: number;
+}
+
 interface PendingOrder {
   mode: ServiceMode;
   destination: string;
@@ -75,6 +80,7 @@ const STORAGE_TICKETS = "orange-hotel-barista-orders";
 const STORAGE_SEQ = "orange-hotel-barista-seq";
 const STORAGE_MENU = "orange-hotel-barista-menu";
 const STORAGE_PAYMENTS = "orange-hotel-barista-payments";
+const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 
 const normalizeCategory = (value: string): Exclude<BaristaCategory, "all"> => {
   if (value === "espresso" || value === "coffee" || value === "tea" || value === "cold" || value === "snacks") {
@@ -273,7 +279,20 @@ export default function BaristaPage() {
   };
 
   const cancelTicket = (id: string) => {
+    const ticket = tickets.find((t) => t.id === id);
+    if (!ticket) return;
     if (!window.confirm("Cancel this order?")) return;
+
+    const cancelled: CancelledBaristaTicket = {
+      ...ticket,
+      source: "barista",
+      cancelledAt: Date.now(),
+    };
+
+    const existingRaw = localStorage.getItem(STORAGE_CANCELLED);
+    const existing = existingRaw ? (JSON.parse(existingRaw) as CancelledBaristaTicket[]) : [];
+    localStorage.setItem(STORAGE_CANCELLED, JSON.stringify([cancelled, ...existing]));
+
     setTickets((current) => current.filter((ticket) => ticket.id !== id));
   };
 
