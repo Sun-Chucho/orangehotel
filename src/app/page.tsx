@@ -405,7 +405,6 @@ export default function Home() {
             <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Quick Links</p>
             <div className="mt-3 space-y-2 text-sm text-white/80">
               <a href="#book" className="block hover:text-orange-300">Book Now</a>
-              <Link href="/staff" className="block hover:text-orange-300">Staff Login</Link>
             </div>
           </div>
         </div>

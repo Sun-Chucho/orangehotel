@@ -46,6 +46,7 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<InventoryTab>("kitchen");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAdjustForm, setShowAdjustForm] = useState(false);
+  const [showCreateMenuForm, setShowCreateMenuForm] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [adjustQty, setAdjustQty] = useState("1");
   const [adjustMode, setAdjustMode] = useState<"add" | "remove">("add");
@@ -56,6 +57,11 @@ export default function InventoryPage() {
   const [newPrice, setNewPrice] = useState("0");
   const [newKitchenCategory, setNewKitchenCategory] = useState<KitchenMenuCategory>("breakfast");
   const [newBaristaCategory, setNewBaristaCategory] = useState<BaristaMenuCategory>("coffee");
+  const [menuName, setMenuName] = useState("");
+  const [menuPrice, setMenuPrice] = useState("0");
+  const [menuPrepMinutes, setMenuPrepMinutes] = useState("10");
+  const [menuKitchenCategory, setMenuKitchenCategory] = useState<KitchenMenuCategory>("breakfast");
+  const [menuBaristaCategory, setMenuBaristaCategory] = useState<BaristaMenuCategory>("coffee");
 
   useEffect(() => {
     const savedItems = localStorage.getItem(STORAGE_ITEMS);
@@ -173,6 +179,52 @@ export default function InventoryPage() {
     setShowAddForm(false);
   };
 
+  const createMenuItem = () => {
+    const price = Number(menuPrice);
+    const prepMinutes = Number(menuPrepMinutes);
+    if (
+      menuName.trim().length === 0 ||
+      Number.isNaN(price) ||
+      price <= 0 ||
+      Number.isNaN(prepMinutes) ||
+      prepMinutes <= 0
+    ) {
+      return;
+    }
+    if (!window.confirm("Create this menu item and sync to POS?")) return;
+
+    if (activeTab === "kitchen") {
+      const menuItem: KitchenMenuItem = {
+        id: `km-${Date.now()}`,
+        name: menuName.trim(),
+        price,
+        category: menuKitchenCategory,
+        prepMinutes,
+      };
+      const raw = localStorage.getItem(STORAGE_KITCHEN_MENU);
+      const parsed = raw ? (JSON.parse(raw) as KitchenMenuItem[]) : [];
+      localStorage.setItem(STORAGE_KITCHEN_MENU, JSON.stringify([menuItem, ...parsed]));
+    } else {
+      const menuItem: BaristaMenuItem = {
+        id: `bm-${Date.now()}`,
+        name: menuName.trim(),
+        price,
+        category: menuBaristaCategory,
+        prepMinutes,
+      };
+      const raw = localStorage.getItem(STORAGE_BARISTA_MENU);
+      const parsed = raw ? (JSON.parse(raw) as BaristaMenuItem[]) : [];
+      localStorage.setItem(STORAGE_BARISTA_MENU, JSON.stringify([menuItem, ...parsed]));
+    }
+
+    setMenuName("");
+    setMenuPrice("0");
+    setMenuPrepMinutes(activeTab === "kitchen" ? "10" : "3");
+    setMenuKitchenCategory("breakfast");
+    setMenuBaristaCategory("coffee");
+    setShowCreateMenuForm(false);
+  };
+
   const getStockLabel = (item: InventoryItem) => {
     if (item.stock <= 0) return "Out";
     if (item.stock < item.minStock) return "Low";
@@ -249,6 +301,7 @@ export default function InventoryPage() {
               onClick={() => {
                 setShowAddForm((current) => !current);
                 setShowAdjustForm(false);
+                setShowCreateMenuForm(false);
               }}
             >
               <Package className="w-4 h-4 mr-2" /> Add Item
@@ -257,8 +310,20 @@ export default function InventoryPage() {
               variant="outline"
               className="h-11 font-black uppercase tracking-widest text-[10px]"
               onClick={() => {
+                setShowCreateMenuForm((current) => !current);
+                setShowAddForm(false);
+                setShowAdjustForm(false);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" /> Create Menu
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 font-black uppercase tracking-widest text-[10px]"
+              onClick={() => {
                 setShowAdjustForm((current) => !current);
                 setShowAddForm(false);
+                setShowCreateMenuForm(false);
               }}
             >
               <Minus className="w-4 h-4 mr-2" /> Adjust Stock
@@ -304,6 +369,49 @@ export default function InventoryPage() {
                 )}
                 <Button className="w-full bg-primary hover:bg-primary/90 font-black uppercase tracking-widest text-xs h-11" onClick={addNewItem}>
                   <Plus className="w-4 h-4 mr-2" /> Add Item
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {showCreateMenuForm && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2 uppercase font-black">
+                  <Plus className="w-5 h-5 text-primary" /> Create {activeTab === "kitchen" ? "Kitchen" : "Barista"} Menu
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Input value={menuName} onChange={(event) => setMenuName(event.target.value)} placeholder="Menu item name" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="number" min="1" value={menuPrice} onChange={(event) => setMenuPrice(event.target.value)} placeholder="Price (TZS)" />
+                  <Input type="number" min="1" value={menuPrepMinutes} onChange={(event) => setMenuPrepMinutes(event.target.value)} placeholder="Prep (min)" />
+                </div>
+                {activeTab === "kitchen" ? (
+                  <select
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={menuKitchenCategory}
+                    onChange={(event) => setMenuKitchenCategory(event.target.value as KitchenMenuCategory)}
+                  >
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner">Dinner</option>
+                  </select>
+                ) : (
+                  <select
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={menuBaristaCategory}
+                    onChange={(event) => setMenuBaristaCategory(event.target.value as BaristaMenuCategory)}
+                  >
+                    <option value="espresso">Espresso</option>
+                    <option value="coffee">Coffee</option>
+                    <option value="tea">Tea</option>
+                    <option value="cold">Cold</option>
+                    <option value="snacks">Snacks</option>
+                  </select>
+                )}
+                <Button className="w-full bg-primary hover:bg-primary/90 font-black uppercase tracking-widest text-xs h-11" onClick={createMenuItem}>
+                  <Plus className="w-4 h-4 mr-2" /> Create Menu
                 </Button>
               </CardContent>
             </Card>
