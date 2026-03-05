@@ -200,7 +200,7 @@ export default function CashierPage() {
     <div className="space-y-8">
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Reception POS</h1>
+          <h1 className="text-3xl font-black tracking-tight uppercase">Reception Booking</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
             Check-in billing, service charges, and payment processing
           </p>

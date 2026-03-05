@@ -32,7 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['manager'] },
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'cashier'] },
   { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'inventory'] },
-  { label: 'POS Terminal', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'cashier'] },
+  { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'cashier'] },
   { label: 'Kitchen POS', href: '/dashboard/kitchen', icon: Utensils, roles: ['manager', 'kitchen'] },
   { label: 'Barista POS', href: '/dashboard/barista', icon: Coffee, roles: ['manager', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager'] },
