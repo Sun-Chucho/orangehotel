@@ -68,6 +68,7 @@ const KITCHEN_MENU: KitchenMenuItem[] = [
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
 const STORAGE_ITEMS = "orange-hotel-inventory-items";
+const STORAGE_MENU = "orange-hotel-kitchen-menu";
 
 function formatAgo(timestamp: number): string {
   const elapsedMs = Date.now() - timestamp;
@@ -89,6 +90,7 @@ export default function KitchenPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [ticketSeq, setTicketSeq] = useState(300);
+  const [menuItems, setMenuItems] = useState<KitchenMenuItem[]>(KITCHEN_MENU);
   const [kitchenInventory, setKitchenInventory] = useState<InventoryItem[]>(
     INVENTORY.filter((item) => item.category === "Kitchen"),
   );
@@ -117,6 +119,19 @@ export default function KitchenPage() {
   }, []);
 
   useEffect(() => {
+    const savedMenu = localStorage.getItem(STORAGE_MENU);
+    if (!savedMenu) return;
+    try {
+      const parsed = JSON.parse(savedMenu) as KitchenMenuItem[];
+      if (Array.isArray(parsed)) {
+        setMenuItems([...parsed, ...KITCHEN_MENU]);
+      }
+    } catch {
+      setMenuItems(KITCHEN_MENU);
+    }
+  }, []);
+
+  useEffect(() => {
     const savedItems = localStorage.getItem(STORAGE_ITEMS);
     if (!savedItems) return;
     try {
@@ -138,12 +153,12 @@ export default function KitchenPage() {
   }, [ticketSeq]);
 
   const filteredMenu = useMemo(() => {
-    return KITCHEN_MENU.filter((item) => {
+    return menuItems.filter((item) => {
       const inCategory = category === "all" || item.category === category;
       const inSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
       return inCategory && inSearch;
     });
-  }, [category, searchTerm]);
+  }, [category, menuItems, searchTerm]);
 
   const filteredTickets = useMemo(() => {
     if (queueFilter === "all") return tickets;

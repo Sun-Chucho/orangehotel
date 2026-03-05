@@ -18,20 +18,35 @@ import { Minus, Package, Plus } from "lucide-react";
 
 type InventoryTab = "kitchen" | "barista";
 type ItemCategory = "Kitchen" | "Bar";
+type KitchenMenuCategory = "grill" | "pasta" | "salad" | "sides" | "dessert";
+
+interface KitchenMenuItem {
+  id: string;
+  name: string;
+  price: number;
+  category: KitchenMenuCategory;
+  prepMinutes: number;
+}
 
 const STORAGE_ITEMS = "orange-hotel-inventory-items";
+const STORAGE_KITCHEN_MENU = "orange-hotel-kitchen-menu";
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>(INVENTORY);
   const [activeTab, setActiveTab] = useState<InventoryTab>("kitchen");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAdjustForm, setShowAdjustForm] = useState(false);
+  const [showCreateMenuForm, setShowCreateMenuForm] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [adjustQty, setAdjustQty] = useState("1");
   const [adjustMode, setAdjustMode] = useState<"add" | "remove">("add");
   const [newName, setNewName] = useState("");
   const [newUnit, setNewUnit] = useState("pcs");
   const [newStock, setNewStock] = useState("0");
+  const [menuName, setMenuName] = useState("");
+  const [menuPrice, setMenuPrice] = useState("0");
+  const [menuCategory, setMenuCategory] = useState<KitchenMenuCategory>("grill");
+  const [menuPrepMinutes, setMenuPrepMinutes] = useState("10");
 
   useEffect(() => {
     const savedItems = localStorage.getItem(STORAGE_ITEMS);
@@ -116,6 +131,38 @@ export default function InventoryPage() {
     setShowAddForm(false);
   };
 
+  const createKitchenMenuItem = () => {
+    const price = Number(menuPrice);
+    const prepMinutes = Number(menuPrepMinutes);
+    if (
+      menuName.trim().length === 0 ||
+      Number.isNaN(price) ||
+      price <= 0 ||
+      Number.isNaN(prepMinutes) ||
+      prepMinutes <= 0
+    ) {
+      return;
+    }
+
+    const nextMenuItem: KitchenMenuItem = {
+      id: `km-${Date.now()}`,
+      name: menuName.trim(),
+      price,
+      category: menuCategory,
+      prepMinutes,
+    };
+
+    const currentRaw = localStorage.getItem(STORAGE_KITCHEN_MENU);
+    const current = currentRaw ? (JSON.parse(currentRaw) as KitchenMenuItem[]) : [];
+    localStorage.setItem(STORAGE_KITCHEN_MENU, JSON.stringify([nextMenuItem, ...current]));
+
+    setMenuName("");
+    setMenuPrice("0");
+    setMenuCategory("grill");
+    setMenuPrepMinutes("10");
+    setShowCreateMenuForm(false);
+  };
+
   const getStockLabel = (item: InventoryItem) => {
     if (item.stock <= 0) return "Out";
     if (item.stock < item.minStock) return "Low";
@@ -192,6 +239,7 @@ export default function InventoryPage() {
               onClick={() => {
                 setShowAddForm((current) => !current);
                 setShowAdjustForm(false);
+                setShowCreateMenuForm(false);
               }}
             >
               <Package className="w-4 h-4 mr-2" /> Add Item
@@ -202,10 +250,24 @@ export default function InventoryPage() {
               onClick={() => {
                 setShowAdjustForm((current) => !current);
                 setShowAddForm(false);
+                setShowCreateMenuForm(false);
               }}
             >
               <Minus className="w-4 h-4 mr-2" /> Adjust Stock
             </Button>
+            {activeTab === "kitchen" && (
+              <Button
+                variant="outline"
+                className="h-11 font-black uppercase tracking-widest text-[10px]"
+                onClick={() => {
+                  setShowCreateMenuForm((current) => !current);
+                  setShowAddForm(false);
+                  setShowAdjustForm(false);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" /> Create Menu
+              </Button>
+            )}
           </div>
 
           {showAddForm && (
@@ -260,6 +322,37 @@ export default function InventoryPage() {
                 <Input type="number" min="1" value={adjustQty} onChange={(event) => setAdjustQty(event.target.value)} placeholder="Quantity" />
                 <Button className="w-full font-black uppercase tracking-widest text-xs h-11" onClick={runAdjustment}>
                   Apply
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "kitchen" && showCreateMenuForm && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2 uppercase font-black">
+                  <Plus className="w-5 h-5 text-primary" /> Create Kitchen Menu
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Input value={menuName} onChange={(event) => setMenuName(event.target.value)} placeholder="Dish name" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="number" min="1" value={menuPrice} onChange={(event) => setMenuPrice(event.target.value)} placeholder="Price (TZS)" />
+                  <Input type="number" min="1" value={menuPrepMinutes} onChange={(event) => setMenuPrepMinutes(event.target.value)} placeholder="Prep (mins)" />
+                </div>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={menuCategory}
+                  onChange={(event) => setMenuCategory(event.target.value as KitchenMenuCategory)}
+                >
+                  <option value="grill">Grill</option>
+                  <option value="pasta">Pasta</option>
+                  <option value="salad">Salad</option>
+                  <option value="sides">Sides</option>
+                  <option value="dessert">Dessert</option>
+                </select>
+                <Button className="w-full bg-primary hover:bg-primary/90 font-black uppercase tracking-widest text-xs h-11" onClick={createKitchenMenuItem}>
+                  <Plus className="w-4 h-4 mr-2" /> Save Menu Item
                 </Button>
               </CardContent>
             </Card>
