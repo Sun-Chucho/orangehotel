@@ -6,62 +6,32 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Banknote,
-  BedDouble,
-  CalendarCheck2,
-  CreditCard,
-  Minus,
-  Plus,
-  Receipt,
-  Search,
-  ShoppingCart,
-  Trash2,
-  User,
-} from "lucide-react";
+import { Banknote, CalendarCheck2, Clock, CreditCard, Phone, Receipt, User } from "lucide-react";
 
-type ServiceCategory = "all" | "rooms" | "transport" | "wellness" | "food" | "fees";
-type PaymentMethod = "cash" | "card" | "mobile-money" | "room-charge";
+type PaymentMethod = "cash" | "card" | "mobile-money";
 type TxFilter = "all" | PaymentMethod;
-type RoomAction = "occupied" | "left" | "reserved" | "cleaning";
-
-interface ServiceItem {
-  id: string;
-  name: string;
-  price: number;
-  category: Exclude<ServiceCategory, "all">;
-}
-
-interface CartLine {
-  item: ServiceItem;
-  qty: number;
-}
+type RoomType = "standard" | "platinum";
+type StayMode = "days" | "calendar";
 
 interface Transaction {
   id: string;
   receiptNo: string;
   createdAt: number;
   guestName: string;
-  roomNumber: string;
-  roomAction: RoomAction;
+  phone: string;
+  roomType: RoomType;
+  nights: number;
   payment: PaymentMethod;
-  lines: Array<{ name: string; qty: number; unitPrice: number }>;
-  subtotal: number;
-  tax: number;
+  bookingTime: string;
+  checkIn?: string;
+  checkOut?: string;
   total: number;
 }
 
-const SERVICES: ServiceItem[] = [
-  { id: "s1", name: "Standard Room Booking", price: 70000, category: "rooms" },
-  { id: "s2", name: "Platinum Room Booking", price: 100000, category: "rooms" },
-  { id: "s3", name: "Late Checkout Fee", price: 50000, category: "fees" },
-  { id: "s4", name: "Airport Transfer", price: 35000, category: "transport" },
-  { id: "s5", name: "City Shuttle", price: 20000, category: "transport" },
-  { id: "s6", name: "Spa Day Pass", price: 80000, category: "wellness" },
-  { id: "s7", name: "Laundry Express", price: 20000, category: "fees" },
-  { id: "s8", name: "Dinner Buffet", price: 45000, category: "food" },
-  { id: "s9", name: "Breakfast Voucher", price: 25000, category: "food" },
-];
+const ROOM_RATE: Record<RoomType, number> = {
+  standard: 70000,
+  platinum: 100000,
+};
 
 const STORAGE_TX = "orange-hotel-cashier-transactions";
 const STORAGE_SEQ = "orange-hotel-cashier-seq";
@@ -74,15 +44,28 @@ function formatAgo(timestamp: number): string {
   return `${hours}h ${mins % 60}m ago`;
 }
 
-export default function CashierPage() {
-  const [category, setCategory] = useState<ServiceCategory>("all");
+function daysBetween(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 0;
+  const inDate = new Date(`${checkIn}T00:00:00`);
+  const outDate = new Date(`${checkOut}T00:00:00`);
+  const ms = outDate.getTime() - inDate.getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  return Math.ceil(ms / 86400000);
+}
+
+export default function BookingPage() {
   const [txFilter, setTxFilter] = useState<TxFilter>("all");
-  const [searchTerm, setSearchTerm] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
-  const [roomAction, setRoomAction] = useState<RoomAction>("occupied");
+  const [roomType, setRoomType] = useState<RoomType>("standard");
+  const [stayMode, setStayMode] = useState<StayMode>("days");
+
   const [guestName, setGuestName] = useState("");
-  const [roomNumber, setRoomNumber] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [phone, setPhone] = useState("");
+  const [bookingTime, setBookingTime] = useState("12:00");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [daysInput, setDaysInput] = useState("1");
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [receiptSeq, setReceiptSeq] = useState(84920);
 
@@ -113,62 +96,39 @@ export default function CashierPage() {
     localStorage.setItem(STORAGE_SEQ, String(receiptSeq));
   }, [receiptSeq]);
 
-  const filteredServices = useMemo(() => {
-    return SERVICES.filter((service) => {
-      const inCategory = category === "all" || service.category === category;
-      const inSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase());
-      return inCategory && inSearch;
-    });
-  }, [category, searchTerm]);
+  const nights = useMemo(() => {
+    if (stayMode === "days") {
+      const value = Number(daysInput);
+      return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    }
+    return daysBetween(checkIn, checkOut);
+  }, [stayMode, daysInput, checkIn, checkOut]);
+
+  const rate = ROOM_RATE[roomType];
+  const total = nights * rate;
 
   const filteredTransactions = useMemo(() => {
     if (txFilter === "all") return transactions;
     return transactions.filter((tx) => tx.payment === txFilter);
   }, [transactions, txFilter]);
 
-  const subtotal = useMemo(
-    () => cart.reduce((sum, line) => sum + line.item.price * line.qty, 0),
-    [cart],
-  );
-  const tax = Math.round(subtotal * 0.05);
-  const total = subtotal + tax;
+  const totalTransactions = transactions.length;
+  const todayRevenue = transactions.reduce((sum, tx) => sum + tx.total, 0);
 
-  const addToCart = (item: ServiceItem) => {
-    setCart((current) => {
-      const existing = current.find((line) => line.item.id === item.id);
-      if (existing) {
-        return current.map((line) =>
-          line.item.id === item.id ? { ...line, qty: line.qty + 1 } : line,
-        );
-      }
-      return [...current, { item, qty: 1 }];
-    });
+  const clearBookingForm = () => {
+    setGuestName("");
+    setPhone("");
+    setBookingTime("12:00");
+    setCheckIn("");
+    setCheckOut("");
+    setDaysInput("1");
+    setRoomType("standard");
+    setPayment("cash");
+    setStayMode("days");
   };
 
-  const incQty = (id: string) => {
-    setCart((current) =>
-      current.map((line) => (line.item.id === id ? { ...line, qty: line.qty + 1 } : line)),
-    );
-  };
-
-  const decQty = (id: string) => {
-    setCart((current) =>
-      current
-        .map((line) => (line.item.id === id ? { ...line, qty: Math.max(0, line.qty - 1) } : line))
-        .filter((line) => line.qty > 0),
-    );
-  };
-
-  const removeLine = (id: string) => {
-    setCart((current) => current.filter((line) => line.item.id !== id));
-  };
-
-  const clearOrder = () => {
-    setCart([]);
-  };
-
-  const completePayment = () => {
-    if (cart.length === 0 || guestName.trim().length === 0) return;
+  const completeBooking = () => {
+    if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1) return;
 
     const nextReceipt = receiptSeq + 1;
     setReceiptSeq(nextReceipt);
@@ -178,23 +138,19 @@ export default function CashierPage() {
       receiptNo: `#${nextReceipt}`,
       createdAt: Date.now(),
       guestName: guestName.trim(),
-      roomNumber: roomNumber.trim() || "Walk-in",
-      roomAction,
+      phone: phone.trim(),
+      roomType,
+      nights,
       payment,
-      lines: cart.map((line) => ({ name: line.item.name, qty: line.qty, unitPrice: line.item.price })),
-      subtotal,
-      tax,
+      bookingTime,
+      checkIn: stayMode === "calendar" ? checkIn : undefined,
+      checkOut: stayMode === "calendar" ? checkOut : undefined,
       total,
     };
 
     setTransactions((current) => [tx, ...current]);
-    setCart([]);
-    setGuestName("");
-    setRoomNumber("");
+    clearBookingForm();
   };
-
-  const totalTransactions = transactions.length;
-  const todayRevenue = transactions.reduce((sum, tx) => sum + tx.total, 0);
 
   return (
     <div className="space-y-8">
@@ -202,7 +158,7 @@ export default function CashierPage() {
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Reception Booking</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-            Check-in billing, service charges, and payment processing
+            Guest booking capture and payment processing
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 w-full lg:w-auto">
@@ -216,220 +172,85 @@ export default function CashierPage() {
       </header>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <div className="xl:col-span-2 space-y-6">
-          <Card className="border-none shadow-sm">
-            <CardHeader className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search services, rooms, or items..."
-                  className="pl-10 h-12"
-                />
-              </div>
-
-              <Tabs value={category} onValueChange={(value) => setCategory(value as ServiceCategory)}>
-                <TabsList className="w-full grid grid-cols-3 md:grid-cols-6 h-auto gap-1 bg-muted/30 p-1.5 rounded-xl">
-                  <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest rounded-lg">All</TabsTrigger>
-                  <TabsTrigger value="rooms" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Rooms</TabsTrigger>
-                  <TabsTrigger value="transport" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Transport</TabsTrigger>
-                  <TabsTrigger value="wellness" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Wellness</TabsTrigger>
-                  <TabsTrigger value="food" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Food</TabsTrigger>
-                  <TabsTrigger value="fees" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Fees</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </CardHeader>
-
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredServices.map((service) => (
-                  <button
-                    key={service.id}
-                    onClick={() => addToCart(service)}
-                    className="text-left bg-white border rounded-2xl p-5 hover:border-primary/50 hover:shadow-md transition-all"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge variant="outline" className="uppercase text-[9px] font-black tracking-widest">
-                        {service.category}
-                      </Badge>
-                      <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center">
-                        <Plus className="w-4 h-4" />
-                      </div>
-                    </div>
-                    <h3 className="font-black text-lg leading-tight">{service.name}</h3>
-                    <div className="mt-4 font-black text-sm">TSh {service.price.toLocaleString()}</div>
-                  </button>
-                ))}
-                {filteredServices.length === 0 && (
-                  <div className="col-span-full py-10 text-center opacity-40">
-                    <p className="font-black uppercase tracking-widest text-xs">No matching services</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Transactions</CardTitle>
-                  <CardDescription>Completed booking transactions</CardDescription>
-                </div>
-                <Tabs value={txFilter} onValueChange={(value) => setTxFilter(value as TxFilter)}>
-                  <TabsList className="h-10">
-                    <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
-                    <TabsTrigger value="cash" className="text-[10px] font-black uppercase tracking-widest">Cash</TabsTrigger>
-                    <TabsTrigger value="card" className="text-[10px] font-black uppercase tracking-widest">Card</TabsTrigger>
-                    <TabsTrigger value="mobile-money" className="text-[10px] font-black uppercase tracking-widest">Mobile</TabsTrigger>
-                    <TabsTrigger value="room-charge" className="text-[10px] font-black uppercase tracking-widest">Room</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {filteredTransactions.slice(0, 8).map((tx) => (
-                <div key={tx.id} className="border rounded-2xl p-4 bg-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-black text-sm">{tx.receiptNo}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                        {tx.guestName} | Room: {tx.roomNumber} ({tx.roomAction}) | {tx.payment} | {formatAgo(tx.createdAt)}
-                      </p>
-                    </div>
-                    <p className="font-black text-sm">TSh {tx.total.toLocaleString()}</p>
-                  </div>
-                </div>
-              ))}
-
-              {filteredTransactions.length === 0 && (
-                <div className="py-10 text-center opacity-40">
-                  <Receipt className="w-10 h-10 mx-auto mb-2" />
-                  <p className="font-black uppercase tracking-widest text-xs">No transactions yet</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="shadow-2xl border-none bg-white overflow-hidden">
+        <Card className="xl:col-span-2 shadow-2xl border-none bg-white overflow-hidden">
           <div className="h-1.5 bg-primary" />
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Current Order</CardTitle>
-              <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-primary shadow-xl">
-                <ShoppingCart className="w-5 h-5" />
-              </div>
-            </div>
-            <CardDescription>Capture guest details and process payment</CardDescription>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">New Booking</CardTitle>
+            <CardDescription>Guest details, stay duration, room type, and payment</CardDescription>
           </CardHeader>
-
           <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={guestName}
-                  onChange={(event) => setGuestName(event.target.value)}
-                  placeholder="Guest name"
-                  className="pl-10"
-                />
+                <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Guest name" className="pl-10" />
               </div>
               <div className="relative">
-                <BedDouble className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={roomNumber}
-                  onChange={(event) => setRoomNumber(event.target.value)}
-                  placeholder="Room number (optional)"
-                  className="pl-10"
-                />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" className="pl-10" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room Action</p>
-              <div className="grid grid-cols-2 gap-2">
-                {(["occupied", "left", "reserved", "cleaning"] as RoomAction[]).map((action) => (
-                  <Button
-                    key={action}
-                    type="button"
-                    variant={roomAction === action ? "default" : "outline"}
-                    onClick={() => setRoomAction(action)}
-                    className="h-10 font-black uppercase text-[10px] tracking-widest"
-                  >
-                    {action}
-                  </Button>
-                ))}
-              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room Type</p>
+              <Tabs value={roomType} onValueChange={(value) => setRoomType(value as RoomType)}>
+                <TabsList className="w-full grid grid-cols-2 h-11 bg-muted/30 rounded-xl">
+                  <TabsTrigger value="standard" className="font-black uppercase text-[10px] tracking-widest">Standard</TabsTrigger>
+                  <TabsTrigger value="platinum" className="font-black uppercase text-[10px] tracking-widest">Platinum</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
-            {cart.length === 0 ? (
-              <div className="h-44 rounded-xl border border-dashed flex flex-col items-center justify-center text-center opacity-40">
-                <Receipt className="w-10 h-10 mb-2" />
-                <p className="font-black uppercase tracking-widest text-[10px]">Waiting for items...</p>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Stay Selection</p>
+              <Tabs value={stayMode} onValueChange={(value) => setStayMode(value as StayMode)}>
+                <TabsList className="w-full grid grid-cols-2 h-11 bg-muted/30 rounded-xl">
+                  <TabsTrigger value="days" className="font-black uppercase text-[10px] tracking-widest">Number Of Days</TabsTrigger>
+                  <TabsTrigger value="calendar" className="font-black uppercase text-[10px] tracking-widest">Calendar Days</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {stayMode === "days" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input type="number" min="1" value={daysInput} onChange={(e) => setDaysInput(e.target.value)} placeholder="Number of days" />
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="pl-10" />
+                </div>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-                {cart.map((line) => (
-                  <div key={line.item.id} className="border rounded-xl p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-bold leading-tight">{line.item.name}</p>
-                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">
-                          TSh {line.item.price.toLocaleString()} each
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => removeLine(line.item.id)}
-                        className="p-1.5 rounded-md text-destructive hover:bg-destructive/10"
-                        aria-label={`Remove ${line.item.name}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between mt-3">
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => decQty(line.item.id)}>
-                          <Minus className="w-3.5 h-3.5" />
-                        </Button>
-                        <span className="w-8 text-center font-black">{line.qty}</span>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => incQty(line.item.id)}>
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                      <span className="font-black text-sm">TSh {(line.item.price * line.qty).toLocaleString()}</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+                <Input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input type="time" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="pl-10" />
+                </div>
               </div>
             )}
 
             <Tabs value={payment} onValueChange={(value) => setPayment(value as PaymentMethod)}>
-              <TabsList className="w-full grid grid-cols-2 md:grid-cols-4 h-auto gap-1 bg-muted/30 p-1.5 rounded-xl">
-                <TabsTrigger value="cash" className="text-[10px] font-black uppercase tracking-widest rounded-lg">
+              <TabsList className="w-full grid grid-cols-3 h-11 bg-muted/30 rounded-xl">
+                <TabsTrigger value="cash" className="text-[10px] font-black uppercase tracking-widest">
                   <Banknote className="w-3.5 h-3.5 mr-1" /> Cash
                 </TabsTrigger>
-                <TabsTrigger value="card" className="text-[10px] font-black uppercase tracking-widest rounded-lg">
+                <TabsTrigger value="card" className="text-[10px] font-black uppercase tracking-widest">
                   <CreditCard className="w-3.5 h-3.5 mr-1" /> Card
                 </TabsTrigger>
-                <TabsTrigger value="mobile-money" className="text-[10px] font-black uppercase tracking-widest rounded-lg">
+                <TabsTrigger value="mobile-money" className="text-[10px] font-black uppercase tracking-widest">
                   <CalendarCheck2 className="w-3.5 h-3.5 mr-1" /> Mobile
-                </TabsTrigger>
-                <TabsTrigger value="room-charge" className="text-[10px] font-black uppercase tracking-widest rounded-lg">
-                  <Receipt className="w-3.5 h-3.5 mr-1" /> Room
                 </TabsTrigger>
               </TabsList>
             </Tabs>
 
             <div className="space-y-2 border-t pt-4">
               <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
-                <span>Subtotal</span>
-                <span>TSh {subtotal.toLocaleString()}</span>
+                <span>Rate / Night</span>
+                <span>TSh {rate.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
-                <span>Tax (5%)</span>
-                <span>TSh {tax.toLocaleString()}</span>
+                <span>Days</span>
+                <span>{nights}</span>
               </div>
               <div className="flex justify-between text-lg font-black pt-2">
                 <span>Total</span>
@@ -438,22 +259,58 @@ export default function CashierPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                onClick={clearOrder}
-                disabled={cart.length === 0}
-                className="h-11 font-black uppercase text-[10px] tracking-widest"
-              >
+              <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
                 Clear
               </Button>
               <Button
-                onClick={completePayment}
-                disabled={cart.length === 0 || guestName.trim().length === 0}
+                onClick={completeBooking}
+                disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1}
                 className="h-11 font-black uppercase text-[10px] tracking-widest"
               >
-                Complete Payment
+                Complete Booking
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Transactions</CardTitle>
+                <CardDescription>Completed booking transactions</CardDescription>
+              </div>
+              <Tabs value={txFilter} onValueChange={(value) => setTxFilter(value as TxFilter)}>
+                <TabsList className="h-10">
+                  <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
+                  <TabsTrigger value="cash" className="text-[10px] font-black uppercase tracking-widest">Cash</TabsTrigger>
+                  <TabsTrigger value="card" className="text-[10px] font-black uppercase tracking-widest">Card</TabsTrigger>
+                  <TabsTrigger value="mobile-money" className="text-[10px] font-black uppercase tracking-widest">Mobile</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {filteredTransactions.slice(0, 10).map((tx) => (
+              <div key={tx.id} className="border rounded-2xl p-4 bg-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-black text-sm">{tx.receiptNo}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                      {tx.guestName} | {tx.phone} | {tx.roomType} | {tx.nights} days | {tx.payment} | {tx.bookingTime} | {formatAgo(tx.createdAt)}
+                    </p>
+                  </div>
+                  <p className="font-black text-sm">TSh {tx.total.toLocaleString()}</p>
+                </div>
+              </div>
+            ))}
+
+            {filteredTransactions.length === 0 && (
+              <div className="py-10 text-center opacity-40">
+                <Receipt className="w-10 h-10 mx-auto mb-2" />
+                <p className="font-black uppercase tracking-widest text-xs">No transactions yet</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
