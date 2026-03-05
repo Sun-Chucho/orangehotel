@@ -28,12 +28,27 @@ export interface Room {
 const STANDARD_ROOM_PRICE = 70000;
 const PLATINUM_ROOM_PRICE = 100000;
 
-const standardRooms: Room[] = Array.from({ length: 20 }, (_, index) => {
-  const number = String(101 + index);
+const FIRST_FLOOR_PLATINUM = ["1001", "1002", "1003", "1004", "1005", "1006"] as const;
+const FIRST_FLOOR_STANDARD = ["1007", "1008", "1009"] as const;
+
+const generateRoomNumbers = (start: number, count: number) =>
+  Array.from({ length: count }, (_, index) => String(start + index));
+
+const allPlatinumNumbers = [
+  ...FIRST_FLOOR_PLATINUM,
+  ...generateRoomNumbers(2001, 33 - FIRST_FLOOR_PLATINUM.length),
+];
+
+const allStandardNumbers = [
+  ...FIRST_FLOOR_STANDARD,
+  ...generateRoomNumbers(3001, 20 - FIRST_FLOOR_STANDARD.length),
+];
+
+const standardRooms: Room[] = allStandardNumbers.map((number, index) => {
   let status: Room["status"] = "available";
   if (index < 5) status = "occupied";
   if (index >= 5 && index < 7) status = "cleaning";
-  if (index === 19) status = "maintenance";
+  if (index === allStandardNumbers.length - 1) status = "maintenance";
 
   return {
     id: `r${number}`,
@@ -44,12 +59,11 @@ const standardRooms: Room[] = Array.from({ length: 20 }, (_, index) => {
   };
 });
 
-const platinumRooms: Room[] = Array.from({ length: 33 }, (_, index) => {
-  const number = String(201 + index);
+const platinumRooms: Room[] = allPlatinumNumbers.map((number, index) => {
   let status: Room["status"] = "available";
   if (index < 8) status = "occupied";
   if (index >= 8 && index < 11) status = "cleaning";
-  if (index === 32) status = "maintenance";
+  if (index === allPlatinumNumbers.length - 1) status = "maintenance";
 
   return {
     id: `r${number}`,
