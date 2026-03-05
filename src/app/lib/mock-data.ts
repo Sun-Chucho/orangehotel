@@ -8,14 +8,7 @@ export interface User {
   avatar: string;
 }
 
-export const USERS: User[] = [
-  { id: 'u1', name: 'Alex Rivera', role: 'manager', avatar: '/logo.jpeg' },
-  { id: 'u2', name: 'Sara Jenkins', role: 'inventory', avatar: '/logo.jpeg' },
-  { id: 'u3', name: 'Mike Ross (Day)', role: 'cashier', avatar: '/logo.jpeg' },
-  { id: 'u4', name: 'Rachel Zane (Night)', role: 'cashier', avatar: '/logo.jpeg' },
-  { id: 'u5', name: 'Chef Gordon', role: 'kitchen', avatar: '/logo.jpeg' },
-  { id: 'u6', name: 'Barista James', role: 'barista', avatar: '/logo.jpeg' },
-];
+export const USERS: User[] = [];
 
 export interface Room {
   id: string;
@@ -28,56 +21,80 @@ export interface Room {
 const STANDARD_ROOM_PRICE = 70000;
 const PLATINUM_ROOM_PRICE = 100000;
 
-const FIRST_FLOOR_PLATINUM = ["1001", "1002", "1003", "1004", "1005", "1006"] as const;
-const FIRST_FLOOR_STANDARD = ["1007", "1008", "1009"] as const;
+const PLATINUM_ROOM_NUMBERS = [
+  "1001",
+  "1002",
+  "1003",
+  "1004",
+  "1005",
+  "1006",
+  "2003",
+  "2004",
+  "2005",
+  "2006",
+  "2007",
+  "2008",
+  "3003",
+  "3004",
+  "3005",
+  "3006",
+  "3007",
+  "3008",
+  "4003",
+  "4004",
+  "4005",
+  "4006",
+  "4007",
+  "4008",
+  "5003",
+  "5004",
+  "5005",
+  "5006",
+  "5007",
+  "5008",
+] as const;
 
-const UPPER_FLOOR_PLATINUM_SUFFIXES = ["003", "004", "005", "006", "007", "008"] as const;
-const UPPER_FLOOR_STANDARD_SUFFIXES = ["001", "002", "009", "010", "011"] as const;
-const UPPER_FLOORS = [2, 3, 4, 5] as const;
+const STANDARD_ROOM_NUMBERS = [
+  "1007",
+  "1008",
+  "1009",
+  "2001",
+  "2002",
+  "2009",
+  "2010",
+  "2011",
+  "3001",
+  "3002",
+  "3009",
+  "3010",
+  "3011",
+  "4001",
+  "4002",
+  "4009",
+  "4010",
+  "4011",
+  "5001",
+  "5002",
+  "5009",
+  "5010",
+  "5011",
+] as const;
 
-const allPlatinumNumbers = [
-  ...FIRST_FLOOR_PLATINUM,
-  ...UPPER_FLOORS.flatMap((floor) =>
-    UPPER_FLOOR_PLATINUM_SUFFIXES.map((suffix) => `${floor}${suffix}`)
-  ),
-];
+const standardRooms: Room[] = STANDARD_ROOM_NUMBERS.map((number) => ({
+  id: `r${number}`,
+  number,
+  type: "Standard",
+  status: "available",
+  price: STANDARD_ROOM_PRICE,
+}));
 
-const allStandardNumbers = [
-  ...FIRST_FLOOR_STANDARD,
-  ...UPPER_FLOORS.flatMap((floor) =>
-    UPPER_FLOOR_STANDARD_SUFFIXES.map((suffix) => `${floor}${suffix}`)
-  ),
-];
-
-const standardRooms: Room[] = allStandardNumbers.map((number, index) => {
-  let status: Room["status"] = "available";
-  if (index < 5) status = "occupied";
-  if (index >= 5 && index < 7) status = "cleaning";
-  if (index === allStandardNumbers.length - 1) status = "maintenance";
-
-  return {
-    id: `r${number}`,
-    number,
-    type: "Standard",
-    status,
-    price: STANDARD_ROOM_PRICE,
-  };
-});
-
-const platinumRooms: Room[] = allPlatinumNumbers.map((number, index) => {
-  let status: Room["status"] = "available";
-  if (index < 8) status = "occupied";
-  if (index >= 8 && index < 11) status = "cleaning";
-  if (index === allPlatinumNumbers.length - 1) status = "maintenance";
-
-  return {
-    id: `r${number}`,
-    number,
-    type: "Platinum",
-    status,
-    price: PLATINUM_ROOM_PRICE,
-  };
-});
+const platinumRooms: Room[] = PLATINUM_ROOM_NUMBERS.map((number) => ({
+  id: `r${number}`,
+  number,
+  type: "Platinum",
+  status: "available",
+  price: PLATINUM_ROOM_PRICE,
+}));
 
 export const ROOMS: Room[] = [...standardRooms, ...platinumRooms];
 
@@ -91,19 +108,11 @@ export interface InventoryItem {
   price?: number;
 }
 
-export const INVENTORY: InventoryItem[] = [
-  { id: 'i1', name: 'Coffee Beans', category: 'Bar', stock: 5, minStock: 10, unit: 'kg', price: 12000 },
-  { id: 'i2', name: 'Milk', category: 'Bar', stock: 12, minStock: 5, unit: 'L', price: 3000 },
-  { id: 'i3', name: 'Chicken Breast', category: 'Kitchen', stock: 2, minStock: 15, unit: 'kg', price: 18000 },
-  { id: 'i4', name: 'Toilet Paper', category: 'General', stock: 150, minStock: 50, unit: 'rolls', price: 1500 },
-];
+export const INVENTORY: InventoryItem[] = [];
 
-export const SALES_HISTORY = [
-  { date: '2024-05-15', totalRevenue: 1200, roomRevenue: 800, foodAndDrinksRevenue: 400 },
-  { date: '2024-05-16', totalRevenue: 1500, roomRevenue: 1000, foodAndDrinksRevenue: 500 },
-  { date: '2024-05-17', totalRevenue: 1100, roomRevenue: 700, foodAndDrinksRevenue: 400 },
-  { date: '2024-05-18', totalRevenue: 2200, roomRevenue: 1500, foodAndDrinksRevenue: 700 },
-  { date: '2024-05-19', totalRevenue: 1900, roomRevenue: 1200, foodAndDrinksRevenue: 700 },
-  { date: '2024-05-20', totalRevenue: 1400, roomRevenue: 900, foodAndDrinksRevenue: 500 },
-  { date: '2024-05-21', totalRevenue: 1650, roomRevenue: 1100, foodAndDrinksRevenue: 550 },
-];
+export const SALES_HISTORY: Array<{
+  date: string;
+  totalRevenue: number;
+  roomRevenue: number;
+  foodAndDrinksRevenue: number;
+}> = [];

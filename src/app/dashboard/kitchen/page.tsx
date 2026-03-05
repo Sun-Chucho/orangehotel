@@ -62,14 +62,7 @@ interface PendingOrder {
   total: number;
 }
 
-const KITCHEN_MENU: KitchenMenuItem[] = [
-  { id: "k1", name: "Pancake Platter", price: 22000, category: "breakfast", prepMinutes: 10 },
-  { id: "k2", name: "Omelette Deluxe", price: 18000, category: "breakfast", prepMinutes: 8 },
-  { id: "k3", name: "Chicken Alfredo", price: 36000, category: "lunch", prepMinutes: 12 },
-  { id: "k4", name: "Beef Lasagna", price: 39000, category: "lunch", prepMinutes: 13 },
-  { id: "k5", name: "Grilled Salmon", price: 42000, category: "dinner", prepMinutes: 14 },
-  { id: "k6", name: "Steak Frites", price: 58000, category: "dinner", prepMinutes: 16 },
-];
+const KITCHEN_MENU: KitchenMenuItem[] = [];
 
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";

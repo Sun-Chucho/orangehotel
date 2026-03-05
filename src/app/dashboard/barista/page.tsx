@@ -62,19 +62,7 @@ interface PendingOrder {
   total: number;
 }
 
-const BARISTA_MENU: BaristaMenuItem[] = [
-  { id: "b1", name: "Single Espresso", price: 7000, category: "espresso", prepMinutes: 2 },
-  { id: "b2", name: "Double Espresso", price: 9500, category: "espresso", prepMinutes: 2 },
-  { id: "b3", name: "Americano", price: 9000, category: "coffee", prepMinutes: 3 },
-  { id: "b4", name: "Cappuccino", price: 12000, category: "coffee", prepMinutes: 4 },
-  { id: "b5", name: "Vanilla Latte", price: 14000, category: "coffee", prepMinutes: 5 },
-  { id: "b6", name: "Masala Tea", price: 7000, category: "tea", prepMinutes: 3 },
-  { id: "b7", name: "Earl Grey", price: 8000, category: "tea", prepMinutes: 3 },
-  { id: "b8", name: "Iced Latte", price: 14500, category: "cold", prepMinutes: 4 },
-  { id: "b9", name: "Cold Brew", price: 13500, category: "cold", prepMinutes: 3 },
-  { id: "b10", name: "Croissant", price: 6000, category: "snacks", prepMinutes: 1 },
-  { id: "b11", name: "Blueberry Muffin", price: 6500, category: "snacks", prepMinutes: 1 },
-];
+const BARISTA_MENU: BaristaMenuItem[] = [];
 
 const STORAGE_TICKETS = "orange-hotel-barista-orders";
 const STORAGE_SEQ = "orange-hotel-barista-seq";
