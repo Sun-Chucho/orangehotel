@@ -69,13 +69,14 @@ export interface InventoryItem {
   stock: number;
   minStock: number;
   unit: string;
+  price?: number;
 }
 
 export const INVENTORY: InventoryItem[] = [
-  { id: 'i1', name: 'Coffee Beans', category: 'Bar', stock: 5, minStock: 10, unit: 'kg' },
-  { id: 'i2', name: 'Milk', category: 'Bar', stock: 12, minStock: 5, unit: 'L' },
-  { id: 'i3', name: 'Chicken Breast', category: 'Kitchen', stock: 2, minStock: 15, unit: 'kg' },
-  { id: 'i4', name: 'Toilet Paper', category: 'General', stock: 150, minStock: 50, unit: 'rolls' },
+  { id: 'i1', name: 'Coffee Beans', category: 'Bar', stock: 5, minStock: 10, unit: 'kg', price: 12000 },
+  { id: 'i2', name: 'Milk', category: 'Bar', stock: 12, minStock: 5, unit: 'L', price: 3000 },
+  { id: 'i3', name: 'Chicken Breast', category: 'Kitchen', stock: 2, minStock: 15, unit: 'kg', price: 18000 },
+  { id: 'i4', name: 'Toilet Paper', category: 'General', stock: 150, minStock: 50, unit: 'rolls', price: 1500 },
 ];
 
 export const SALES_HISTORY = [
