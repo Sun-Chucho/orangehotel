@@ -22,9 +22,9 @@ export default function DashboardLayout({
   const [mounted, setMounted] = useState(false);
 
   const allowedByRole: Record<Role, string[]> = {
-    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/cashier', '/dashboard/kitchen', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
+    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/cashier', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
     inventory: ['/dashboard/inventory'],
-    cashier: ['/dashboard/cashier', '/dashboard/rooms'],
+    cashier: ['/dashboard/cashier', '/dashboard/payments', '/dashboard/rooms'],
     kitchen: ['/dashboard/kitchen'],
     barista: ['/dashboard/barista'],
   };
