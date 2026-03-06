@@ -1,8 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SALES_HISTORY } from "@/app/lib/mock-data";
+import {
+  BeverageCostRow,
+  RecipeCostRow,
+  STORAGE_BEVERAGE_COST,
+  STORAGE_RECIPE_COST,
+  STORAGE_STOCK_SALES,
+  StockSalesRow,
+} from "@/app/lib/fnb-control";
 import {
   Area,
   AreaChart,
@@ -36,6 +44,33 @@ function formatShortDate(dateText: string) {
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<RangeKey>("7d");
+  const [beverageRows, setBeverageRows] = useState<BeverageCostRow[]>([]);
+  const [recipeRows, setRecipeRows] = useState<RecipeCostRow[]>([]);
+  const [stockSalesRows, setStockSalesRows] = useState<StockSalesRow[]>([]);
+
+  useEffect(() => {
+    const bev = localStorage.getItem(STORAGE_BEVERAGE_COST);
+    const rec = localStorage.getItem(STORAGE_RECIPE_COST);
+    const ss = localStorage.getItem(STORAGE_STOCK_SALES);
+    if (bev) {
+      try {
+        const parsed = JSON.parse(bev) as BeverageCostRow[];
+        if (Array.isArray(parsed)) setBeverageRows(parsed);
+      } catch {}
+    }
+    if (rec) {
+      try {
+        const parsed = JSON.parse(rec) as RecipeCostRow[];
+        if (Array.isArray(parsed)) setRecipeRows(parsed);
+      } catch {}
+    }
+    if (ss) {
+      try {
+        const parsed = JSON.parse(ss) as StockSalesRow[];
+        if (Array.isArray(parsed)) setStockSalesRows(parsed);
+      } catch {}
+    }
+  }, []);
 
   const history = useMemo(() => {
     if (range === "7d") return SALES_HISTORY;
@@ -84,6 +119,36 @@ export default function AnalyticsPage() {
     ],
     [totals.avgDaily],
   );
+
+  const fnbControlMetrics = useMemo(() => {
+    const beverageRevenue = beverageRows.reduce((sum, row) => sum + row.salesRevenue, 0);
+    const beverageCogs = beverageRows.reduce((sum, row) => {
+      const consumed = Math.max(0, row.openingStock + row.purchasedStock - row.closingStock);
+      const unitCost = row.purchasedStock > 0 ? row.purchaseCostTotal / row.purchasedStock : 0;
+      return sum + consumed * unitCost;
+    }, 0);
+    const beverageCostPct = beverageRevenue > 0 ? (beverageCogs / beverageRevenue) * 100 : 0;
+
+    const recipeCostPctAvg =
+      recipeRows.length === 0
+        ? 0
+        : recipeRows.reduce((sum, row) => {
+            const costPerPortion = row.batchCost / row.yieldPortions;
+            const pct = row.sellingPricePerPortion > 0 ? (costPerPortion / row.sellingPricePerPortion) * 100 : 0;
+            return sum + pct;
+          }, 0) / recipeRows.length;
+
+    const varianceUnits = stockSalesRows.reduce((sum, row) => sum + Math.abs(row.salesUnits - row.stockOut), 0);
+    const matchedRows = stockSalesRows.filter((row) => row.salesUnits === row.stockOut).length;
+
+    return {
+      beverageCostPct,
+      recipeCostPctAvg,
+      varianceUnits,
+      matchedRows,
+      totalRows: stockSalesRows.length,
+    };
+  }, [beverageRows, recipeRows, stockSalesRows]);
 
   const exportReport = () => {
     const payload = {
@@ -144,6 +209,35 @@ export default function AnalyticsPage() {
           </Card>
         ))}
       </div>
+
+      <Card className="border-none shadow-sm bg-white">
+        <CardHeader>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">F&amp;B Control Sheet Metrics</CardTitle>
+          <CardDescription>Live KPIs from beverage cost, recipe costing, and stock-sales tracking sheets</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="rounded-xl border p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Beverage Cost %</p>
+              <p className="text-2xl font-black mt-1">{fnbControlMetrics.beverageCostPct.toFixed(1)}%</p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Avg Recipe Cost %</p>
+              <p className="text-2xl font-black mt-1">{fnbControlMetrics.recipeCostPctAvg.toFixed(1)}%</p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Stock/Sales Variance Units</p>
+              <p className="text-2xl font-black mt-1">{fnbControlMetrics.varianceUnits.toFixed(2)}</p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rows Matched</p>
+              <p className="text-2xl font-black mt-1">
+                {fnbControlMetrics.matchedRows}/{fnbControlMetrics.totalRows}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 shadow-sm border-none bg-white">

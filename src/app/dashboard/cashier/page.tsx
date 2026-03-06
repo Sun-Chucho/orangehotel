@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Clock, Phone, Receipt, User } from "lucide-react";
+import { useIsDirector } from "@/hooks/use-is-director";
 
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type TransactionTab = "completed" | "credit";
@@ -64,6 +65,7 @@ function isOverstay(record: BookingRecord): boolean {
 }
 
 export default function BookingPage() {
+  const isDirector = useIsDirector();
   const today = new Date().toISOString().slice(0, 10);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
@@ -161,6 +163,7 @@ export default function BookingPage() {
   };
 
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
+    if (isDirector) return;
     if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
 
     const nextReceipt = receiptSeq + 1;
@@ -200,6 +203,7 @@ export default function BookingPage() {
   };
 
   const openSettlementPopup = () => {
+    if (isDirector) return;
     if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
     setShowSettlementPopup(true);
   };
@@ -222,7 +226,15 @@ export default function BookingPage() {
           </Badge>
         </div>
       </header>
+      {isDirector && (
+        <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
+          <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
+            Managing Director View: Booking and revenue visibility only (read-only)
+          </CardContent>
+        </Card>
+      )}
 
+      {!isDirector && (
       <Card className="shadow-2xl border-none bg-white overflow-hidden">
         <div className="h-1.5 bg-primary" />
         <CardHeader>
@@ -331,6 +343,7 @@ export default function BookingPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       <Card className="border-none shadow-sm">
         <CardHeader>
@@ -445,7 +458,7 @@ export default function BookingPage() {
         </div>
       )}
 
-      {showSettlementPopup && (
+      {!isDirector && showSettlementPopup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
@@ -476,7 +489,7 @@ export default function BookingPage() {
         </div>
       )}
 
-      {showPayNowPopup && (
+      {!isDirector && showPayNowPopup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>

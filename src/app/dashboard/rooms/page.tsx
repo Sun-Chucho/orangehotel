@@ -23,11 +23,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsDirector } from "@/hooks/use-is-director";
 
 type StatusFilter = "all" | Room["status"];
 type TypeFilter = "all" | Room["type"];
 
 export default function RoomsPage() {
+  const isDirector = useIsDirector();
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -57,6 +59,7 @@ export default function RoomsPage() {
   };
 
   const confirmAndSetRoomStatus = (roomId: string, roomNumber: string, status: Room["status"]) => {
+    if (isDirector) return;
     const labels: Record<Room["status"], string> = {
       available: "available",
       occupied: "occupied",
@@ -90,6 +93,13 @@ export default function RoomsPage() {
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Real-time status and occupancy control</p>
         </div>
       </header>
+      {isDirector && (
+        <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
+          <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
+            Managing Director View: Read-only room analytics and occupancy visibility
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-green-50/50 border-green-100 shadow-none">
@@ -184,7 +194,7 @@ export default function RoomsPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14">Type</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14">Status</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right">Rate</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right">Actions</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right">{isDirector ? "View" : "Actions"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -214,12 +224,16 @@ export default function RoomsPage() {
                   </TableCell>
                   <TableCell className="text-right font-black text-lg">TSh {room.price.toLocaleString()}/night</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "occupied")}>Occ</Button>
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "cleaning")}>Clean</Button>
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "available")}>Free</Button>
-                      <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "maintenance")}>Fix</Button>
-                    </div>
+                    {isDirector ? (
+                      <Badge variant="outline" className="font-black uppercase text-[10px] tracking-widest">Read Only</Badge>
+                    ) : (
+                      <div className="flex justify-end gap-1">
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "occupied")}>Occ</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "cleaning")}>Clean</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "available")}>Free</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "maintenance")}>Fix</Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

@@ -32,16 +32,16 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['manager', 'director'] },
-  { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'cashier'] },
-  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'inventory'] },
-  { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'cashier'] },
-  { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'cashier', 'kitchen', 'barista'] },
-  { label: 'Kitchen POS', href: '/dashboard/kitchen', icon: Utensils, roles: ['manager', 'kitchen'] },
-  { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'kitchen', 'barista'] },
-  { label: 'Barista POS', href: '/dashboard/barista', icon: Coffee, roles: ['manager', 'barista'] },
-  { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager'] },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['manager'] },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager'] },
+  { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'director', 'cashier'] },
+  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
+  { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
+  { label: 'Kitchen POS', href: '/dashboard/kitchen', icon: Utensils, roles: ['manager', 'director', 'kitchen'] },
+  { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
+  { label: 'Barista POS', href: '/dashboard/barista', icon: Coffee, roles: ['manager', 'director', 'barista'] },
+  { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
+  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['manager', 'director'] },
+  { label: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager', 'director'] },
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {

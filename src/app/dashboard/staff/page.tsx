@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsDirector } from "@/hooks/use-is-director";
 
 type StaffRoleFilter = "all" | Role;
 
@@ -36,6 +37,7 @@ function toEmail(name: string) {
 }
 
 export default function StaffPage() {
+  const isDirector = useIsDirector();
   const [members, setMembers] = useState<StaffMember[]>(
     USERS.map((user) => ({
       ...user,
@@ -91,12 +93,12 @@ export default function StaffPage() {
           <h1 className="text-3xl font-black tracking-tight">Staff Directory</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Human resources and shift planning</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 font-bold" onClick={() => setShowAddForm((current) => !current)}>
-          <Plus className="w-4 h-4 mr-2" /> {showAddForm ? "Close Form" : "Add Staff Member"}
+        <Button className="bg-primary hover:bg-primary/90 font-bold" onClick={() => !isDirector && setShowAddForm((current) => !current)} disabled={isDirector}>
+          <Plus className="w-4 h-4 mr-2" /> {isDirector ? "Read Only" : showAddForm ? "Close Form" : "Add Staff Member"}
         </Button>
       </header>
 
-      {showAddForm && (
+      {showAddForm && !isDirector && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
             <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Full name" />
@@ -177,8 +179,8 @@ export default function StaffPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 mt-6">
-                <Button size="sm" variant="outline" className="font-bold text-[10px] uppercase tracking-widest">Profile</Button>
-                <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold text-[10px] uppercase tracking-widest">Schedule</Button>
+                <Button size="sm" variant="outline" className="font-bold text-[10px] uppercase tracking-widest" disabled={isDirector}>Profile</Button>
+                <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold text-[10px] uppercase tracking-widest" disabled={isDirector}>Schedule</Button>
               </div>
             </CardContent>
           </Card>

@@ -8,6 +8,7 @@ import {
   StoreMovementLog,
   StoreUsageLog,
 } from "@/app/lib/inventory-transfer";
+import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,7 @@ const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
 };
 
 export default function KitchenPage() {
+  const isDirector = useIsDirector();
   const [category, setCategory] = useState<KitchenCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -242,6 +244,7 @@ export default function KitchenPage() {
   const subtotal = useMemo(() => cart.reduce((sum, line) => sum + line.item.price * line.qty, 0), [cart]);
 
   const addToCart = (item: KitchenMenuItem) => {
+    if (isDirector) return;
     setCart((current) => {
       const existing = current.find((line) => line.item.id === item.id);
       if (existing) {
@@ -252,10 +255,12 @@ export default function KitchenPage() {
   };
 
   const increaseQty = (itemId: string) => {
+    if (isDirector) return;
     setCart((current) => current.map((line) => (line.item.id === itemId ? { ...line, qty: line.qty + 1 } : line)));
   };
 
   const decreaseQty = (itemId: string) => {
+    if (isDirector) return;
     setCart((current) =>
       current
         .map((line) => (line.item.id === itemId ? { ...line, qty: Math.max(0, line.qty - 1) } : line))
@@ -264,15 +269,18 @@ export default function KitchenPage() {
   };
 
   const removeLine = (itemId: string) => {
+    if (isDirector) return;
     setCart((current) => current.filter((line) => line.item.id !== itemId));
   };
 
   const clearCart = () => {
+    if (isDirector) return;
     if (!window.confirm("Clear current ticket?")) return;
     setCart([]);
   };
 
   const placeTicket = () => {
+    if (isDirector) return;
     if (cart.length === 0) return;
 
     const destination =
@@ -297,6 +305,7 @@ export default function KitchenPage() {
   };
 
   const finalizeOrder = (status: KitchenPaymentStatus, method: KitchenPaymentMethod) => {
+    if (isDirector) return;
     if (!pendingOrder) return;
 
     const nextSeq = ticketSeq + 1;
@@ -337,11 +346,13 @@ export default function KitchenPage() {
   };
 
   const deliverTicket = (id: string) => {
+    if (isDirector) return;
     if (!window.confirm("Mark this order as delivered?")) return;
     setTickets((current) => current.filter((ticket) => ticket.id !== id));
   };
 
   const cancelTicket = (id: string) => {
+    if (isDirector) return;
     const ticket = tickets.find((t) => t.id === id);
     if (!ticket) return;
     if (!window.confirm("Cancel this order?")) return;
@@ -378,6 +389,13 @@ export default function KitchenPage() {
           {tickets.length} Active Orders
         </Badge>
       </header>
+      {isDirector && (
+        <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
+          <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
+            Managing Director View: Kitchen operations analytics and stock visibility only
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <div className="xl:col-span-2 space-y-6">
@@ -482,12 +500,12 @@ export default function KitchenPage() {
                         <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button onClick={() => deliverTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
-                              <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
-                            </Button>
-                            <Button onClick={() => cancelTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
-                              <XCircle className="w-4 h-4 mr-1" /> Cancelled
-                            </Button>
+                          <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
+                            <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
+                          </Button>
+                          <Button onClick={() => cancelTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
+                            <XCircle className="w-4 h-4 mr-1" /> Cancelled
+                          </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -656,10 +674,10 @@ export default function KitchenPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={clearCart} disabled={cart.length === 0} className="h-11 font-black uppercase text-[10px] tracking-widest">
+              <Button variant="outline" onClick={clearCart} disabled={cart.length === 0 || isDirector} className="h-11 font-black uppercase text-[10px] tracking-widest">
                 Clear Ticket
               </Button>
-              <Button onClick={placeTicket} disabled={cart.length === 0} className="h-11 font-black uppercase text-[10px] tracking-widest">
+              <Button onClick={placeTicket} disabled={cart.length === 0 || isDirector} className="h-11 font-black uppercase text-[10px] tracking-widest">
                 Place Order
               </Button>
             </div>
@@ -667,7 +685,7 @@ export default function KitchenPage() {
         </Card>
       </div>
 
-      {showSettlementPopup && (
+      {!isDirector && showSettlementPopup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
@@ -698,7 +716,7 @@ export default function KitchenPage() {
         </div>
       )}
 
-      {showPayNowPopup && (
+      {!isDirector && showPayNowPopup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>

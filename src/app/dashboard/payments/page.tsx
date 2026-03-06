@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Receipt } from "lucide-react";
+import { useIsDirector } from "@/hooks/use-is-director";
 
 type PaymentsTab = "completed" | "credit";
 type PaymentMethod = "cash" | "card" | "mobile-money";
@@ -83,6 +84,7 @@ function formatAgo(timestamp: number): string {
 }
 
 export default function PaymentsPage() {
+  const isDirector = useIsDirector();
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("completed");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
@@ -214,6 +216,7 @@ export default function PaymentsPage() {
   const totalCredit = creditPayments.reduce((sum, tx) => sum + tx.amount, 0);
 
   const openPaidFlow = (row: PaymentRow) => {
+    if (isDirector) return;
     setSelectedCredit({ source: row.source, id: row.id });
     setShowMethodPopup(true);
   };
@@ -266,6 +269,13 @@ export default function PaymentsPage() {
           </Badge>
         </div>
       </header>
+      {isDirector && (
+        <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
+          <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
+            Managing Director View: Revenue and credit visibility only (read-only)
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-none shadow-sm">
         <CardHeader>
@@ -313,7 +323,7 @@ export default function PaymentsPage() {
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{tx.method}</TableCell>
                   <TableCell className="font-black">TSh {tx.amount.toLocaleString()}</TableCell>
                   <TableCell className="text-right">
-                    {paymentsTab === "credit" ? (
+                    {paymentsTab === "credit" && !isDirector ? (
                       <Button
                         onClick={() => openPaidFlow(tx)}
                         className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
@@ -321,7 +331,9 @@ export default function PaymentsPage() {
                         Paid
                       </Button>
                     ) : (
-                      <Badge className="bg-blue-600 text-white border-blue-600 hover:bg-blue-600">Completed</Badge>
+                      <Badge className="bg-blue-600 text-white border-blue-600 hover:bg-blue-600">
+                        {paymentsTab === "credit" ? "Credit" : "Completed"}
+                      </Badge>
                     )}
                   </TableCell>
                 </TableRow>

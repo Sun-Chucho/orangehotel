@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { XCircle } from "lucide-react";
+import { useIsDirector } from "@/hooks/use-is-director";
 
 interface CancelledKitchenTicket {
   id: string;
@@ -31,6 +32,7 @@ function formatAgo(timestamp: number): string {
 }
 
 export default function CancelledPage() {
+  const isDirector = useIsDirector();
   const [cancelled, setCancelled] = useState<CancelledKitchenTicket[]>([]);
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function CancelledPage() {
   );
 
   const clearAll = () => {
+    if (isDirector) return;
     if (!window.confirm("Clear all cancelled orders?")) return;
     setCancelled([]);
   };
@@ -75,7 +78,7 @@ export default function CancelledPage() {
             TSh {totalCancelledValue.toLocaleString()}
           </Badge>
           <Button variant="outline" className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={clearAll}>
-            Clear All
+            {isDirector ? "Read Only" : "Clear All"}
           </Button>
         </div>
       </header>
