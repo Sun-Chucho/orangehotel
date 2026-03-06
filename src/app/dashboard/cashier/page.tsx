@@ -22,7 +22,7 @@ type PaymentMethod = "cash" | "card" | "mobile-money";
 type TransactionTab = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
-type BookingCurrency = "TSh" | "USD";
+type BookingCurrency = "TSh";
 type SpecialPackage = "resident-no-breakfast" | "non-resident-no-breakfast";
 
 interface BookingRecord {
@@ -63,9 +63,9 @@ const SPECIAL_PACKAGES: Record<
   },
   "non-resident-no-breakfast": {
     label: "Non Resident no Breakfast",
-    currency: "USD",
-    min: 50,
-    max: 70,
+    currency: "TSh",
+    min: 50000,
+    max: 70000,
   },
 };
 
@@ -191,9 +191,6 @@ export default function BookingPage() {
   const todayRevenueTSh = transactions
     .filter((tx) => (tx.status === "completed" || tx.status === "checked-out") && (tx.currency ?? "TSh") === "TSh")
     .reduce((sum, tx) => sum + tx.total, 0);
-  const todayRevenueUSD = transactions
-    .filter((tx) => (tx.status === "completed" || tx.status === "checked-out") && tx.currency === "USD")
-    .reduce((sum, tx) => sum + tx.total, 0);
 
   const clearBookingForm = () => {
     if (!window.confirm("Clear this booking form?")) return;
@@ -275,15 +272,12 @@ export default function BookingPage() {
             Guest booking capture and payment processing
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full lg:w-auto">
           <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
             {totalTransactions} Transactions
           </Badge>
           <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
             TSh {todayRevenueTSh.toLocaleString()} Today
-          </Badge>
-          <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
-            USD {todayRevenueUSD.toLocaleString()} Today
           </Badge>
         </div>
       </header>
@@ -356,7 +350,7 @@ export default function BookingPage() {
             >
               <option value="none">No special package</option>
               <option value="resident-no-breakfast">Resident no Breakfast (TSh 80,000 - 120,000)</option>
-              <option value="non-resident-no-breakfast">Non Resident no Breakfast (USD 50 - 70)</option>
+              <option value="non-resident-no-breakfast">Non Resident no Breakfast (TSh 50,000 - 70,000)</option>
             </select>
 
             {packageConfig && (
