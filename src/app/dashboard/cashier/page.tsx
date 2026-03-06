@@ -22,6 +22,8 @@ type PaymentMethod = "cash" | "card" | "mobile-money";
 type TransactionTab = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
+type BookingCurrency = "TSh" | "USD";
+type SpecialPackage = "resident-no-breakfast" | "non-resident-no-breakfast";
 
 interface BookingRecord {
   id: string;
@@ -31,6 +33,9 @@ interface BookingRecord {
   phone: string;
   roomType: RoomType;
   roomNumber: string;
+  specialPackage?: SpecialPackage;
+  currency?: BookingCurrency;
+  ratePerNight?: number;
   payment: PaymentMethod;
   checkInDate: string;
   checkInTime: string;
@@ -44,6 +49,24 @@ interface BookingRecord {
 const ROOM_RATE: Record<RoomType, number> = {
   standard: 70000,
   platinum: 100000,
+};
+
+const SPECIAL_PACKAGES: Record<
+  SpecialPackage,
+  { label: string; currency: BookingCurrency; min: number; max: number }
+> = {
+  "resident-no-breakfast": {
+    label: "Resident no Breakfast",
+    currency: "TSh",
+    min: 80000,
+    max: 120000,
+  },
+  "non-resident-no-breakfast": {
+    label: "Non Resident no Breakfast",
+    currency: "USD",
+    min: 50,
+    max: 70,
+  },
 };
 
 const STORAGE_TX = "orange-hotel-cashier-transactions";
@@ -79,6 +102,8 @@ export default function BookingPage() {
   const [checkOutDate, setCheckOutDate] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("12:00");
   const [selectedRoomNumber, setSelectedRoomNumber] = useState("");
+  const [selectedPackage, setSelectedPackage] = useState<SpecialPackage | "none">("none");
+  const [packageRate, setPackageRate] = useState("");
 
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
@@ -122,13 +147,36 @@ export default function BookingPage() {
   }, [receiptSeq]);
 
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
-  const rate = ROOM_RATE[roomType];
+  const packageConfig = selectedPackage === "none" ? null : SPECIAL_PACKAGES[selectedPackage];
+  const defaultPackageRate = packageConfig ? packageConfig.min : 0;
+  const selectedRate = packageConfig
+    ? Number(packageRate || defaultPackageRate)
+    : ROOM_RATE[roomType];
+  const rate = Number.isFinite(selectedRate) && selectedRate > 0 ? selectedRate : 0;
+  const bookingCurrency: BookingCurrency = packageConfig?.currency ?? "TSh";
   const total = nights * rate;
+  const packageRateOutOfRange = Boolean(
+    packageConfig && (Number.isNaN(rate) || rate < packageConfig.min || rate > packageConfig.max),
+  );
+  const canSubmitBooking =
+    guestName.trim().length > 0 &&
+    phone.trim().length >= 7 &&
+    nights >= 1 &&
+    Boolean(selectedRoomNumber) &&
+    !packageRateOutOfRange;
 
   const availableRooms = useMemo(() => {
     const wantedType = roomType === "standard" ? "Standard" : "Platinum";
     return rooms.filter((room) => room.type === wantedType && room.status === "available");
   }, [roomType, rooms]);
+
+  useEffect(() => {
+    if (!packageConfig) {
+      setPackageRate("");
+      return;
+    }
+    setPackageRate(String(packageConfig.min));
+  }, [packageConfig?.currency, packageConfig?.min, packageConfig?.max]);
 
   const completedTransactions = useMemo(
     () => transactions.filter((tx) => tx.status === "completed" || tx.status === "checked-out"),
@@ -140,8 +188,11 @@ export default function BookingPage() {
   );
 
   const totalTransactions = transactions.length;
-  const todayRevenue = transactions
-    .filter((tx) => tx.status === "completed" || tx.status === "checked-out")
+  const todayRevenueTSh = transactions
+    .filter((tx) => (tx.status === "completed" || tx.status === "checked-out") && (tx.currency ?? "TSh") === "TSh")
+    .reduce((sum, tx) => sum + tx.total, 0);
+  const todayRevenueUSD = transactions
+    .filter((tx) => (tx.status === "completed" || tx.status === "checked-out") && tx.currency === "USD")
     .reduce((sum, tx) => sum + tx.total, 0);
 
   const clearBookingForm = () => {
@@ -154,6 +205,8 @@ export default function BookingPage() {
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
     setRoomType("standard");
+    setSelectedPackage("none");
+    setPackageRate("");
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
   };
@@ -164,7 +217,7 @@ export default function BookingPage() {
 
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
     if (isDirector) return;
-    if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
+    if (!canSubmitBooking) return;
 
     const nextReceipt = receiptSeq + 1;
     setReceiptSeq(nextReceipt);
@@ -177,6 +230,9 @@ export default function BookingPage() {
       phone: phone.trim(),
       roomType,
       roomNumber: selectedRoomNumber,
+      specialPackage: selectedPackage === "none" ? undefined : selectedPackage,
+      currency: bookingCurrency,
+      ratePerNight: rate,
       payment: paymentMethod,
       checkInDate,
       checkInTime,
@@ -198,13 +254,15 @@ export default function BookingPage() {
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
     setRoomType("standard");
+    setSelectedPackage("none");
+    setPackageRate("");
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
   };
 
   const openSettlementPopup = () => {
     if (isDirector) return;
-    if (guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber) return;
+    if (!canSubmitBooking) return;
     setShowSettlementPopup(true);
   };
 
@@ -217,12 +275,15 @@ export default function BookingPage() {
             Guest booking capture and payment processing
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 w-full lg:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
           <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
             {totalTransactions} Transactions
           </Badge>
           <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
-            TSh {todayRevenue.toLocaleString()} Today
+            TSh {todayRevenueTSh.toLocaleString()} Today
+          </Badge>
+          <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
+            USD {todayRevenueUSD.toLocaleString()} Today
           </Badge>
         </div>
       </header>
@@ -286,6 +347,41 @@ export default function BookingPage() {
             )}
           </div>
 
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Special Package</p>
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm w-full"
+              value={selectedPackage}
+              onChange={(event) => setSelectedPackage(event.target.value as SpecialPackage | "none")}
+            >
+              <option value="none">No special package</option>
+              <option value="resident-no-breakfast">Resident no Breakfast (TSh 80,000 - 120,000)</option>
+              <option value="non-resident-no-breakfast">Non Resident no Breakfast (USD 50 - 70)</option>
+            </select>
+
+            {packageConfig && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  min={packageConfig.min}
+                  max={packageConfig.max}
+                  value={packageRate}
+                  onChange={(event) => setPackageRate(event.target.value)}
+                  placeholder="Rate per night"
+                />
+                <div className="rounded-md border px-3 py-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
+                  Allowed: {packageConfig.currency} {packageConfig.min.toLocaleString()} - {packageConfig.max.toLocaleString()}
+                </div>
+              </div>
+            )}
+
+            {packageRateOutOfRange && (
+              <p className="text-[11px] font-bold text-red-600">
+                Package rate must be between {packageConfig?.currency} {packageConfig?.min.toLocaleString()} and {packageConfig?.max.toLocaleString()}.
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Check-In Date</p>
@@ -317,7 +413,7 @@ export default function BookingPage() {
           <div className="space-y-2 border-t pt-4">
             <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
               <span>Rate / Night</span>
-              <span>TSh {rate.toLocaleString()}</span>
+              <span>{bookingCurrency} {rate.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
               <span>Days</span>
@@ -325,7 +421,7 @@ export default function BookingPage() {
             </div>
             <div className="flex justify-between text-lg font-black pt-2">
               <span>Total</span>
-              <span className="text-primary">TSh {total.toLocaleString()}</span>
+              <span className="text-primary">{bookingCurrency} {total.toLocaleString()}</span>
             </div>
           </div>
 
@@ -335,7 +431,7 @@ export default function BookingPage() {
             </Button>
             <Button
               onClick={openSettlementPopup}
-              disabled={guestName.trim().length === 0 || phone.trim().length < 7 || nights < 1 || !selectedRoomNumber}
+              disabled={!canSubmitBooking}
               className="h-11 font-black uppercase text-[10px] tracking-widest"
             >
               Complete Booking

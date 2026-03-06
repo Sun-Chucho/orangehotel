@@ -17,6 +17,8 @@ import {
   Users, 
   BarChart3, 
   Settings,
+  Building2,
+  FileSpreadsheet,
   LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['manager', 'director'] },
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'director', 'cashier'] },
   { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director'] },
+  { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: ['manager', 'director'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
   { label: 'Kitchen POS', href: '/dashboard/kitchen', icon: Utensils, roles: ['manager', 'director', 'kitchen'] },

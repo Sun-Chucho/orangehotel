@@ -86,6 +86,7 @@ const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
 
 export default function KitchenPage() {
   const isDirector = useIsDirector();
+  const [directorTab, setDirectorTab] = useState<"inventory" | "sales">("inventory");
   const [category, setCategory] = useState<KitchenCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -369,6 +370,120 @@ export default function KitchenPage() {
 
     setTickets((current) => current.filter((t) => t.id !== id));
   };
+
+  if (isDirector) {
+    return (
+      <div className="space-y-6">
+        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+              <ChefHat className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight">Kitchen Analytics</h1>
+              <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
+                Managing Director read-only controls
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
+            {kitchenPayments.length} Sales Records
+          </Badge>
+        </header>
+
+        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "sales")}>
+          <TabsList className="h-10">
+            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+            <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {directorTab === "inventory" ? (
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Inventory from Store</CardTitle>
+              <CardDescription>Received, used, and remaining quantities</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/10">
+                  <TableRow>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Remaining</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fromStoreEntries.map((entry) => {
+                    const used = getUsedQty(entry.id);
+                    const remaining = Math.max(0, entry.convertedQty - used);
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell className="font-bold">{entry.itemName}</TableCell>
+                        <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
+                        <TableCell className="font-bold">{used} units</TableCell>
+                        <TableCell className="font-bold">{remaining} units</TableCell>
+                        <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {fromStoreEntries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                        No inventory records
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Sales</CardTitle>
+              <CardDescription>Completed and credit sales summary</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/10">
+                  <TableRow>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {kitchenPayments.map((payment) => (
+                    <TableRow key={payment.id}>
+                      <TableCell className="font-black">{payment.code}</TableCell>
+                      <TableCell className="font-bold">{payment.destination}</TableCell>
+                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
+                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
+                      <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold text-sm">{new Date(payment.createdAt).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                  {kitchenPayments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                        No sales records
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

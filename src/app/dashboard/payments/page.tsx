@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Receipt } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 
-type PaymentsTab = "completed" | "credit";
+type PaymentsTab = "bookings" | "kitchen" | "barista";
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
@@ -85,7 +85,7 @@ function formatAgo(timestamp: number): string {
 
 export default function PaymentsPage() {
   const isDirector = useIsDirector();
-  const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("completed");
+  const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("bookings");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
@@ -202,15 +202,8 @@ export default function PaymentsPage() {
   );
 
   const allRows = useMemo(() => [...bookingRows, ...kitchenRows, ...baristaRows], [bookingRows, kitchenRows, baristaRows]);
-
-  const completedPayments = useMemo(
-    () => allRows.filter((tx) => tx.status === "completed").sort((a, b) => b.createdAt - a.createdAt),
-    [allRows],
-  );
-  const creditPayments = useMemo(
-    () => allRows.filter((tx) => tx.status === "credit").sort((a, b) => b.createdAt - a.createdAt),
-    [allRows],
-  );
+  const completedPayments = useMemo(() => allRows.filter((tx) => tx.status === "completed"), [allRows]);
+  const creditPayments = useMemo(() => allRows.filter((tx) => tx.status === "credit"), [allRows]);
 
   const totalCompleted = completedPayments.reduce((sum, tx) => sum + tx.amount, 0);
   const totalCredit = creditPayments.reduce((sum, tx) => sum + tx.amount, 0);
@@ -249,7 +242,15 @@ export default function PaymentsPage() {
     setSelectedCredit(null);
   };
 
-  const rows = paymentsTab === "completed" ? completedPayments : creditPayments;
+  const rows = useMemo(() => {
+    const base =
+      paymentsTab === "bookings"
+        ? bookingRows
+        : paymentsTab === "kitchen"
+        ? kitchenRows
+        : baristaRows;
+    return [...base].sort((a, b) => b.createdAt - a.createdAt);
+  }, [paymentsTab, bookingRows, kitchenRows, baristaRows]);
 
   return (
     <div className="space-y-6">
@@ -257,7 +258,7 @@ export default function PaymentsPage() {
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Payments</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-            Completed and credit payment tracking
+            Bookings, kitchen, and barista payment tracking
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -282,15 +283,18 @@ export default function PaymentsPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Payment Transactions</CardTitle>
-              <CardDescription>Use tabs to review completed and credit records</CardDescription>
+              <CardDescription>Use tabs to review bookings, kitchen, and barista payments</CardDescription>
             </div>
             <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)}>
               <TabsList className="h-10">
-                <TabsTrigger value="completed" className="text-[10px] font-black uppercase tracking-widest">
-                  Completed Payments
+                <TabsTrigger value="bookings" className="text-[10px] font-black uppercase tracking-widest">
+                  Bookings
                 </TabsTrigger>
-                <TabsTrigger value="credit" className="text-[10px] font-black uppercase tracking-widest">
-                  Credit Payments
+                <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">
+                  Kitchen
+                </TabsTrigger>
+                <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">
+                  Barista
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -306,6 +310,7 @@ export default function PaymentsPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Context</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -322,8 +327,13 @@ export default function PaymentsPage() {
                   <TableCell className="font-bold">{tx.context}</TableCell>
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{tx.method}</TableCell>
                   <TableCell className="font-black">TSh {tx.amount.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Badge className={tx.status === "credit" ? "bg-red-600 text-white border-red-600 hover:bg-red-600" : "bg-blue-600 text-white border-blue-600 hover:bg-blue-600"}>
+                      {tx.status}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right">
-                    {paymentsTab === "credit" && !isDirector ? (
+                    {tx.status === "credit" && !isDirector ? (
                       <Button
                         onClick={() => openPaidFlow(tx)}
                         className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
@@ -331,9 +341,7 @@ export default function PaymentsPage() {
                         Paid
                       </Button>
                     ) : (
-                      <Badge className="bg-blue-600 text-white border-blue-600 hover:bg-blue-600">
-                        {paymentsTab === "credit" ? "Credit" : "Completed"}
-                      </Badge>
+                      <Badge className="bg-gray-200 text-gray-700 border-gray-200 hover:bg-gray-200">View</Badge>
                     )}
                   </TableCell>
                 </TableRow>
@@ -341,7 +349,7 @@ export default function PaymentsPage() {
 
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center">
+                  <TableCell colSpan={7} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">No payments found</p>

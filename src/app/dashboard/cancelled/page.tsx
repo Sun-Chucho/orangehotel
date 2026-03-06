@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CancelledKitchenTicket {
   id: string;
@@ -33,6 +34,7 @@ function formatAgo(timestamp: number): string {
 
 export default function CancelledPage() {
   const isDirector = useIsDirector();
+  const [cancelledTab, setCancelledTab] = useState<"kitchen" | "barista">("kitchen");
   const [cancelled, setCancelled] = useState<CancelledKitchenTicket[]>([]);
 
   useEffect(() => {
@@ -53,6 +55,10 @@ export default function CancelledPage() {
   const totalCancelledValue = useMemo(
     () => cancelled.reduce((sum, ticket) => sum + ticket.total, 0),
     [cancelled],
+  );
+  const filteredCancelled = useMemo(
+    () => cancelled.filter((ticket) => (ticket.source ?? "kitchen") === cancelledTab),
+    [cancelled, cancelledTab],
   );
 
   const clearAll = () => {
@@ -85,8 +91,18 @@ export default function CancelledPage() {
 
       <Card className="border-none shadow-sm">
         <CardHeader>
-          <CardTitle className="text-xl font-black uppercase tracking-tight">Cancelled Queue</CardTitle>
-          <CardDescription>Kitchen and barista orders that were cancelled</CardDescription>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Cancelled Queue</CardTitle>
+              <CardDescription>Kitchen and barista orders that were cancelled</CardDescription>
+            </div>
+            <Tabs value={cancelledTab} onValueChange={(value) => setCancelledTab(value as "kitchen" | "barista")}>
+              <TabsList className="h-10">
+                <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">Kitchen</TabsTrigger>
+                <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">Barista</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -100,7 +116,7 @@ export default function CancelledPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cancelled.map((ticket) => (
+              {filteredCancelled.map((ticket) => (
                 <TableRow key={ticket.id}>
                   <TableCell className="font-black">
                     <p>{ticket.code}</p>
@@ -123,7 +139,7 @@ export default function CancelledPage() {
                 </TableRow>
               ))}
 
-              {cancelled.length === 0 && (
+              {filteredCancelled.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-12 text-center opacity-40">
                     <XCircle className="w-12 h-12 mx-auto mb-3" />
