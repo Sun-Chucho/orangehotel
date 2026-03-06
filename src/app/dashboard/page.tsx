@@ -4,9 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Role, ROOMS, INVENTORY } from "@/app/lib/mock-data";
+import {
+  CompanyStockCategory,
+  CompanyStockItem,
+  STORAGE_COMPANY_STOCK,
+} from "@/app/lib/company-stock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users,
   BedDouble,
@@ -29,6 +37,20 @@ interface QueueTicket {
   id: string;
 }
 
+interface POSPaymentRecord {
+  total: number;
+  status?: "completed" | "credit";
+  createdAt?: number;
+}
+
+const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> = [
+  { value: "kitchen-equipment", label: "Kitchen Equipment" },
+  { value: "technology", label: "Technology" },
+  { value: "electronics", label: "Electronics" },
+  { value: "cleaning-supplies", label: "Cleaning Supplies" },
+  { value: "furniture", label: "Furniture" },
+];
+
 export default function OverviewPage() {
   const [role, setRole] = useState<Role>("manager");
   const [shift, setShift] = useState<string | null>(null);
@@ -38,6 +60,15 @@ export default function OverviewPage() {
   const [bookingRevenue, setBookingRevenue] = useState(0);
   const [activeKitchen, setActiveKitchen] = useState(0);
   const [activeBarista, setActiveBarista] = useState(0);
+  const [companyStockItems, setCompanyStockItems] = useState<CompanyStockItem[]>([]);
+  const [companyTab, setCompanyTab] = useState<CompanyStockCategory>("kitchen-equipment");
+  const [assetName, setAssetName] = useState("");
+  const [assetDescription, setAssetDescription] = useState("");
+  const [assetQty, setAssetQty] = useState("1");
+  const [assetCategory, setAssetCategory] = useState<CompanyStockCategory>("kitchen-equipment");
+  const [foodRevenue, setFoodRevenue] = useState(0);
+  const [creditExposure, setCreditExposure] = useState(0);
+  const [settledToday, setSettledToday] = useState(0);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
@@ -45,6 +76,9 @@ export default function OverviewPage() {
     const savedTx = localStorage.getItem("orange-hotel-cashier-transactions");
     const kitchenQueue = localStorage.getItem("orange-hotel-kitchen-tickets");
     const baristaQueue = localStorage.getItem("orange-hotel-barista-orders");
+    const companyStock = localStorage.getItem(STORAGE_COMPANY_STOCK);
+    const kitchenPayments = localStorage.getItem("orange-hotel-kitchen-payments");
+    const baristaPayments = localStorage.getItem("orange-hotel-barista-payments");
 
     if (savedRole) setRole(savedRole);
     if (savedShift) setShift(savedShift);
@@ -82,21 +116,90 @@ export default function OverviewPage() {
       }
     }
 
+    if (companyStock) {
+      try {
+        const parsed = JSON.parse(companyStock) as CompanyStockItem[];
+        if (Array.isArray(parsed)) setCompanyStockItems(parsed);
+      } catch {
+        setCompanyStockItems([]);
+      }
+    }
+
+    const collectPaymentMetrics = (records: POSPaymentRecord[]) => {
+      const today = new Date().toDateString();
+      const paid = records
+        .filter((record) => record.status !== "credit")
+        .reduce((sum, record) => sum + (record.total || 0), 0);
+      const credit = records
+        .filter((record) => record.status === "credit")
+        .reduce((sum, record) => sum + (record.total || 0), 0);
+      const settledCount = records.filter((record) => {
+        if (record.status === "credit" || !record.createdAt) return false;
+        return new Date(record.createdAt).toDateString() === today;
+      }).length;
+      return { paid, credit, settledCount };
+    };
+
+    let kitchenMetrics = { paid: 0, credit: 0, settledCount: 0 };
+    let baristaMetrics = { paid: 0, credit: 0, settledCount: 0 };
+
+    if (kitchenPayments) {
+      try {
+        const parsed = JSON.parse(kitchenPayments) as POSPaymentRecord[];
+        if (Array.isArray(parsed)) kitchenMetrics = collectPaymentMetrics(parsed);
+      } catch {
+        kitchenMetrics = { paid: 0, credit: 0, settledCount: 0 };
+      }
+    }
+
+    if (baristaPayments) {
+      try {
+        const parsed = JSON.parse(baristaPayments) as POSPaymentRecord[];
+        if (Array.isArray(parsed)) baristaMetrics = collectPaymentMetrics(parsed);
+      } catch {
+        baristaMetrics = { paid: 0, credit: 0, settledCount: 0 };
+      }
+    }
+
+    setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
+    setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
+    setSettledToday(kitchenMetrics.settledCount + baristaMetrics.settledCount);
+
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(companyStockItems));
+  }, [companyStockItems]);
 
   const lowStock = useMemo(() => INVENTORY.filter((item) => item.stock < item.minStock), []);
   const occupiedRooms = useMemo(() => ROOMS.filter((room) => room.status === "occupied").length, []);
   const recentRooms = useMemo(() => ROOMS.slice(0, 4), []);
+  const isDirector = role === "director";
+  const occupancyPct = Math.round((occupiedRooms / ROOMS.length) * 100);
+  const totalRevenue = bookingRevenue + foodRevenue;
+  const revPar = Math.round(totalRevenue / Math.max(ROOMS.length, 1));
 
   const stats = useMemo(
     () => [
       { label: "Booking Revenue", value: `TSh ${bookingRevenue.toLocaleString()}`, icon: DollarSign, trend: "+12%", trendUp: true, color: "text-green-500" },
-      { label: "Room Occupancy", value: `${Math.round((occupiedRooms / ROOMS.length) * 100)}%`, icon: BedDouble, trend: "+5%", trendUp: true, color: "text-blue-500" },
+      { label: "Room Occupancy", value: `${occupancyPct}%`, icon: BedDouble, trend: "+5%", trendUp: true, color: "text-blue-500" },
       { label: "Kitchen Queue", value: `${activeKitchen}`, icon: TrendingUp, trend: activeKitchen > 5 ? "High" : "Stable", trendUp: activeKitchen <= 5, color: "text-orange-500" },
       { label: "Barista Queue", value: `${activeBarista}`, icon: Users, trend: activeBarista > 5 ? "High" : "Stable", trendUp: activeBarista <= 5, color: "text-purple-500" },
     ],
-    [activeBarista, activeKitchen, bookingRevenue, occupiedRooms],
+    [activeBarista, activeKitchen, bookingRevenue, occupancyPct],
+  );
+
+  const executiveStats = useMemo(
+    () => [
+      { label: "Total Revenue", value: `TSh ${totalRevenue.toLocaleString()}`, note: "Rooms + F&B collections" },
+      { label: "F&B Revenue", value: `TSh ${foodRevenue.toLocaleString()}`, note: "Kitchen and Barista settlements" },
+      { label: "Credit Exposure", value: `TSh ${creditExposure.toLocaleString()}`, note: "Outstanding unsettled balances" },
+      { label: "RevPAR", value: `TSh ${revPar.toLocaleString()}`, note: "Revenue per available room" },
+      { label: "Occupancy", value: `${occupancyPct}%`, note: `${occupiedRooms}/${ROOMS.length} occupied rooms` },
+      { label: "Settled Today", value: `${settledToday}`, note: "Completed POS settlements today" },
+    ],
+    [creditExposure, foodRevenue, occupancyPct, occupiedRooms, revPar, settledToday, totalRevenue],
   );
 
   const generateReport = () => {
@@ -113,14 +216,43 @@ export default function OverviewPage() {
     setReportText(text);
   };
 
+  const filteredCompanyStock = useMemo(
+    () => companyStockItems.filter((item) => item.category === companyTab),
+    [companyStockItems, companyTab],
+  );
+
+  const addCompanyStock = () => {
+    const quantity = Number(assetQty);
+    if (assetName.trim().length === 0 || assetDescription.trim().length === 0 || Number.isNaN(quantity) || quantity <= 0) return;
+    setCompanyStockItems((current) => [
+      {
+        id: `cs-${Date.now()}`,
+        name: assetName.trim(),
+        description: assetDescription.trim(),
+        quantity,
+        category: assetCategory,
+        createdAt: Date.now(),
+      },
+      ...current,
+    ]);
+    setAssetName("");
+    setAssetDescription("");
+    setAssetQty("1");
+    setAssetCategory("kitchen-equipment");
+  };
+
   if (!mounted) return null;
 
   return (
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Operations Overview</h1>
-          <p className="text-muted-foreground uppercase font-bold text-xs tracking-wider">Active performance tracking for {role}</p>
+          <h1 className="text-3xl font-black tracking-tight uppercase">
+            {isDirector ? "Executive Overview" : "Operations Overview"}
+          </h1>
+          <p className="text-muted-foreground uppercase font-bold text-xs tracking-wider">
+            {isDirector ? "Read-only strategic dashboard for managing director" : `Active performance tracking for ${role}`}
+          </p>
         </div>
         <div className="flex gap-2">
           {shift && (
@@ -129,9 +261,11 @@ export default function OverviewPage() {
               {shift} Shift
             </Badge>
           )}
-          <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6 uppercase tracking-widest text-[10px]" onClick={generateReport}>
-            <FileText className="w-3.5 h-3.5 mr-2" /> Generate Report
-          </Button>
+          {!isDirector && (
+            <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold px-6 uppercase tracking-widest text-[10px]" onClick={generateReport}>
+              <FileText className="w-3.5 h-3.5 mr-2" /> Generate Report
+            </Button>
+          )}
         </div>
       </header>
 
@@ -165,6 +299,26 @@ export default function OverviewPage() {
         ))}
       </div>
 
+      {isDirector && (
+        <Card className="border-none shadow-sm bg-white">
+          <CardHeader>
+            <CardTitle className="text-lg font-black uppercase tracking-tight">Managing Director Snapshot</CardTitle>
+            <CardDescription>Strategic indicators across revenue, occupancy, and receivables</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {executiveStats.map((metric) => (
+                <div key={metric.label} className="rounded-xl border p-4 bg-muted/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{metric.label}</p>
+                  <p className="text-2xl font-black mt-2">{metric.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{metric.note}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -189,9 +343,11 @@ export default function OverviewPage() {
                     </div>
                   </div>
                 ))}
-                <Button variant="link" className="w-full text-[10px] text-primary font-black uppercase tracking-widest" asChild>
-                  <Link href="/dashboard/inventory">Manage Inventory <ChevronRight className="w-3 h-3 ml-1" /></Link>
-                </Button>
+                {!isDirector && (
+                  <Button variant="link" className="w-full text-[10px] text-primary font-black uppercase tracking-widest" asChild>
+                    <Link href="/dashboard/inventory">Manage Inventory <ChevronRight className="w-3 h-3 ml-1" /></Link>
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -229,6 +385,79 @@ export default function OverviewPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="shadow-sm border-none bg-white">
+            <CardHeader className="border-b">
+              <CardTitle className="text-lg font-black uppercase tracking-tight">Company Stock</CardTitle>
+              <CardDescription>Non-consumable assets for business operations</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              {!isDirector && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <Input value={assetName} onChange={(event) => setAssetName(event.target.value)} placeholder="Item Name" />
+                  <Input value={assetDescription} onChange={(event) => setAssetDescription(event.target.value)} placeholder="Description" />
+                  <Input type="number" min="1" value={assetQty} onChange={(event) => setAssetQty(event.target.value)} placeholder="Quantity" />
+                  <div className="flex gap-2">
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={assetCategory}
+                      onChange={(event) => setAssetCategory(event.target.value as CompanyStockCategory)}
+                    >
+                      {COMPANY_CATEGORIES.map((category) => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={addCompanyStock}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {isDirector && (
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Read-only access for managing director
+                </div>
+              )}
+
+              <Tabs value={companyTab} onValueChange={(value) => setCompanyTab(value as CompanyStockCategory)}>
+                <TabsList className="h-auto flex-wrap">
+                  {COMPANY_CATEGORIES.map((category) => (
+                    <TabsTrigger key={category.value} value={category.value} className="font-black uppercase text-[10px] tracking-widest">
+                      {category.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Item Name</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Description</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCompanyStock.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-bold">{item.name}</TableCell>
+                      <TableCell className="font-bold">{item.description}</TableCell>
+                      <TableCell className="font-bold">{item.quantity}</TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredCompanyStock.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="py-8 text-center opacity-50 font-black uppercase text-[10px] tracking-widest">
+                        No company stock in this category
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </div>
 
         <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-3xl">

@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ROOMS } from "@/app/lib/mock-data";
+import {
+  STORAGE_STORE_MOVEMENTS,
+  STORAGE_STORE_USAGE,
+  StoreMovementLog,
+  StoreUsageLog,
+} from "@/app/lib/inventory-transfer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,6 +95,11 @@ export default function BaristaPage() {
   const [ticketSeq, setTicketSeq] = useState(490);
   const [menuItems, setMenuItems] = useState<BaristaMenuItem[]>(BARISTA_MENU);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
+  const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
+  const [fromStoreEntries, setFromStoreEntries] = useState<StoreMovementLog[]>([]);
+  const [usageLogs, setUsageLogs] = useState<StoreUsageLog[]>([]);
+  const [useEntryId, setUseEntryId] = useState("");
+  const [useQty, setUseQty] = useState("1");
 
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
@@ -148,6 +159,70 @@ export default function BaristaPage() {
   useEffect(() => {
     localStorage.setItem(STORAGE_PAYMENTS, JSON.stringify(baristaPayments));
   }, [baristaPayments]);
+
+  const loadFromStoreData = () => {
+    const savedMovements = localStorage.getItem(STORAGE_STORE_MOVEMENTS);
+    const savedUsage = localStorage.getItem(STORAGE_STORE_USAGE);
+    if (savedMovements) {
+      try {
+        const parsed = JSON.parse(savedMovements) as StoreMovementLog[];
+        if (Array.isArray(parsed)) setFromStoreEntries(parsed.filter((entry) => entry.destination === "barista"));
+      } catch {
+        setFromStoreEntries([]);
+      }
+    }
+    if (savedUsage) {
+      try {
+        const parsed = JSON.parse(savedUsage) as StoreUsageLog[];
+        if (Array.isArray(parsed)) setUsageLogs(parsed.filter((entry) => entry.destination === "barista"));
+      } catch {
+        setUsageLogs([]);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadFromStoreData();
+  }, []);
+
+  useEffect(() => {
+    if (queueTab === "from-store") loadFromStoreData();
+  }, [queueTab]);
+
+  const getUsedQty = (movementId: string) =>
+    usageLogs.filter((entry) => entry.movementId === movementId).reduce((sum, entry) => sum + entry.quantityUsed, 0);
+
+  const addUsage = () => {
+    const qty = Number(useQty);
+    const entry = fromStoreEntries.find((item) => item.id === useEntryId);
+    if (!entry || Number.isNaN(qty) || qty <= 0) return;
+    const remaining = entry.convertedQty - getUsedQty(entry.id);
+    if (qty > remaining) return;
+    const log: StoreUsageLog = {
+      id: `su-${Date.now()}`,
+      movementId: entry.id,
+      destination: "barista",
+      quantityUsed: qty,
+      usedAt: Date.now(),
+    };
+    const next = [log, ...usageLogs];
+    setUsageLogs(next);
+    const rawUsage = localStorage.getItem(STORAGE_STORE_USAGE);
+    let existingUsage: StoreUsageLog[] = [];
+    if (rawUsage) {
+      try {
+        const parsed = JSON.parse(rawUsage) as StoreUsageLog[];
+        if (Array.isArray(parsed)) existingUsage = parsed;
+      } catch {
+        existingUsage = [];
+      }
+    }
+    localStorage.setItem(
+      STORAGE_STORE_USAGE,
+      JSON.stringify([...next, ...existingUsage.filter((i) => i.destination !== "barista")]),
+    );
+    setUseQty("1");
+  };
 
   const filteredMenu = useMemo(
     () =>
@@ -374,55 +449,122 @@ export default function BaristaPage() {
 
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Queue</CardTitle>
-              <CardDescription>Placed orders with delivery and cancellation actions</CardDescription>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Operations</CardTitle>
+              <CardDescription>Queue and stock received from Main Store</CardDescription>
+              <Tabs value={queueTab} onValueChange={(value) => setQueueTab(value as "queue" | "from-store")}>
+                <TabsList className="w-full md:w-[280px] grid grid-cols-2 h-10 bg-muted/30 rounded-xl">
+                  <TabsTrigger value="queue" className="font-black uppercase text-[10px] tracking-widest">Queue</TabsTrigger>
+                  <TabsTrigger value="from-store" className="font-black uppercase text-[10px] tracking-widest">From Store</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/10">
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Ticket</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Details</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Total</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tickets.map((ticket) => (
-                    <TableRow key={ticket.id}>
-                      <TableCell className="font-black">
-                        <p>{ticket.code}</p>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                          {ticket.mode} | {ticket.destination}
-                        </p>
-                      </TableCell>
-                      <TableCell className="font-bold text-sm">
-                        {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
-                      </TableCell>
-                      <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button onClick={() => deliverTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
-                            <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
-                          </Button>
-                          <Button onClick={() => cancelTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
-                            <XCircle className="w-4 h-4 mr-1" /> Cancelled
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {tickets.length === 0 && (
+              {queueTab === "queue" ? (
+                <Table>
+                  <TableHeader className="bg-muted/10">
                     <TableRow>
-                      <TableCell colSpan={4} className="py-12 text-center opacity-40">
-                        <Coffee className="w-12 h-12 mx-auto mb-3" />
-                        <p className="font-black uppercase tracking-widest text-xs">No orders in queue</p>
-                      </TableCell>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Ticket</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Details</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Total</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {tickets.map((ticket) => (
+                      <TableRow key={ticket.id}>
+                        <TableCell className="font-black">
+                          <p>{ticket.code}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                            {ticket.mode} | {ticket.destination}
+                          </p>
+                        </TableCell>
+                        <TableCell className="font-bold text-sm">
+                          {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
+                        </TableCell>
+                        <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button onClick={() => deliverTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
+                              <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
+                            </Button>
+                            <Button onClick={() => cancelTicket(ticket.id)} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
+                              <XCircle className="w-4 h-4 mr-1" /> Cancelled
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                    {tickets.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="py-12 text-center opacity-40">
+                          <Coffee className="w-12 h-12 mx-auto mb-3" />
+                          <p className="font-black uppercase tracking-widest text-xs">No orders in queue</p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="space-y-3 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <select
+                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={useEntryId}
+                      onChange={(event) => setUseEntryId(event.target.value)}
+                    >
+                      <option value="">Select item to use</option>
+                      {fromStoreEntries.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.itemName}
+                        </option>
+                      ))}
+                    </select>
+                    <Input type="number" min="1" value={useQty} onChange={(event) => setUseQty(event.target.value)} placeholder="Usage quantity" />
+                    <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={addUsage}>
+                      Record Usage
+                    </Button>
+                  </div>
+
+                  <Table>
+                    <TableHeader className="bg-muted/10">
+                      <TableRow>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Quantity Received</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Remaining</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Conversion</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Source</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fromStoreEntries.map((entry) => {
+                        const used = getUsedQty(entry.id);
+                        const remaining = Math.max(0, entry.convertedQty - used);
+                        return (
+                          <TableRow key={entry.id}>
+                            <TableCell className="font-bold">{entry.itemName}</TableCell>
+                            <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
+                            <TableCell className="font-bold">{used} units</TableCell>
+                            <TableCell className="font-bold">{remaining} units</TableCell>
+                            <TableCell className="font-bold">1 {entry.storeUnit} = {entry.conversionValue} units</TableCell>
+                            <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
+                            <TableCell className="font-black uppercase text-[10px] tracking-widest">Store</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {fromStoreEntries.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="py-12 text-center opacity-40">
+                            <p className="font-black uppercase tracking-widest text-xs">No stock received from store</p>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -8,7 +8,7 @@ import { Bell, Search, User, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
-const VALID_ROLES: Role[] = ['manager', 'inventory', 'cashier', 'kitchen', 'barista'];
+const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
 
 export default function DashboardLayout({
   children,
@@ -23,6 +23,7 @@ export default function DashboardLayout({
 
   const allowedByRole: Record<Role, string[]> = {
     manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/cashier', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings'],
+    director: ['/dashboard'],
     inventory: ['/dashboard/inventory'],
     cashier: ['/dashboard/cashier', '/dashboard/payments', '/dashboard/rooms'],
     kitchen: ['/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/payments'],
@@ -31,6 +32,7 @@ export default function DashboardLayout({
 
   const defaultByRole: Record<Role, string> = {
     manager: '/dashboard',
+    director: '/dashboard',
     inventory: '/dashboard/inventory',
     cashier: '/dashboard/cashier',
     kitchen: '/dashboard/kitchen',

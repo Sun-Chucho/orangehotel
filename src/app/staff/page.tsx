@@ -4,13 +4,14 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import { Role } from "../lib/mock-data";
-import { ShieldCheck, ShoppingCart, Package, Utensils, Coffee, Sun, Moon } from "lucide-react";
+import { ShieldCheck, ShoppingCart, Package, Utensils, Coffee, Sun, Moon, Building2 } from "lucide-react";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ROLES: { id: Role; label: string; icon: any; color: string; desc: string }[] = [
   { id: 'manager', label: 'Hotel Manager', icon: ShieldCheck, color: 'bg-orange-500', desc: 'Full system oversight & analytics' },
+  { id: 'director', label: 'Managing Director', icon: Building2, color: 'bg-emerald-700', desc: 'Executive overview, strategic KPIs (read only)' },
   { id: 'inventory', label: 'Inventory Manager', icon: Package, color: 'bg-black', desc: 'Stock control & procurement' },
   { id: 'cashier', label: 'Reception Booking', icon: ShoppingCart, color: 'bg-orange-600', desc: 'Bookings, payments & shifts' },
   { id: 'kitchen', label: 'Kitchen POS', icon: Utensils, color: 'bg-orange-700', desc: 'Food orders & prep status' },
@@ -36,6 +37,9 @@ export default function Home() {
     localStorage.removeItem('orange-hotel-shift');
     switch (role) {
       case 'manager':
+        window.location.href = '/dashboard';
+        break;
+      case 'director':
         window.location.href = '/dashboard';
         break;
       case 'inventory':

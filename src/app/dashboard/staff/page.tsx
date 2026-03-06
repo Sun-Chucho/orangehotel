@@ -29,7 +29,7 @@ interface StaffMember {
   shift: "Day" | "Night";
 }
 
-const ROLE_OPTIONS: Role[] = ["manager", "inventory", "cashier", "kitchen", "barista"];
+const ROLE_OPTIONS: Role[] = ["manager", "director", "inventory", "cashier", "kitchen", "barista"];
 
 function toEmail(name: string) {
   return `${name.toLowerCase().replace(/\s+/g, ".")}@orange.hotel`;
