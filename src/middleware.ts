@@ -1,13 +1,29 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+const DIRECT_ROLE_ROUTES: Record<string, string> = {
+  "/manager": "/MANAGER",
+  "/md": "/MD",
+  "/im": "/IM",
+  "/rb": "/RB",
+  "/kp": "/KP",
+  "/bp": "/BP",
+};
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const normalizedPath = pathname.toLowerCase();
+  const directRoute = DIRECT_ROLE_ROUTES[normalizedPath];
 
-  // Normalize staff portal URL casing so /STAFF (and variants) always resolve.
-  if (pathname.toLowerCase() === "/staff" && pathname !== "/staff") {
+  if (directRoute && pathname !== directRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/staff";
+    url.pathname = directRoute;
+    return NextResponse.redirect(url);
+  }
+
+  if (normalizedPath === "/staff") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

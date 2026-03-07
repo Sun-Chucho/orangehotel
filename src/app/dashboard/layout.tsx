@@ -51,7 +51,7 @@ export default function DashboardLayout({
       if (!savedRole || !VALID_ROLES.includes(savedRole as Role)) {
         localStorage.removeItem('orange-hotel-role');
         localStorage.removeItem('orange-hotel-shift');
-        router.replace('/staff');
+        router.replace('/');
         return;
       }
 
