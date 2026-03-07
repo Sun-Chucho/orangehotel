@@ -312,7 +312,16 @@ export default function BookingPage() {
     redirectToBookedRooms("credit");
   };
 
-  const completePaidBooking = (paymentMethod: Exclude<PaymentMethod, "credit">) => {
+  const completePaidBooking = async (paymentMethod: Exclude<PaymentMethod, "credit">) => {
+    if (isDirector || !canSubmitBooking) return;
+    const paymentLabel =
+      paymentMethod === "mobile-money" ? "mobile money" : paymentMethod;
+    const approved = await confirm({
+      title: "Complete Booking Payment",
+      description: `Are you sure you want to complete booking room ${selectedRoomNumber} for ${guestName.trim()} using ${paymentLabel}?`,
+      actionLabel: "Complete Payment",
+    });
+    if (!approved) return;
     saveBooking("completed", paymentMethod);
     redirectToBookedRooms("completed");
   };
