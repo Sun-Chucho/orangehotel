@@ -211,7 +211,7 @@ export default function BookingPage() {
     setPackageRate("");
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
-    setShowCreditRecordedPopup(status === "credit");
+    setShowCreditRecordedPopup(false);
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
