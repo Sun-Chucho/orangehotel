@@ -40,14 +40,15 @@ export function updateRoomStatusById(roomId: string, status: Room["status"]): Ro
   return nextRooms;
 }
 
-export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[]): Room[] {
+export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {
   const occupiedRooms = new Set(
     bookings
       .filter((booking) => booking.status !== "checked-out")
       .map((booking) => booking.roomNumber),
   );
 
-  const nextRooms = readRoomsState().map((room) =>
+  const currentRooms = Array.isArray(baseRooms) && baseRooms.length > 0 ? baseRooms : readRoomsState();
+  const nextRooms = currentRooms.map((room) =>
     occupiedRooms.has(room.number) ? { ...room, status: "occupied" } : room,
   );
 

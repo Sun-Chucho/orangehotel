@@ -50,20 +50,20 @@ export default function RoomsPage() {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
     setRole(savedRole);
 
-    const applyRoomSnapshot = () => {
+    const applyRoomSnapshot = (baseRooms?: Room[]) => {
       const cashierSnapshot = readCashierState<BookingRoomRecord>(
         "orange-hotel-cashier-transactions",
         "orange-hotel-cashier-seq",
         84920,
       );
-      const nextRooms = syncRoomsWithActiveBookings(cashierSnapshot.transactions);
+      const nextRooms = syncRoomsWithActiveBookings(cashierSnapshot.transactions, baseRooms);
       setRooms(nextRooms);
     };
 
     applyRoomSnapshot();
 
     const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
-      setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
+      applyRoomSnapshot(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
     });
     const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
       applyRoomSnapshot();
