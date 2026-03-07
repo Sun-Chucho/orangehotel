@@ -13,7 +13,7 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentsTab = "reception" | "kitchen" | "barista";
-type PaymentMethod = "cash" | "card" | "mobile-money";
+type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type TransactionStatus = "completed" | "credit" | "checked-out";

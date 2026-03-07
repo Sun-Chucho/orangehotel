@@ -22,7 +22,7 @@ import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { readRoomsState, writeRoomsState } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
-type PaymentMethod = "cash" | "card" | "mobile-money";
+type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type TransactionTab = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
@@ -186,6 +186,22 @@ export default function BookingPage() {
     () => transactions.filter((tx) => tx.status === "credit"),
     [transactions],
   );
+  const selectedExtendBooking = useMemo(
+    () => transactions.find((entry) => entry.id === selectedExtendBookingId) ?? null,
+    [selectedExtendBookingId, transactions],
+  );
+  const extendNights = useMemo(
+    () => (selectedExtendBooking ? daysBetween(selectedExtendBooking.checkInDate, extendCheckOutDate) : 0),
+    [extendCheckOutDate, selectedExtendBooking],
+  );
+  const extendTotal = useMemo(
+    () => (selectedExtendBooking && extendNights > 0 ? extendNights * (selectedExtendBooking.ratePerNight ?? 0) : 0),
+    [extendNights, selectedExtendBooking],
+  );
+  const extendIncrement = useMemo(
+    () => (selectedExtendBooking ? Math.max(0, extendTotal - selectedExtendBooking.total) : 0),
+    [extendTotal, selectedExtendBooking],
+  );
 
   const totalTransactions = transactions.length;
   const todayRevenueTSh = transactions
@@ -284,7 +300,7 @@ export default function BookingPage() {
       actionLabel: "Book On Credit",
     });
     if (!approved) return;
-    saveBooking("credit", "cash");
+    saveBooking("credit", "credit");
   };
 
   const openExtendStay = (booking: BookingRecord) => {
@@ -297,10 +313,10 @@ export default function BookingPage() {
   const applyExtendStay = async () => {
     if (isDirector || !selectedExtendBookingId || !extendCheckOutDate || !extendCheckOutTime) return;
 
-    const booking = transactions.find((entry) => entry.id === selectedExtendBookingId);
+    const booking = selectedExtendBooking;
     if (!booking) return;
 
-    const nextNights = daysBetween(booking.checkInDate, extendCheckOutDate);
+    const nextNights = extendNights;
     if (nextNights < 1) return;
 
     const approved = await confirm({
@@ -317,7 +333,7 @@ export default function BookingPage() {
             checkOutDate: extendCheckOutDate,
             checkOutTime: extendCheckOutTime,
             nights: nextNights,
-            total: nextNights * (entry.ratePerNight ?? 0),
+            total: extendTotal,
           }
         : entry,
     );
@@ -640,6 +656,26 @@ export default function BookingPage() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">New Check-Out Time</p>
                 <Input type="time" value={extendCheckOutTime} onChange={(event) => setExtendCheckOutTime(event.target.value)} />
               </div>
+              {selectedExtendBooking && (
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <span>Rate / Night</span>
+                    <span>{selectedExtendBooking.currency ?? "TSh"} {(selectedExtendBooking.ratePerNight ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <span>Days</span>
+                    <span>{extendNights}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <span>Added Amount</span>
+                    <span>{selectedExtendBooking.currency ?? "TSh"} {extendIncrement.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 text-sm font-black uppercase tracking-widest">
+                    <span>New Total</span>
+                    <span>{selectedExtendBooking.currency ?? "TSh"} {extendTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
@@ -652,7 +688,7 @@ export default function BookingPage() {
                 >
                   Close
                 </Button>
-                <Button onClick={applyExtendStay} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                <Button onClick={applyExtendStay} disabled={extendNights < 1} className="h-11 font-black uppercase text-[10px] tracking-widest">
                   Save Extension
                 </Button>
               </div>

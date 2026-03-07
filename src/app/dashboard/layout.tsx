@@ -13,6 +13,8 @@ import { removeJson, STORAGE_CASHIER_STATE } from "@/app/lib/storage";
 import { getDefaultRooms, writeRoomsState } from "@/app/lib/rooms-storage";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
+const LEGACY_CASHIER_TRANSACTIONS_KEY = "orange-hotel-cashier-transactions";
+const LEGACY_CASHIER_SEQUENCE_KEY = "orange-hotel-cashier-seq";
 
 export default function DashboardLayout({
   children,
@@ -60,10 +62,12 @@ export default function DashboardLayout({
       await hydrateDefaultAppStateFromFirebase();
       if (!active) return;
 
-      const bookingResetVersion = "2026-03-07-reset-booking-records";
+      const bookingResetVersion = "2026-03-07-reset-booking-records-v2";
       const bookingResetMarker = "orange-hotel-booking-reset-version";
       if (localStorage.getItem(bookingResetMarker) !== bookingResetVersion) {
         removeJson(STORAGE_CASHIER_STATE);
+        localStorage.removeItem(LEGACY_CASHIER_TRANSACTIONS_KEY);
+        localStorage.removeItem(LEGACY_CASHIER_SEQUENCE_KEY);
         writeRoomsState(getDefaultRooms());
         localStorage.setItem(bookingResetMarker, bookingResetVersion);
       }
