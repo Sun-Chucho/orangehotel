@@ -1,6 +1,11 @@
 import { ROOMS, Room } from "@/app/lib/mock-data";
 import { readJson, writeJson } from "@/app/lib/storage";
 
+interface ActiveBookingRoom {
+  roomNumber: string;
+  status?: "completed" | "credit" | "checked-out";
+}
+
 export const STORAGE_ROOMS = "orange-hotel-rooms-state";
 
 export function getDefaultRooms(): Room[] {
@@ -31,6 +36,21 @@ export function updateRoomStatusById(roomId: string, status: Room["status"]): Ro
   const nextRooms = readRoomsState().map((room) =>
     room.id === roomId ? { ...room, status } : room,
   );
+  writeRoomsState(nextRooms);
+  return nextRooms;
+}
+
+export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[]): Room[] {
+  const occupiedRooms = new Set(
+    bookings
+      .filter((booking) => booking.status !== "checked-out")
+      .map((booking) => booking.roomNumber),
+  );
+
+  const nextRooms = readRoomsState().map((room) =>
+    occupiedRooms.has(room.number) ? { ...room, status: "occupied" } : room,
+  );
+
   writeRoomsState(nextRooms);
   return nextRooms;
 }

@@ -25,11 +25,17 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { readRoomsState, updateRoomStatusById } from "@/app/lib/rooms-storage";
+import { readRoomsState, syncRoomsWithActiveBookings, updateRoomStatusById } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { readCashierState, STORAGE_CASHIER_STATE } from "@/app/lib/storage";
 
 type StatusFilter = "all" | Room["status"];
 type TypeFilter = "all" | Room["type"];
+
+interface BookingRoomRecord {
+  roomNumber: string;
+  status?: "completed" | "credit" | "checked-out";
+}
 
 export default function RoomsPage() {
   const isDirector = useIsDirector();
@@ -44,11 +50,29 @@ export default function RoomsPage() {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
     setRole(savedRole);
 
+    const applyRoomSnapshot = () => {
+      const cashierSnapshot = readCashierState<BookingRoomRecord>(
+        "orange-hotel-cashier-transactions",
+        "orange-hotel-cashier-seq",
+        84920,
+      );
+      const nextRooms = syncRoomsWithActiveBookings(cashierSnapshot.transactions);
+      setRooms(nextRooms);
+    };
+
+    applyRoomSnapshot();
+
     const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
       setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
     });
+    const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
+      applyRoomSnapshot();
+    });
 
-    return () => unsubscribeRooms();
+    return () => {
+      unsubscribeRooms();
+      unsubscribeCashier();
+    };
   }, []);
 
   const filteredRooms = useMemo(() => {
