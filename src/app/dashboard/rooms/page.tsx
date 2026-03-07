@@ -24,13 +24,16 @@ import {
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { readRoomsState, writeRoomsState } from "@/app/lib/rooms-storage";
 
 type StatusFilter = "all" | Room["status"];
 type TypeFilter = "all" | Room["type"];
 
 export default function RoomsPage() {
   const isDirector = useIsDirector();
-  const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
+  const { confirm, dialog } = useConfirmDialog();
+  const [rooms, setRooms] = useState<Room[]>(readRoomsState());
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -55,10 +58,14 @@ export default function RoomsPage() {
   );
 
   const setRoomStatus = (roomId: string, status: Room["status"]) => {
-    setRooms((current) => current.map((room) => (room.id === roomId ? { ...room, status } : room)));
+    setRooms((current) => {
+      const nextRooms = current.map((room) => (room.id === roomId ? { ...room, status } : room));
+      writeRoomsState(nextRooms);
+      return nextRooms;
+    });
   };
 
-  const confirmAndSetRoomStatus = (roomId: string, roomNumber: string, status: Room["status"]) => {
+  const confirmAndSetRoomStatus = async (roomId: string, roomNumber: string, status: Room["status"]) => {
     if (isDirector) return;
     const labels: Record<Room["status"], string> = {
       available: "available",
@@ -66,7 +73,12 @@ export default function RoomsPage() {
       cleaning: "cleaning",
       maintenance: "maintenance",
     };
-    if (!window.confirm(`Do you wish to mark room ${roomNumber} as ${labels[status]}?`)) return;
+    const approved = await confirm({
+      title: "Update Room Status",
+      description: `Are you sure you want to mark room ${roomNumber} as ${labels[status]}?`,
+      actionLabel: "Update Room",
+    });
+    if (!approved) return;
     setRoomStatus(roomId, status);
   };
 
@@ -87,6 +99,7 @@ export default function RoomsPage() {
 
   return (
     <div className="space-y-6">
+      {dialog}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Room Management</h1>

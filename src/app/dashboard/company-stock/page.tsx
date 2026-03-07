@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
 const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> = [
   { value: "kitchen-equipment", label: "Kitchen Equipment" },
@@ -20,6 +21,7 @@ const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> 
 
 export default function CompanyStockPage() {
   const isDirector = useIsDirector();
+  const { confirm, dialog } = useConfirmDialog();
   const [items, setItems] = useState<CompanyStockItem[]>([]);
   const [tab, setTab] = useState<CompanyStockCategory>("kitchen-equipment");
   const [name, setName] = useState("");
@@ -34,10 +36,16 @@ export default function CompanyStockPage() {
 
   const filteredItems = useMemo(() => items.filter((item) => item.category === tab), [items, tab]);
 
-  const addItem = () => {
+  const addItem = async () => {
     if (isDirector) return;
     const qty = Number(quantity);
     if (name.trim().length === 0 || description.trim().length === 0 || Number.isNaN(qty) || qty <= 0) return;
+    const approved = await confirm({
+      title: "Add Company Stock",
+      description: `Are you sure you want to add ${qty} ${name.trim()} to company stock?`,
+      actionLabel: "Add Item",
+    });
+    if (!approved) return;
     const nextItems = [
       {
         id: `cs-${Date.now()}`,
@@ -59,6 +67,7 @@ export default function CompanyStockPage() {
 
   return (
     <div className="space-y-6">
+      {dialog}
       <header>
         <h1 className="text-3xl font-black tracking-tight uppercase">Company Stock</h1>
         <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">

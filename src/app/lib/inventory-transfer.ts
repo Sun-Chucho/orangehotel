@@ -24,6 +24,18 @@ export interface StoreMovementLog {
   movedAt: number;
 }
 
+export interface StockLogicRule {
+  id: string;
+  itemId: string;
+  itemName: string;
+  destination: TransferDestination;
+  storeUnit: string;
+  departmentUnit: string;
+  unitToMenu: number;
+  logicNote: string;
+  updatedAt: number;
+}
+
 export interface StoreUsageLog {
   id: string;
   movementId: string;
@@ -36,3 +48,4 @@ export const STORAGE_INVENTORY_ITEMS = "orange-hotel-inventory-items";
 export const STORAGE_MAIN_STORE_ITEMS = "orange-hotel-main-store-items";
 export const STORAGE_STORE_MOVEMENTS = "orange-hotel-store-movements";
 export const STORAGE_STORE_USAGE = "orange-hotel-store-usage";
+export const STORAGE_STOCK_LOGIC = "orange-hotel-stock-logic";

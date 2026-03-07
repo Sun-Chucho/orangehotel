@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/table";
 import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { readRoomsState, writeRoomsState } from "@/app/lib/rooms-storage";
 
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type TransactionTab = "completed" | "credit";
@@ -54,19 +56,19 @@ const ROOM_RATE: Record<RoomType, number> = {
 
 const SPECIAL_PACKAGES: Record<
   SpecialPackage,
-  { label: string; currency: BookingCurrency; min: number; max: number }
+  { label: string; currency: BookingCurrency; standardRate: number; platinumRate: number }
 > = {
   "resident-no-breakfast": {
     label: "Resident no Breakfast",
     currency: "TSh",
-    min: 80000,
-    max: 120000,
+    standardRate: 80000,
+    platinumRate: 120000,
   },
   "non-resident-no-breakfast": {
     label: "Non Resident no Breakfast",
     currency: "TSh",
-    min: 50000,
-    max: 70000,
+    standardRate: 50000,
+    platinumRate: 70000,
   },
 };
 
@@ -90,6 +92,7 @@ function isOverstay(record: BookingRecord): boolean {
 
 export default function BookingPage() {
   const isDirector = useIsDirector();
+  const { confirm, dialog } = useConfirmDialog();
   const today = new Date().toISOString().slice(0, 10);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
@@ -115,6 +118,7 @@ export default function BookingPage() {
 
   useEffect(() => {
     const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
+    setRooms(readRoomsState());
     setTransactions(
       snapshot.transactions.map((tx) => ({
         ...tx,
@@ -126,22 +130,19 @@ export default function BookingPage() {
 
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
   const packageConfig = selectedPackage === "none" ? null : SPECIAL_PACKAGES[selectedPackage];
-  const defaultPackageRate = packageConfig ? packageConfig.min : 0;
   const selectedRate = packageConfig
-    ? Number(packageRate || defaultPackageRate)
+    ? roomType === "standard"
+      ? packageConfig.standardRate
+      : packageConfig.platinumRate
     : ROOM_RATE[roomType];
   const rate = Number.isFinite(selectedRate) && selectedRate > 0 ? selectedRate : 0;
   const bookingCurrency: BookingCurrency = packageConfig?.currency ?? "TSh";
   const total = nights * rate;
-  const packageRateOutOfRange = Boolean(
-    packageConfig && (Number.isNaN(rate) || rate < packageConfig.min || rate > packageConfig.max),
-  );
   const canSubmitBooking =
     guestName.trim().length > 0 &&
     phone.trim().length >= 7 &&
     nights >= 1 &&
-    Boolean(selectedRoomNumber) &&
-    !packageRateOutOfRange;
+    Boolean(selectedRoomNumber);
 
   const availableRooms = useMemo(() => {
     const wantedType = roomType === "standard" ? "Standard" : "Platinum";
@@ -153,8 +154,8 @@ export default function BookingPage() {
       setPackageRate("");
       return;
     }
-    setPackageRate(String(packageConfig.min));
-  }, [packageConfig?.currency, packageConfig?.min, packageConfig?.max]);
+    setPackageRate(String(roomType === "standard" ? packageConfig.standardRate : packageConfig.platinumRate));
+  }, [packageConfig, roomType]);
 
   const completedTransactions = useMemo(
     () => transactions.filter((tx) => tx.status === "completed" || tx.status === "checked-out"),
@@ -170,8 +171,13 @@ export default function BookingPage() {
     .filter((tx) => (tx.status === "completed" || tx.status === "checked-out") && (tx.currency ?? "TSh") === "TSh")
     .reduce((sum, tx) => sum + tx.total, 0);
 
-  const clearBookingForm = () => {
-    if (!window.confirm("Clear this booking form?")) return;
+  const clearBookingForm = async () => {
+    const approved = await confirm({
+      title: "Clear Booking Form",
+      description: "Are you sure you want to clear this booking form?",
+      actionLabel: "Clear Form",
+    });
+    if (!approved) return;
     setGuestName("");
     setPhone("");
     setCheckInDate(today);
@@ -187,7 +193,11 @@ export default function BookingPage() {
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
-    setRooms((current) => current.map((room) => (room.number === roomNumber ? { ...room, status } : room)));
+    setRooms((current) => {
+      const nextRooms = current.map((room) => (room.number === roomNumber ? { ...room, status } : room));
+      writeRoomsState(nextRooms);
+      return nextRooms;
+    });
   };
 
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
@@ -245,6 +255,7 @@ export default function BookingPage() {
 
   return (
     <div className="space-y-8">
+      {dialog}
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Reception Booking</h1>
@@ -329,30 +340,22 @@ export default function BookingPage() {
               onChange={(event) => setSelectedPackage(event.target.value as SpecialPackage | "none")}
             >
               <option value="none">No special package</option>
-              <option value="resident-no-breakfast">Resident no Breakfast (TSh 80,000 - 120,000)</option>
-              <option value="non-resident-no-breakfast">Non Resident no Breakfast (TSh 50,000 - 70,000)</option>
+              <option value="resident-no-breakfast">Resident no Breakfast (Standard TSh 80,000 | Platinum TSh 120,000)</option>
+              <option value="non-resident-no-breakfast">Non Resident no Breakfast (Standard TSh 50,000 | Platinum TSh 70,000)</option>
             </select>
 
             {packageConfig && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <Input
                   type="number"
-                  min={packageConfig.min}
-                  max={packageConfig.max}
                   value={packageRate}
-                  onChange={(event) => setPackageRate(event.target.value)}
+                  readOnly
                   placeholder="Rate per night"
                 />
                 <div className="rounded-md border px-3 py-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
-                  Allowed: {packageConfig.currency} {packageConfig.min.toLocaleString()} - {packageConfig.max.toLocaleString()}
+                  {roomType === "standard" ? "Standard" : "Platinum"} package rate: {packageConfig.currency} {rate.toLocaleString()}
                 </div>
               </div>
-            )}
-
-            {packageRateOutOfRange && (
-              <p className="text-[11px] font-bold text-red-600">
-                Package rate must be between {packageConfig?.currency} {packageConfig?.min.toLocaleString()} and {packageConfig?.max.toLocaleString()}.
-              </p>
             )}
           </div>
 

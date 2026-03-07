@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Role } from "@/app/lib/mock-data";
+import { ROOMS, Role } from "@/app/lib/mock-data";
 import {
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
 type KitchenCategory = "all" | "breakfast" | "lunch" | "dinner";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -88,9 +89,9 @@ const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
 
 export default function KitchenPage() {
   const isDirector = useIsDirector();
+  const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<Role | null>(null);
   const isManager = role === "manager";
-  const [managerTab, setManagerTab] = useState<"inventory" | "menu">("inventory");
   const [directorTab, setDirectorTab] = useState<"inventory" | "sales">("inventory");
   const [category, setCategory] = useState<KitchenCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
@@ -108,14 +109,16 @@ export default function KitchenPage() {
   const [usageLogs, setUsageLogs] = useState<StoreUsageLog[]>([]);
   const [useEntryId, setUseEntryId] = useState("");
   const [useQty, setUseQty] = useState("1");
-  const [menuName, setMenuName] = useState("");
-  const [menuPrice, setMenuPrice] = useState("");
-  const [menuPrepMinutes, setMenuPrepMinutes] = useState("15");
-  const [menuCategory, setMenuCategory] = useState<Exclude<KitchenCategory, "all">>("lunch");
 
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
+
+  const roomSuggestions = useMemo(() => ROOMS.map((room) => room.number), []);
+  const tableSuggestions = useMemo(
+    () => Array.from({ length: 30 }, (_, index) => String(index + 1)),
+    [],
+  );
 
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
@@ -152,15 +155,34 @@ export default function KitchenPage() {
     if (queueTab === "from-store") loadFromStoreData();
   }, [queueTab]);
 
+  useEffect(() => {
+    if (serviceMode === "restaurant") {
+      setRoomNumber("");
+      return;
+    }
+    if (serviceMode === "room-service") {
+      setTableNumber("");
+      return;
+    }
+    setRoomNumber("");
+    setTableNumber("");
+  }, [serviceMode]);
+
   const getUsedQty = (movementId: string) =>
     usageLogs.filter((entry) => entry.movementId === movementId).reduce((sum, entry) => sum + entry.quantityUsed, 0);
 
-  const addUsage = () => {
+  const addUsage = async () => {
     const qty = Number(useQty);
     const entry = fromStoreEntries.find((item) => item.id === useEntryId);
     if (!entry || Number.isNaN(qty) || qty <= 0) return;
     const remaining = entry.convertedQty - getUsedQty(entry.id);
     if (qty > remaining) return;
+    const approved = await confirm({
+      title: "Record Kitchen Usage",
+      description: `Are you sure you want to record ${qty} units used for ${entry.itemName}?`,
+      actionLabel: "Record Usage",
+    });
+    if (!approved) return;
     const log: StoreUsageLog = {
       id: `su-${Date.now()}`,
       movementId: entry.id,
@@ -176,30 +198,6 @@ export default function KitchenPage() {
       [...next, ...existingUsage.filter((i) => i.destination !== "kitchen")],
     );
     setUseQty("1");
-  };
-
-  const addMenuItem = () => {
-    if (!isManager) return;
-    const price = Number(menuPrice);
-    const prepMinutes = Number(menuPrepMinutes);
-    if (!menuName.trim() || Number.isNaN(price) || price <= 0 || Number.isNaN(prepMinutes) || prepMinutes <= 0) return;
-
-    const nextMenuItems = [
-      {
-        id: `km-${Date.now()}`,
-        name: menuName.trim(),
-        price,
-        prepMinutes,
-        category: menuCategory,
-      },
-      ...menuItems,
-    ];
-    setMenuItems(nextMenuItems);
-    writePosState(STORAGE_KITCHEN_STATE, tickets, ticketSeq, kitchenPayments, nextMenuItems);
-    setMenuName("");
-    setMenuPrice("");
-    setMenuPrepMinutes("15");
-    setMenuCategory("lunch");
   };
 
   const filteredMenu = useMemo(
@@ -244,9 +242,14 @@ export default function KitchenPage() {
     setCart((current) => current.filter((line) => line.item.id !== itemId));
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
     if (isDirector) return;
-    if (!window.confirm("Clear current ticket?")) return;
+    const approved = await confirm({
+      title: "Clear Kitchen Ticket",
+      description: "Are you sure you want to clear the current ticket?",
+      actionLabel: "Clear Ticket",
+    });
+    if (!approved) return;
     setCart([]);
   };
 
@@ -341,19 +344,29 @@ export default function KitchenPage() {
     }
   };
 
-  const deliverTicket = (id: string) => {
+  const deliverTicket = async (id: string) => {
     if (isDirector) return;
-    if (!window.confirm("Mark this order as delivered?")) return;
+    const approved = await confirm({
+      title: "Deliver Kitchen Order",
+      description: "Are you sure you want to mark this kitchen order as delivered?",
+      actionLabel: "Deliver",
+    });
+    if (!approved) return;
     const nextTickets = tickets.filter((ticket) => ticket.id !== id);
     setTickets(nextTickets);
     writePosState(STORAGE_KITCHEN_STATE, nextTickets, ticketSeq, kitchenPayments, menuItems);
   };
 
-  const cancelTicket = (id: string) => {
+  const cancelTicket = async (id: string) => {
     if (isDirector) return;
     const ticket = tickets.find((t) => t.id === id);
     if (!ticket) return;
-    if (!window.confirm("Cancel this order?")) return;
+    const approved = await confirm({
+      title: "Cancel Kitchen Order",
+      description: "Are you sure you want to cancel this kitchen order?",
+      actionLabel: "Cancel Order",
+    });
+    if (!approved) return;
 
     const cancelled: CancelledKitchenTicket = {
       ...ticket,
@@ -380,120 +393,46 @@ export default function KitchenPage() {
             <div>
               <h1 className="text-3xl font-black tracking-tight">Kitchen Setup</h1>
               <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-                Inventory and menu settings for kitchen operations
+                Inventory visibility for kitchen operations
               </p>
             </div>
           </div>
         </header>
-
-        <Tabs value={managerTab} onValueChange={(value) => setManagerTab(value as "inventory" | "menu")}>
-          <TabsList className="h-10">
-            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
-            <TabsTrigger value="menu" className="font-black uppercase text-[10px] tracking-widest">Menu Settings</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {managerTab === "inventory" ? (
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Inventory from Store</CardTitle>
-              <CardDescription>Received stock linked to kitchen operations</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/10">
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Logic</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+        <Card className="border-none shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Inventory from Store</CardTitle>
+            <CardDescription>Received stock linked to kitchen operations. Menu creation now lives in Menu Create.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-muted/10">
+                <TableRow>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Logic</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {fromStoreEntries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="font-bold">{entry.itemName}</TableCell>
+                    <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
+                    <TableCell className="font-bold">{entry.conversionNote}</TableCell>
+                    <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fromStoreEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="font-bold">{entry.itemName}</TableCell>
-                      <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
-                      <TableCell className="font-bold">{entry.conversionNote}</TableCell>
-                      <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                  {fromStoreEntries.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                        No kitchen inventory records
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            <Card className="border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-xl font-black uppercase tracking-tight">Create Kitchen Menu Item</CardTitle>
-                <CardDescription>Set dish name, category, preparation time, and price</CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Input value={menuName} onChange={(event) => setMenuName(event.target.value)} placeholder="Dish name" />
-                <select
-                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={menuCategory}
-                  onChange={(event) => setMenuCategory(event.target.value as Exclude<KitchenCategory, "all">)}
-                >
-                  <option value="breakfast">Breakfast</option>
-                  <option value="lunch">Lunch</option>
-                  <option value="dinner">Dinner</option>
-                </select>
-                <Input type="number" min="1" value={menuPrepMinutes} onChange={(event) => setMenuPrepMinutes(event.target.value)} placeholder="Prep minutes" />
-                <Input type="number" min="1" value={menuPrice} onChange={(event) => setMenuPrice(event.target.value)} placeholder="Price" />
-                <div className="md:col-span-4">
-                  <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={addMenuItem}>
-                    Add Menu Item
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Menu</CardTitle>
-                <CardDescription>Current menu items and selling prices</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader className="bg-muted/10">
-                    <TableRow>
-                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
-                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Category</TableHead>
-                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Prep</TableHead>
-                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Price</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {menuItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.name}</TableCell>
-                        <TableCell className="font-bold uppercase text-[10px] tracking-widest">{item.category}</TableCell>
-                        <TableCell className="font-bold">{item.prepMinutes} min</TableCell>
-                        <TableCell className="font-bold">TSh {item.price.toLocaleString()}</TableCell>
-                      </TableRow>
-                    ))}
-                    {menuItems.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                          No kitchen menu items yet
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                ))}
+                {fromStoreEntries.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                      No kitchen inventory records
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -614,6 +553,7 @@ export default function KitchenPage() {
 
   return (
     <div className="space-y-8">
+      {dialog}
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
@@ -779,7 +719,7 @@ export default function KitchenPage() {
                       ))}
                     </select>
                     <Input type="number" min="1" value={useQty} onChange={(event) => setUseQty(event.target.value)} placeholder="Usage quantity" />
-                    <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={addUsage}>
+                    <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={addUsage} disabled={!useEntryId}>
                       Record Usage
                     </Button>
                   </div>
@@ -842,12 +782,32 @@ export default function KitchenPage() {
             {serviceMode === "room-service" ? (
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room Number</label>
-                <Input value={roomNumber} onChange={(event) => setRoomNumber(event.target.value)} placeholder="Enter room number" />
+                <Input
+                  list="kitchen-room-numbers"
+                  value={roomNumber}
+                  onChange={(event) => setRoomNumber(event.target.value)}
+                  placeholder="Enter room number"
+                />
+                <datalist id="kitchen-room-numbers">
+                  {roomSuggestions.map((room) => (
+                    <option key={room} value={room} />
+                  ))}
+                </datalist>
               </div>
             ) : serviceMode === "restaurant" ? (
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Table Number</label>
-                <Input value={tableNumber} onChange={(event) => setTableNumber(event.target.value)} placeholder="Enter table number" />
+                <Input
+                  list="kitchen-table-numbers"
+                  value={tableNumber}
+                  onChange={(event) => setTableNumber(event.target.value)}
+                  placeholder="Enter table number"
+                />
+                <datalist id="kitchen-table-numbers">
+                  {tableSuggestions.map((table) => (
+                    <option key={table} value={table} />
+                  ))}
+                </datalist>
               </div>
             ) : (
               <div className="rounded-xl border p-3 bg-muted/20">

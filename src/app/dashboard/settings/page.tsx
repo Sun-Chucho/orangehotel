@@ -24,6 +24,7 @@ import {
   User,
 } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
 type SettingsSection = "profile" | "notifications" | "security" | "general" | "billing" | "hardware";
 
@@ -65,6 +66,7 @@ const FALLBACK_PRINTERS = [
 
 export default function SettingsPage() {
   const isDirector = useIsDirector();
+  const { confirm, dialog } = useConfirmDialog();
   const [section, setSection] = useState<SettingsSection>("profile");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [hardwareSettings, setHardwareSettings] = useState<HardwareSettings>(DEFAULT_HARDWARE_SETTINGS);
@@ -106,15 +108,27 @@ export default function SettingsPage() {
     void loadPrinters();
   }, []);
 
-  const saveChanges = () => {
+  const saveChanges = async () => {
     if (isDirector) return;
+    const approved = await confirm({
+      title: "Save Settings",
+      description: "Are you sure you want to save these system and hardware settings?",
+      actionLabel: "Save Changes",
+    });
+    if (!approved) return;
     writeJson(STORAGE_KEY, settings);
     writeJson(STORAGE_HARDWARE_SETTINGS, hardwareSettings);
     setSavedAt(Date.now());
   };
 
-  const resetDefaults = () => {
+  const resetDefaults = async () => {
     if (isDirector) return;
+    const approved = await confirm({
+      title: "Reset Settings",
+      description: "Are you sure you want to reset the current settings form back to defaults?",
+      actionLabel: "Reset",
+    });
+    if (!approved) return;
     setSettings(DEFAULT_SETTINGS);
     setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
   };
@@ -138,6 +152,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
+      {dialog}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight">System Settings</h1>

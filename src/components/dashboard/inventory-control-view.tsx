@@ -6,7 +6,9 @@ import {
   MainStoreItem,
   STORAGE_INVENTORY_ITEMS,
   STORAGE_MAIN_STORE_ITEMS,
+  STORAGE_STOCK_LOGIC,
   STORAGE_STORE_MOVEMENTS,
+  StockLogicRule,
   StoreLane,
   StoreMovementLog,
   TransferDestination,
@@ -17,10 +19,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRightLeft, Plus } from "lucide-react";
+import { ArrowRightLeft, Plus, Save } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
-export type InventoryTab = "kitchen-stock" | "barista-stock" | "stock-control" | "low-stock-threshold";
+export type InventoryTab =
+  | "kitchen-stock"
+  | "barista-stock"
+  | "stock-control"
+  | "stock-movement";
+
 type ItemCategory = "Kitchen" | "Bar";
 type StockControlTab = "kitchen" | "barista";
 
@@ -30,9 +38,14 @@ function getStockLabel(stock: number, minStock: number) {
   return "In Stock";
 }
 
+function getLogicLabel(rule: StockLogicRule | undefined) {
+  if (!rule) return "No Logic";
+  return `1 ${rule.storeUnit} -> ${rule.unitToMenu} ${rule.departmentUnit}`;
+}
+
 export function InventoryControlView({
   initialTab,
-  visibleTabs = ["kitchen-stock", "barista-stock", "stock-control", "low-stock-threshold"],
+  visibleTabs = ["kitchen-stock", "barista-stock", "stock-control", "stock-movement"],
 }: {
   initialTab: InventoryTab;
   visibleTabs?: InventoryTab[];
@@ -40,26 +53,35 @@ export function InventoryControlView({
   const isDirector = useIsDirector();
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
   const [stockControlTab, setStockControlTab] = useState<StockControlTab>("kitchen");
+  const [stockMovementTab, setStockMovementTab] = useState<StockControlTab>("kitchen");
   const [items, setItems] = useState<InventoryItem[]>(INVENTORY);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [movementLogs, setMovementLogs] = useState<StoreMovementLog[]>([]);
+  const [logicRules, setLogicRules] = useState<StockLogicRule[]>([]);
 
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenQty, setKitchenQty] = useState("0");
   const [kitchenUnit, setKitchenUnit] = useState("kg");
+  const [kitchenThreshold, setKitchenThreshold] = useState("1");
   const [baristaName, setBaristaName] = useState("");
   const [baristaQty, setBaristaQty] = useState("0");
   const [baristaUnit, setBaristaUnit] = useState("kg");
+  const [baristaThreshold, setBaristaThreshold] = useState("1");
 
-  const [selectedKitchenStoreItemId, setSelectedKitchenStoreItemId] = useState("");
-  const [selectedBaristaStoreItemId, setSelectedBaristaStoreItemId] = useState("");
+  const [selectedKitchenRuleItemId, setSelectedKitchenRuleItemId] = useState("");
+  const [selectedBaristaRuleItemId, setSelectedBaristaRuleItemId] = useState("");
+  const [kitchenDepartmentUnit, setKitchenDepartmentUnit] = useState("portion");
+  const [baristaDepartmentUnit, setBaristaDepartmentUnit] = useState("cup");
+  const [kitchenUnitToMenu, setKitchenUnitToMenu] = useState("1");
+  const [baristaUnitToMenu, setBaristaUnitToMenu] = useState("1");
+  const [kitchenLogicNote, setKitchenLogicNote] = useState("");
+  const [baristaLogicNote, setBaristaLogicNote] = useState("");
+
+  const [selectedKitchenMoveItemId, setSelectedKitchenMoveItemId] = useState("");
+  const [selectedBaristaMoveItemId, setSelectedBaristaMoveItemId] = useState("");
   const [kitchenMoveQty, setKitchenMoveQty] = useState("1");
   const [baristaMoveQty, setBaristaMoveQty] = useState("1");
-  const [kitchenConversionValue, setKitchenConversionValue] = useState("1");
-  const [baristaConversionValue, setBaristaConversionValue] = useState("1");
-  const [kitchenConversionNote, setKitchenConversionNote] = useState("");
-  const [baristaConversionNote, setBaristaConversionNote] = useState("");
-  const [thresholdDrafts, setThresholdDrafts] = useState<Record<string, string>>({});
+  const { confirm, dialog } = useConfirmDialog();
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -67,43 +89,76 @@ export function InventoryControlView({
 
   useEffect(() => {
     if (!visibleTabs.includes(activeTab)) {
-      setActiveTab(initialTab);
+      setActiveTab(visibleTabs[0] ?? "kitchen-stock");
     }
-  }, [activeTab, initialTab, visibleTabs]);
+  }, [activeTab, visibleTabs]);
 
   useEffect(() => {
     const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
     const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS);
     const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
+    const rules = readJson<StockLogicRule[]>(STORAGE_STOCK_LOGIC);
     if (Array.isArray(inv)) setItems(inv);
     if (Array.isArray(store)) {
-      setStoreItems(store.map((i) => ({ ...i, lane: i.lane === "barista" ? "barista" : "kitchen" })));
+      setStoreItems(store.map((item) => ({ ...item, lane: item.lane === "barista" ? "barista" : "kitchen" })));
     }
     if (Array.isArray(moves)) setMovementLogs(moves);
+    if (Array.isArray(rules)) setLogicRules(rules);
   }, []);
 
-  useEffect(() => {
-    setThresholdDrafts(
-      Object.fromEntries(items.map((item) => [item.id, String(item.minStock)])),
-    );
-  }, [items]);
+  const kitchenStore = useMemo(() => storeItems.filter((item) => item.lane === "kitchen"), [storeItems]);
+  const baristaStore = useMemo(() => storeItems.filter((item) => item.lane === "barista"), [storeItems]);
+  const kitchenInventoryItems = useMemo(() => items.filter((item) => item.category === "Kitchen"), [items]);
+  const baristaInventoryItems = useMemo(() => items.filter((item) => item.category === "Bar"), [items]);
+  const kitchenLogicRules = useMemo(() => logicRules.filter((rule) => rule.destination === "kitchen"), [logicRules]);
+  const baristaLogicRules = useMemo(() => logicRules.filter((rule) => rule.destination === "barista"), [logicRules]);
 
-  const kitchenStore = useMemo(() => storeItems.filter((i) => i.lane === "kitchen"), [storeItems]);
-  const baristaStore = useMemo(() => storeItems.filter((i) => i.lane === "barista"), [storeItems]);
-  const kitchenInventoryItems = useMemo(() => items.filter((i) => i.category === "Kitchen"), [items]);
-  const baristaInventoryItems = useMemo(() => items.filter((i) => i.category === "Bar"), [items]);
-  const selectedKitchenStoreItem = useMemo(() => kitchenStore.find((i) => i.id === selectedKitchenStoreItemId), [kitchenStore, selectedKitchenStoreItemId]);
-  const selectedBaristaStoreItem = useMemo(() => baristaStore.find((i) => i.id === selectedBaristaStoreItemId), [baristaStore, selectedBaristaStoreItemId]);
+  const selectedKitchenRuleItem = useMemo(
+    () => kitchenStore.find((item) => item.id === selectedKitchenRuleItemId),
+    [kitchenStore, selectedKitchenRuleItemId],
+  );
+  const selectedBaristaRuleItem = useMemo(
+    () => baristaStore.find((item) => item.id === selectedBaristaRuleItemId),
+    [baristaStore, selectedBaristaRuleItemId],
+  );
+  const selectedKitchenMoveItem = useMemo(
+    () => kitchenStore.find((item) => item.id === selectedKitchenMoveItemId),
+    [kitchenStore, selectedKitchenMoveItemId],
+  );
+  const selectedBaristaMoveItem = useMemo(
+    () => baristaStore.find((item) => item.id === selectedBaristaMoveItemId),
+    [baristaStore, selectedBaristaMoveItemId],
+  );
 
-  const addStoreItem = (lane: StoreLane) => {
+  const getRuleForItem = (destination: TransferDestination, itemId: string) =>
+    logicRules.find((rule) => rule.destination === destination && rule.itemId === itemId);
+
+  const addStoreItem = async (lane: StoreLane) => {
     if (isDirector) return;
+
     const name = lane === "kitchen" ? kitchenName : baristaName;
     const qtyRaw = lane === "kitchen" ? kitchenQty : baristaQty;
     const unit = lane === "kitchen" ? kitchenUnit : baristaUnit;
+    const thresholdRaw = lane === "kitchen" ? kitchenThreshold : baristaThreshold;
     const qty = Number(qtyRaw);
-    if (!name.trim() || Number.isNaN(qty) || qty < 0 || !unit.trim()) return;
+    const threshold = Number(thresholdRaw);
 
-    const nextStoreItems = [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: 1, lane }, ...storeItems];
+    if (!name.trim() || Number.isNaN(qty) || qty < 0 || !unit.trim() || Number.isNaN(threshold) || threshold < 0) {
+      return;
+    }
+
+    const approved = await confirm({
+      title: "Update Stock",
+      description: `Are you sure you want to add ${qty} ${unit} of ${name.trim()} with a low threshold of ${threshold}?`,
+      actionLabel: "Add Stock",
+    });
+    if (!approved) return;
+
+    const nextStoreItems = [
+      { id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane },
+      ...storeItems,
+    ];
+
     setStoreItems(nextStoreItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
 
@@ -111,49 +166,122 @@ export function InventoryControlView({
       setKitchenName("");
       setKitchenQty("0");
       setKitchenUnit("kg");
+      setKitchenThreshold("1");
       return;
     }
 
     setBaristaName("");
     setBaristaQty("0");
     setBaristaUnit("kg");
+    setBaristaThreshold("1");
   };
 
-  const moveFromStore = (lane: StoreLane) => {
-    const selectedStoreItem = lane === "kitchen" ? selectedKitchenStoreItem : selectedBaristaStoreItem;
-    const moveQty = lane === "kitchen" ? kitchenMoveQty : baristaMoveQty;
-    const conversionValue = lane === "kitchen" ? kitchenConversionValue : baristaConversionValue;
-    const conversionNote = (lane === "kitchen" ? kitchenConversionNote : baristaConversionNote).trim();
-    if (isDirector || !selectedStoreItem || !conversionNote) return;
+  const saveLogicRule = async (lane: StoreLane) => {
+    if (isDirector) return;
 
-    const qty = Number(moveQty);
-    const conversion = Number(conversionValue);
-    if (Number.isNaN(qty) || qty <= 0 || Number.isNaN(conversion) || conversion <= 0 || qty > selectedStoreItem.stock) {
+    const selectedItem = lane === "kitchen" ? selectedKitchenRuleItem : selectedBaristaRuleItem;
+    const departmentUnit = (lane === "kitchen" ? kitchenDepartmentUnit : baristaDepartmentUnit).trim();
+    const unitToMenu = Number(lane === "kitchen" ? kitchenUnitToMenu : baristaUnitToMenu);
+    const logicNote = (lane === "kitchen" ? kitchenLogicNote : baristaLogicNote).trim();
+
+    if (!selectedItem || !departmentUnit || Number.isNaN(unitToMenu) || unitToMenu <= 0 || !logicNote) return;
+
+    const approved = await confirm({
+      title: "Save Stock Logic",
+      description: `Are you sure you want to save the conversion rule for ${selectedItem.name}?`,
+      actionLabel: "Save Logic",
+    });
+    if (!approved) return;
+
+    const nextRule: StockLogicRule = {
+      id: `logic-${lane}-${selectedItem.id}`,
+      itemId: selectedItem.id,
+      itemName: selectedItem.name,
+      destination: lane,
+      storeUnit: selectedItem.unit,
+      departmentUnit,
+      unitToMenu,
+      logicNote,
+      updatedAt: Date.now(),
+    };
+
+    const nextRules = [
+      nextRule,
+      ...logicRules.filter((rule) => !(rule.destination === lane && rule.itemId === selectedItem.id)),
+    ];
+
+    setLogicRules(nextRules);
+    writeJson(STORAGE_STOCK_LOGIC, nextRules);
+
+    if (lane === "kitchen") {
+      setKitchenDepartmentUnit("portion");
+      setKitchenUnitToMenu("1");
+      setKitchenLogicNote("");
       return;
     }
 
-    const converted = qty * conversion;
-    const moveDestination: TransferDestination = lane;
-    const destinationCategory: ItemCategory = moveDestination === "kitchen" ? "Kitchen" : "Bar";
-    const normalized = selectedStoreItem.name.trim().toLowerCase();
+    setBaristaDepartmentUnit("cup");
+    setBaristaUnitToMenu("1");
+    setBaristaLogicNote("");
+  };
 
-    const nextStoreItems = storeItems.map((i) => (i.id === selectedStoreItem.id ? { ...i, stock: i.stock - qty } : i));
-    const existing = items.find((i) => i.category === destinationCategory && i.name.trim().toLowerCase() === normalized);
-    const nextItems = existing
-      ? items.map((i) => (i.id === existing.id ? { ...i, stock: i.stock + converted } : i))
-      : [{ id: `i-${Date.now()}`, name: selectedStoreItem.name, category: destinationCategory, stock: converted, minStock: 1, unit: "units", price: 0 }, ...items];
+  const recordMovement = async (lane: StoreLane) => {
+    if (isDirector) return;
+
+    const selectedItem = lane === "kitchen" ? selectedKitchenMoveItem : selectedBaristaMoveItem;
+    const moveQty = Number(lane === "kitchen" ? kitchenMoveQty : baristaMoveQty);
+    const rule = getRuleForItem(lane, selectedItem?.id ?? "");
+
+    if (!selectedItem || !rule || Number.isNaN(moveQty) || moveQty <= 0 || moveQty > selectedItem.stock) return;
+
+    const approved = await confirm({
+      title: "Record Stock Movement",
+      description: `Are you sure you want to move ${moveQty} ${selectedItem.unit} of ${selectedItem.name} to ${lane}?`,
+      actionLabel: "Record Movement",
+    });
+    if (!approved) return;
+
+    const convertedQty = moveQty * rule.unitToMenu;
+    const destinationCategory: ItemCategory = lane === "kitchen" ? "Kitchen" : "Bar";
+    const normalizedName = selectedItem.name.trim().toLowerCase();
+
+    const nextStoreItems = storeItems.map((item) =>
+      item.id === selectedItem.id ? { ...item, stock: item.stock - moveQty } : item,
+    );
+
+    const existingInventoryItem = items.find(
+      (item) => item.category === destinationCategory && item.name.trim().toLowerCase() === normalizedName,
+    );
+
+    const nextItems = existingInventoryItem
+      ? items.map((item) =>
+          item.id === existingInventoryItem.id ? { ...item, stock: item.stock + convertedQty, minStock: selectedItem.minStock } : item,
+        )
+      : [
+          {
+            id: `i-${Date.now()}`,
+            name: selectedItem.name,
+            category: destinationCategory,
+            stock: convertedQty,
+            minStock: selectedItem.minStock,
+            unit: rule.departmentUnit,
+            price: 0,
+          },
+          ...items,
+        ];
+
     const nextMovementLogs = [
       {
         id: `mv-${Date.now()}`,
-        itemId: selectedStoreItem.id,
-        itemName: selectedStoreItem.name,
+        itemId: selectedItem.id,
+        itemName: selectedItem.name,
         source: "store",
-        destination: moveDestination,
-        storeQtyMoved: qty,
-        storeUnit: selectedStoreItem.unit,
-        conversionValue: conversion,
-        conversionNote,
-        convertedQty: converted,
+        destination: lane,
+        storeQtyMoved: moveQty,
+        storeUnit: selectedItem.unit,
+        conversionValue: rule.unitToMenu,
+        conversionNote: `${rule.logicNote} | 1 ${rule.storeUnit} = ${rule.unitToMenu} ${rule.departmentUnit}`,
+        convertedQty,
         movedAt: Date.now(),
       },
       ...movementLogs,
@@ -168,24 +296,20 @@ export function InventoryControlView({
 
     if (lane === "kitchen") {
       setKitchenMoveQty("1");
-      setKitchenConversionValue("1");
-      setKitchenConversionNote("");
       return;
     }
 
     setBaristaMoveQty("1");
-    setBaristaConversionValue("1");
-    setBaristaConversionNote("");
   };
 
   const renderStoreCard = (lane: StoreLane, title: string, list: MainStoreItem[]) => (
     <Card className="shadow-sm">
       <CardHeader className="border-b">
         <CardTitle className="text-lg uppercase font-black">{title}</CardTitle>
-        <CardDescription>Enter and record stock received for {lane === "kitchen" ? "kitchen" : "barista"} operations.</CardDescription>
+        <CardDescription>Enter stock quantity and low stock threshold together.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <Input
             value={lane === "kitchen" ? kitchenName : baristaName}
             onChange={(event) => (lane === "kitchen" ? setKitchenName(event.target.value) : setBaristaName(event.target.value))}
@@ -196,12 +320,19 @@ export function InventoryControlView({
             min="0"
             value={lane === "kitchen" ? kitchenQty : baristaQty}
             onChange={(event) => (lane === "kitchen" ? setKitchenQty(event.target.value) : setBaristaQty(event.target.value))}
-            placeholder="Store quantity"
+            placeholder="Quantity"
           />
           <Input
             value={lane === "kitchen" ? kitchenUnit : baristaUnit}
             onChange={(event) => (lane === "kitchen" ? setKitchenUnit(event.target.value) : setBaristaUnit(event.target.value))}
             placeholder="Unit"
+          />
+          <Input
+            type="number"
+            min="0"
+            value={lane === "kitchen" ? kitchenThreshold : baristaThreshold}
+            onChange={(event) => (lane === "kitchen" ? setKitchenThreshold(event.target.value) : setBaristaThreshold(event.target.value))}
+            placeholder="Low threshold"
           />
           <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
             <Plus className="w-4 h-4 mr-2" /> Add Stock
@@ -213,6 +344,7 @@ export function InventoryControlView({
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Low Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -221,12 +353,13 @@ export function InventoryControlView({
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
               </TableRow>
             ))}
             {list.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock recorded yet
                 </TableCell>
               </TableRow>
@@ -248,6 +381,7 @@ export function InventoryControlView({
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock</TableHead>
             </TableRow>
           </TableHeader>
@@ -256,81 +390,14 @@ export function InventoryControlView({
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
               </TableRow>
             ))}
             {inventoryItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock entries found
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-
-  const saveThreshold = (itemId: string) => {
-    if (isDirector) return;
-    const nextValue = Number(thresholdDrafts[itemId]);
-    if (Number.isNaN(nextValue) || nextValue < 0) return;
-    const nextItems = items.map((item) => (item.id === itemId ? { ...item, minStock: nextValue } : item));
-    setItems(nextItems);
-    writeJson(STORAGE_INVENTORY_ITEMS, nextItems);
-  };
-
-  const renderThresholdTable = () => (
-    <Card className="shadow-sm">
-      <CardHeader className="border-b">
-        <CardTitle className="text-lg uppercase font-black">Low Stock Threshold</CardTitle>
-        <CardDescription>Set the minimum stock level for each item so manager notifications appear when stock falls below that number.</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest">Category</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest">Current Stock</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest">Threshold</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="font-bold">{item.name}</TableCell>
-                <TableCell className="font-bold uppercase text-[10px] tracking-widest">{item.category}</TableCell>
-                <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
-                <TableCell className="w-[180px]">
-                  <Input
-                    type="number"
-                    min="0"
-                    value={thresholdDrafts[item.id] ?? String(item.minStock)}
-                    onChange={(event) =>
-                      setThresholdDrafts((current) => ({ ...current, [item.id]: event.target.value }))
-                    }
-                    placeholder="Threshold"
-                    disabled={isDirector}
-                  />
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    className="h-9 font-black uppercase text-[10px] tracking-widest"
-                    onClick={() => saveThreshold(item.id)}
-                    disabled={isDirector}
-                  >
-                    Save
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                  No inventory items found
                 </TableCell>
               </TableRow>
             )}
@@ -343,27 +410,28 @@ export function InventoryControlView({
   const renderStockControl = (
     lane: StoreLane,
     list: MainStoreItem[],
-    selectedStoreItem: MainStoreItem | undefined,
-    selectedStoreItemId: string,
-    setSelectedStoreItemId: (value: string) => void,
-    moveQty: string,
-    setMoveQty: (value: string) => void,
-    conversionValue: string,
-    setConversionValue: (value: string) => void,
-    conversionNote: string,
-    setConversionNote: (value: string) => void,
+    selectedItemId: string,
+    setSelectedItemId: (value: string) => void,
+    selectedItem: MainStoreItem | undefined,
+    departmentUnit: string,
+    setDepartmentUnit: (value: string) => void,
+    unitToMenu: string,
+    setUnitToMenu: (value: string) => void,
+    logicNote: string,
+    setLogicNote: (value: string) => void,
+    rules: StockLogicRule[],
   ) => (
     <div className="space-y-6">
       <Card className="shadow-sm">
         <CardHeader className="border-b">
           <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Stock Control</CardTitle>
-          <CardDescription>Select an item and write the movement logic, for example: 1 kg meat = 20 units.</CardDescription>
+          <CardDescription>Preset the unit logic once here, then use it later inside stock movement.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 pt-4">
           <select
             className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={selectedStoreItemId}
-            onChange={(event) => setSelectedStoreItemId(event.target.value)}
+            value={selectedItemId}
+            onChange={(event) => setSelectedItemId(event.target.value)}
           >
             <option value="">Select item</option>
             {list.map((item) => (
@@ -372,26 +440,34 @@ export function InventoryControlView({
               </option>
             ))}
           </select>
-          <Input type="number" min="1" value={moveQty} onChange={(event) => setMoveQty(event.target.value)} placeholder="Qty moved" />
+          <Input
+            value={departmentUnit}
+            onChange={(event) => setDepartmentUnit(event.target.value)}
+            placeholder={lane === "kitchen" ? "Kitchen unit" : "Barista unit"}
+          />
           <Input
             type="number"
             min="0.01"
             step="0.01"
-            value={conversionValue}
-            onChange={(event) => setConversionValue(event.target.value)}
-            placeholder="1 unit = X units"
+            value={unitToMenu}
+            onChange={(event) => setUnitToMenu(event.target.value)}
+            placeholder="Unit to menu"
           />
-          <Input value={conversionNote} onChange={(event) => setConversionNote(event.target.value)} placeholder="Logic note e.g. 1 kg meat = 20 units" />
-          <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={() => moveFromStore(lane)} disabled={isDirector}>
-            <ArrowRightLeft className="w-4 h-4 mr-2" /> Record Movement
+          <Input
+            value={logicNote}
+            onChange={(event) => setLogicNote(event.target.value)}
+            placeholder="Record logic"
+          />
+          <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={() => saveLogicRule(lane)} disabled={isDirector}>
+            <Save className="w-4 h-4 mr-2" /> Save Logic
           </Button>
         </CardContent>
-        {selectedStoreItem && (
+        {selectedItem && (
           <CardContent className="pt-0">
             <div className="rounded-md border p-3">
-              <p className="font-black">{selectedStoreItem.name}</p>
+              <p className="font-black">{selectedItem.name}</p>
               <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                Available: {selectedStoreItem.stock} {selectedStoreItem.unit}
+                Base unit: {selectedItem.unit} | Current logic: {getLogicLabel(getRuleForItem(lane, selectedItem.id))}
               </p>
             </div>
           </CardContent>
@@ -400,35 +476,31 @@ export function InventoryControlView({
 
       <Card className="shadow-sm">
         <CardHeader className="border-b">
-          <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Control Log</CardTitle>
+          <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Logic Table</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Movement</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Department Unit</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Unit To Menu</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Logic</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {movementLogs
-                .filter((movement) => movement.destination === lane)
-                .map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell className="font-bold">{movement.itemName}</TableCell>
-                    <TableCell className="font-bold">
-                      {movement.storeQtyMoved} {movement.storeUnit} {"->"} {movement.convertedQty} units
-                    </TableCell>
-                    <TableCell className="font-bold">{movement.conversionNote}</TableCell>
-                    <TableCell className="font-bold text-sm">{new Date(movement.movedAt).toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              {movementLogs.filter((movement) => movement.destination === lane).length === 0 && (
+              {rules.map((rule) => (
+                <TableRow key={rule.id}>
+                  <TableCell className="font-bold">{rule.itemName}</TableCell>
+                  <TableCell className="font-bold">{rule.departmentUnit}</TableCell>
+                  <TableCell className="font-bold">1 {rule.storeUnit} = {rule.unitToMenu} {rule.departmentUnit}</TableCell>
+                  <TableCell className="font-bold">{rule.logicNote}</TableCell>
+                </TableRow>
+              ))}
+              {rules.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                    No control records yet
+                    No logic presets yet
                   </TableCell>
                 </TableRow>
               )}
@@ -439,19 +511,127 @@ export function InventoryControlView({
     </div>
   );
 
+  const renderStockMovement = (
+    lane: StoreLane,
+    list: MainStoreItem[],
+    selectedItemId: string,
+    setSelectedItemId: (value: string) => void,
+    selectedItem: MainStoreItem | undefined,
+    moveQty: string,
+    setMoveQty: (value: string) => void,
+  ) => {
+    const laneRules = logicRules.filter((rule) => rule.destination === lane);
+    const laneMovements = movementLogs.filter((movement) => movement.destination === lane);
+    const selectedRule = getRuleForItem(lane, selectedItemId);
+
+    return (
+      <div className="space-y-6">
+        <Card className="shadow-sm">
+          <CardHeader className="border-b">
+            <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Stock Movement</CardTitle>
+            <CardDescription>Select an item and use the saved stock-control logic to move stock.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 pt-4">
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={selectedItemId}
+              onChange={(event) => setSelectedItemId(event.target.value)}
+            >
+              <option value="">Select item</option>
+              {list.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({item.stock} {item.unit})
+                </option>
+              ))}
+            </select>
+            <Input
+              type="number"
+              min="1"
+              value={moveQty}
+              onChange={(event) => setMoveQty(event.target.value)}
+              placeholder="Quantity moved"
+            />
+            <div className="rounded-md border px-3 py-2 text-sm font-bold">
+              {selectedRule ? `1 ${selectedRule.storeUnit} = ${selectedRule.unitToMenu} ${selectedRule.departmentUnit}` : "No preset logic"}
+            </div>
+            <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={() => recordMovement(lane)} disabled={isDirector || !selectedRule}>
+              <ArrowRightLeft className="w-4 h-4 mr-2" /> Record Movement
+            </Button>
+          </CardContent>
+          {selectedItem && (
+            <CardContent className="pt-0">
+              <div className="rounded-md border p-3">
+                <p className="font-black">{selectedItem.name}</p>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  Available: {selectedItem.stock} {selectedItem.unit} | Logic: {selectedRule ? selectedRule.logicNote : "Set logic in Stock Control first"}
+                </p>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader className="border-b">
+            <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Movement Log</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Movement</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Logic</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {laneMovements.map((movement) => (
+                  <TableRow key={movement.id}>
+                    <TableCell className="font-bold">{movement.itemName}</TableCell>
+                    <TableCell className="font-bold">
+                      {movement.storeQtyMoved} {movement.storeUnit} {"->"} {movement.convertedQty}
+                    </TableCell>
+                    <TableCell className="font-bold">{movement.conversionNote}</TableCell>
+                    <TableCell className="font-bold text-sm">{new Date(movement.movedAt).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+                {laneMovements.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                      No movement records yet
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {laneRules.length === 0 && (
+          <Card className="border-orange-200 bg-orange-50/60 shadow-none">
+            <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-orange-700">
+              Set stock control logic first before recording movement here.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
+      {dialog}
       <header>
         <h1 className="text-3xl font-black tracking-tight uppercase">Inventory Control</h1>
         <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Kitchen stock, barista stock, and stock control logic in one place
+          Stock entry, logic presets, and movement records for kitchen and barista
         </p>
       </header>
 
       {isDirector && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
           <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
-            Managing Director View: Stock and movement analytics (read-only)
+            Managing Director View: Stock and movement analytics only
           </CardContent>
         </Card>
       )}
@@ -468,8 +648,8 @@ export function InventoryControlView({
             {visibleTabs.includes("stock-control") && (
               <TabsTrigger value="stock-control" className="font-black uppercase text-[10px] tracking-widest">Stock Control</TabsTrigger>
             )}
-            {visibleTabs.includes("low-stock-threshold") && (
-              <TabsTrigger value="low-stock-threshold" className="font-black uppercase text-[10px] tracking-widest">Low Stock Threshold</TabsTrigger>
+            {visibleTabs.includes("stock-movement") && (
+              <TabsTrigger value="stock-movement" className="font-black uppercase text-[10px] tracking-widest">Stock Movement</TabsTrigger>
             )}
           </TabsList>
         </Tabs>
@@ -499,36 +679,67 @@ export function InventoryControlView({
             {renderStockControl(
               "kitchen",
               kitchenStore,
-              selectedKitchenStoreItem,
-              selectedKitchenStoreItemId,
-              setSelectedKitchenStoreItemId,
-              kitchenMoveQty,
-              setKitchenMoveQty,
-              kitchenConversionValue,
-              setKitchenConversionValue,
-              kitchenConversionNote,
-              setKitchenConversionNote,
+              selectedKitchenRuleItemId,
+              setSelectedKitchenRuleItemId,
+              selectedKitchenRuleItem,
+              kitchenDepartmentUnit,
+              setKitchenDepartmentUnit,
+              kitchenUnitToMenu,
+              setKitchenUnitToMenu,
+              kitchenLogicNote,
+              setKitchenLogicNote,
+              kitchenLogicRules,
             )}
           </TabsContent>
           <TabsContent value="barista">
             {renderStockControl(
               "barista",
               baristaStore,
-              selectedBaristaStoreItem,
-              selectedBaristaStoreItemId,
-              setSelectedBaristaStoreItemId,
-              baristaMoveQty,
-              setBaristaMoveQty,
-              baristaConversionValue,
-              setBaristaConversionValue,
-              baristaConversionNote,
-              setBaristaConversionNote,
+              selectedBaristaRuleItemId,
+              setSelectedBaristaRuleItemId,
+              selectedBaristaRuleItem,
+              baristaDepartmentUnit,
+              setBaristaDepartmentUnit,
+              baristaUnitToMenu,
+              setBaristaUnitToMenu,
+              baristaLogicNote,
+              setBaristaLogicNote,
+              baristaLogicRules,
             )}
           </TabsContent>
         </Tabs>
       )}
 
-      {activeTab === "low-stock-threshold" && renderThresholdTable()}
+      {activeTab === "stock-movement" && (
+        <Tabs value={stockMovementTab} onValueChange={(value) => setStockMovementTab(value as StockControlTab)}>
+          <TabsList className="h-11">
+            <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen</TabsTrigger>
+            <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista</TabsTrigger>
+          </TabsList>
+          <TabsContent value="kitchen">
+            {renderStockMovement(
+              "kitchen",
+              kitchenStore,
+              selectedKitchenMoveItemId,
+              setSelectedKitchenMoveItemId,
+              selectedKitchenMoveItem,
+              kitchenMoveQty,
+              setKitchenMoveQty,
+            )}
+          </TabsContent>
+          <TabsContent value="barista">
+            {renderStockMovement(
+              "barista",
+              baristaStore,
+              selectedBaristaMoveItemId,
+              setSelectedBaristaMoveItemId,
+              selectedBaristaMoveItem,
+              baristaMoveQty,
+              setBaristaMoveQty,
+            )}
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

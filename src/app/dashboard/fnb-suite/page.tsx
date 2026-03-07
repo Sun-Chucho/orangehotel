@@ -18,11 +18,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
 type FnbSuiteTab = "beverage" | "recipes" | "stock-sales";
 
 export default function FnbSuitePage() {
   const isDirector = useIsDirector();
+  const { confirm, dialog } = useConfirmDialog();
   const [tab, setTab] = useState<FnbSuiteTab>("beverage");
   const [beverageRows, setBeverageRows] = useState<BeverageCostRow[]>([]);
   const [recipeRows, setRecipeRows] = useState<RecipeCostRow[]>([]);
@@ -56,10 +58,6 @@ export default function FnbSuitePage() {
     if (Array.isArray(recipes)) setRecipeRows(recipes);
     if (Array.isArray(stockSales)) setStockSalesRows(stockSales);
   }, []);
-
-  useEffect(() => writeJson(STORAGE_BEVERAGE_COST, beverageRows), [beverageRows]);
-  useEffect(() => writeJson(STORAGE_RECIPE_COST, recipeRows), [recipeRows]);
-  useEffect(() => writeJson(STORAGE_STOCK_SALES, stockSalesRows), [stockSalesRows]);
 
   const beverageSummary = useMemo(() => {
     const totalRevenue = beverageRows.reduce((sum, row) => sum + row.salesRevenue, 0);
@@ -109,7 +107,7 @@ export default function FnbSuitePage() {
     URL.revokeObjectURL(url);
   };
 
-  const addBeverageRow = () => {
+  const addBeverageRow = async () => {
     if (isDirector) return;
     const openingStock = Number(bevOpening);
     const purchasedStock = Number(bevPurchased);
@@ -117,7 +115,15 @@ export default function FnbSuitePage() {
     const closingStock = Number(bevClosing);
     const salesRevenue = Number(bevSalesRevenue);
     if (!bevItemName.trim() || [openingStock, purchasedStock, purchaseCostTotal, closingStock, salesRevenue].some((n) => Number.isNaN(n) || n < 0)) return;
-    setBeverageRows((prev) => [{ id: `bev-${Date.now()}`, itemName: bevItemName.trim(), openingStock, purchasedStock, purchaseCostTotal, closingStock, salesRevenue, createdAt: Date.now() }, ...prev]);
+    const approved = await confirm({
+      title: "Add Beverage Control Row",
+      description: `Are you sure you want to add the beverage cost row for ${bevItemName.trim()}?`,
+      actionLabel: "Add Row",
+    });
+    if (!approved) return;
+    const nextRows = [{ id: `bev-${Date.now()}`, itemName: bevItemName.trim(), openingStock, purchasedStock, purchaseCostTotal, closingStock, salesRevenue, createdAt: Date.now() }, ...beverageRows];
+    setBeverageRows(nextRows);
+    writeJson(STORAGE_BEVERAGE_COST, nextRows);
     setBevItemName("");
     setBevOpening("0");
     setBevPurchased("0");
@@ -126,13 +132,21 @@ export default function FnbSuitePage() {
     setBevSalesRevenue("0");
   };
 
-  const addRecipeRow = () => {
+  const addRecipeRow = async () => {
     if (isDirector) return;
     const yieldPortions = Number(recipeYield);
     const batchCost = Number(recipeBatchCost);
     const sellingPricePerPortion = Number(recipeSellingPrice);
     if (!recipeName.trim() || [yieldPortions, batchCost, sellingPricePerPortion].some((n) => Number.isNaN(n) || n <= 0)) return;
-    setRecipeRows((prev) => [{ id: `rec-${Date.now()}`, recipeName: recipeName.trim(), recipeType, yieldPortions, batchCost, sellingPricePerPortion, createdAt: Date.now() }, ...prev]);
+    const approved = await confirm({
+      title: "Add Recipe Cost Row",
+      description: `Are you sure you want to add the recipe row for ${recipeName.trim()}?`,
+      actionLabel: "Add Row",
+    });
+    if (!approved) return;
+    const nextRows = [{ id: `rec-${Date.now()}`, recipeName: recipeName.trim(), recipeType, yieldPortions, batchCost, sellingPricePerPortion, createdAt: Date.now() }, ...recipeRows];
+    setRecipeRows(nextRows);
+    writeJson(STORAGE_RECIPE_COST, nextRows);
     setRecipeName("");
     setRecipeType("kitchen");
     setRecipeYield("1");
@@ -140,14 +154,22 @@ export default function FnbSuitePage() {
     setRecipeSellingPrice("0");
   };
 
-  const addStockSalesRow = () => {
+  const addStockSalesRow = async () => {
     if (isDirector) return;
     const openingStock = Number(stockSalesOpening);
     const stockIn = Number(stockSalesIn);
     const stockOut = Number(stockSalesOut);
     const salesUnits = Number(stockSalesUnits);
     if (!stockSalesItem.trim() || [openingStock, stockIn, stockOut, salesUnits].some((n) => Number.isNaN(n) || n < 0)) return;
-    setStockSalesRows((prev) => [{ id: `ss-${Date.now()}`, itemName: stockSalesItem.trim(), department: stockSalesDepartment, openingStock, stockIn, stockOut, salesUnits, createdAt: Date.now() }, ...prev]);
+    const approved = await confirm({
+      title: "Add Stock And Sales Row",
+      description: `Are you sure you want to add the stock and sales row for ${stockSalesItem.trim()}?`,
+      actionLabel: "Add Row",
+    });
+    if (!approved) return;
+    const nextRows = [{ id: `ss-${Date.now()}`, itemName: stockSalesItem.trim(), department: stockSalesDepartment, openingStock, stockIn, stockOut, salesUnits, createdAt: Date.now() }, ...stockSalesRows];
+    setStockSalesRows(nextRows);
+    writeJson(STORAGE_STOCK_SALES, nextRows);
     setStockSalesItem("");
     setStockSalesDepartment("kitchen");
     setStockSalesOpening("0");
@@ -158,6 +180,7 @@ export default function FnbSuitePage() {
 
   return (
     <div className="space-y-6">
+      {dialog}
       <header>
         <h1 className="text-3xl font-black tracking-tight uppercase">Hotel F&amp;B Excel Template Suite</h1>
       </header>

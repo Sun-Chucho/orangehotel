@@ -1,34 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Role, ROOMS, INVENTORY, InventoryItem } from "@/app/lib/mock-data";
-import {
-  CompanyStockCategory,
-  CompanyStockItem,
-  STORAGE_COMPANY_STOCK,
-} from "@/app/lib/company-stock";
-import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson } from "@/app/lib/storage";
+import { Role, ROOMS } from "@/app/lib/mock-data";
+import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users,
   BedDouble,
   DollarSign,
-  AlertCircle,
   TrendingUp,
   Clock,
-  ChevronRight,
   ArrowUpRight,
   ArrowDownRight,
   FileText,
 } from "lucide-react";
-import { STORAGE_INVENTORY_ITEMS } from "@/app/lib/inventory-transfer";
+import { readRoomsState } from "@/app/lib/rooms-storage";
 
 interface CashierTransaction {
   total: number;
@@ -45,14 +34,6 @@ interface POSPaymentRecord {
   createdAt?: number;
 }
 
-const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> = [
-  { value: "kitchen-equipment", label: "Kitchen Equipment" },
-  { value: "technology", label: "Technology" },
-  { value: "electronics", label: "Electronics" },
-  { value: "cleaning-supplies", label: "Cleaning Supplies" },
-  { value: "furniture", label: "Furniture" },
-];
-
 export default function OverviewPage() {
   const [role, setRole] = useState<Role>("manager");
   const [shift, setShift] = useState<string | null>(null);
@@ -62,25 +43,18 @@ export default function OverviewPage() {
   const [bookingRevenue, setBookingRevenue] = useState(0);
   const [activeKitchen, setActiveKitchen] = useState(0);
   const [activeBarista, setActiveBarista] = useState(0);
-  const [companyStockItems, setCompanyStockItems] = useState<CompanyStockItem[]>([]);
-  const [companyTab, setCompanyTab] = useState<CompanyStockCategory>("kitchen-equipment");
-  const [assetName, setAssetName] = useState("");
-  const [assetDescription, setAssetDescription] = useState("");
-  const [assetQty, setAssetQty] = useState("1");
-  const [assetCategory, setAssetCategory] = useState<CompanyStockCategory>("kitchen-equipment");
   const [foodRevenue, setFoodRevenue] = useState(0);
   const [creditExposure, setCreditExposure] = useState(0);
   const [settledToday, setSettledToday] = useState(0);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(INVENTORY);
+  const [rooms, setRooms] = useState(ROOMS);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
     const savedShift = localStorage.getItem("orange-hotel-shift");
-    const companyStock = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
-    const savedInventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
     const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
     const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
     const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
+    setRooms(readRoomsState());
 
     if (savedRole) setRole(savedRole);
     if (savedShift) setShift(savedShift);
@@ -92,10 +66,6 @@ export default function OverviewPage() {
     );
     setActiveKitchen(kitchenSnapshot.tickets.length);
     setActiveBarista(baristaSnapshot.tickets.length);
-
-    if (Array.isArray(companyStock)) setCompanyStockItems(companyStock);
-
-    if (Array.isArray(savedInventory)) setInventoryItems(savedInventory);
 
     const collectPaymentMetrics = (records: POSPaymentRecord[]) => {
       const today = new Date().toDateString();
@@ -125,13 +95,12 @@ export default function OverviewPage() {
     setMounted(true);
   }, []);
 
-  const lowStock = useMemo(() => inventoryItems.filter((item) => item.stock < item.minStock), [inventoryItems]);
-  const occupiedRooms = useMemo(() => ROOMS.filter((room) => room.status === "occupied").length, []);
-  const recentRooms = useMemo(() => ROOMS.slice(0, 4), []);
+  const occupiedRooms = useMemo(() => rooms.filter((room) => room.status === "occupied").length, [rooms]);
+  const recentRooms = useMemo(() => rooms.slice(0, 4), [rooms]);
   const isDirector = role === "director";
-  const occupancyPct = Math.round((occupiedRooms / ROOMS.length) * 100);
+  const occupancyPct = Math.round((occupiedRooms / Math.max(rooms.length, 1)) * 100);
   const totalRevenue = bookingRevenue + foodRevenue;
-  const revPar = Math.round(totalRevenue / Math.max(ROOMS.length, 1));
+  const revPar = Math.round(totalRevenue / Math.max(rooms.length, 1));
 
   const stats = useMemo(
     () => [
@@ -149,10 +118,10 @@ export default function OverviewPage() {
       { label: "F&B Revenue", value: `TSh ${foodRevenue.toLocaleString()}`, note: "Kitchen and Barista settlements" },
       { label: "Credit Exposure", value: `TSh ${creditExposure.toLocaleString()}`, note: "Outstanding unsettled balances" },
       { label: "RevPAR", value: `TSh ${revPar.toLocaleString()}`, note: "Revenue per available room" },
-      { label: "Occupancy", value: `${occupancyPct}%`, note: `${occupiedRooms}/${ROOMS.length} occupied rooms` },
+      { label: "Occupancy", value: `${occupancyPct}%`, note: `${occupiedRooms}/${rooms.length} occupied rooms` },
       { label: "Settled Today", value: `${settledToday}`, note: "Completed POS settlements today" },
     ],
-    [creditExposure, foodRevenue, occupancyPct, occupiedRooms, revPar, settledToday, totalRevenue],
+    [creditExposure, foodRevenue, occupancyPct, occupiedRooms, revPar, rooms.length, settledToday, totalRevenue],
   );
 
   const generateReport = () => {
@@ -160,40 +129,12 @@ export default function OverviewPage() {
       `Operations Report (${new Date().toLocaleString()})`,
       `Role: ${role}${shift ? ` (${shift} shift)` : ""}`,
       `Booking Revenue: TSh ${bookingRevenue.toLocaleString()}`,
-      `Occupied Rooms: ${occupiedRooms}/${ROOMS.length}`,
-      `Low Stock Items: ${lowStock.length}`,
+      `Occupied Rooms: ${occupiedRooms}/${rooms.length}`,
       `Active Kitchen Tickets: ${activeKitchen}`,
       `Active Barista Tickets: ${activeBarista}`,
     ].join("\n");
 
     setReportText(text);
-  };
-
-  const filteredCompanyStock = useMemo(
-    () => companyStockItems.filter((item) => item.category === companyTab),
-    [companyStockItems, companyTab],
-  );
-
-  const addCompanyStock = () => {
-    const quantity = Number(assetQty);
-    if (assetName.trim().length === 0 || assetDescription.trim().length === 0 || Number.isNaN(quantity) || quantity <= 0) return;
-    const nextItems = [
-      {
-        id: `cs-${Date.now()}`,
-        name: assetName.trim(),
-        description: assetDescription.trim(),
-        quantity,
-        category: assetCategory,
-        createdAt: Date.now(),
-      },
-      ...companyStockItems,
-    ];
-    setCompanyStockItems(nextItems);
-    writeJson(STORAGE_COMPANY_STOCK, nextItems);
-    setAssetName("");
-    setAssetDescription("");
-    setAssetQty("1");
-    setAssetCategory("kitchen-equipment");
   };
 
   if (!mounted) return null;
@@ -276,36 +217,7 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card className="shadow-sm border-none bg-white">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-black uppercase tracking-tight">Inventory Alerts</CardTitle>
-                  <CardDescription>Items below threshold levels</CardDescription>
-                </div>
-                <AlertCircle className="w-5 h-5 text-destructive" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {lowStock.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-orange-100 bg-orange-50/30">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold">{item.name}</span>
-                      <span className="text-[10px] text-muted-foreground uppercase font-black">{item.category}</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-black text-destructive">{item.stock} {item.unit}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Min: {item.minStock}</p>
-                    </div>
-                  </div>
-                ))}
-                {!isDirector && (
-                  <Button variant="link" className="w-full text-[10px] text-primary font-black uppercase tracking-widest" asChild>
-                    <Link href="/dashboard/inventory">Manage Inventory <ChevronRight className="w-3 h-3 ml-1" /></Link>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
+          <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
             <Card className="shadow-sm border-none bg-white">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -340,79 +252,6 @@ export default function OverviewPage() {
               </CardContent>
             </Card>
           </div>
-
-          <Card className="shadow-sm border-none bg-white">
-            <CardHeader className="border-b">
-              <CardTitle className="text-lg font-black uppercase tracking-tight">Company Stock</CardTitle>
-              <CardDescription>Non-consumable assets for business operations</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4">
-              {!isDirector && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                  <Input value={assetName} onChange={(event) => setAssetName(event.target.value)} placeholder="Item Name" />
-                  <Input value={assetDescription} onChange={(event) => setAssetDescription(event.target.value)} placeholder="Description" />
-                  <Input type="number" min="1" value={assetQty} onChange={(event) => setAssetQty(event.target.value)} placeholder="Quantity" />
-                  <div className="flex gap-2">
-                    <select
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={assetCategory}
-                      onChange={(event) => setAssetCategory(event.target.value as CompanyStockCategory)}
-                    >
-                      {COMPANY_CATEGORIES.map((category) => (
-                        <option key={category.value} value={category.value}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                    <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={addCompanyStock}>
-                      Add
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {isDirector && (
-                <div className="rounded-lg border bg-muted/20 p-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  Read-only access for managing director
-                </div>
-              )}
-
-              <Tabs value={companyTab} onValueChange={(value) => setCompanyTab(value as CompanyStockCategory)}>
-                <TabsList className="h-auto flex-wrap">
-                  {COMPANY_CATEGORIES.map((category) => (
-                    <TabsTrigger key={category.value} value={category.value} className="font-black uppercase text-[10px] tracking-widest">
-                      {category.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Item Name</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Description</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCompanyStock.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-bold">{item.name}</TableCell>
-                      <TableCell className="font-bold">{item.description}</TableCell>
-                      <TableCell className="font-bold">{item.quantity}</TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredCompanyStock.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={3} className="py-8 text-center opacity-50 font-black uppercase text-[10px] tracking-widest">
-                        No company stock in this category
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
         </div>
 
         <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-3xl">
@@ -424,10 +263,10 @@ export default function OverviewPage() {
           <CardContent>
             <div className="space-y-6">
               {[
-                { user: "Reception", action: "Guest Room 204 checked in", time: `${activeKitchen} kitchen tickets active` },
+                { user: "Reception", action: "Room status updated", time: `${occupiedRooms}/${rooms.length} occupied rooms` },
                 { user: "Kitchen", action: "Prep pipeline updated", time: `${activeKitchen} open orders` },
                 { user: "Barista", action: "Beverage queue updated", time: `${activeBarista} open orders` },
-                { user: "Inventory", action: "Low-stock monitoring active", time: `${lowStock.length} alerts` },
+                { user: "Inventory", action: "Stock control updated", time: "Inventory module active" },
               ].map((log, index) => (
                 <div key={index} className="flex gap-3 relative">
                   {index !== 3 && <div className="absolute left-4 top-8 bottom-[-24px] w-0.5 bg-sidebar-accent" />}

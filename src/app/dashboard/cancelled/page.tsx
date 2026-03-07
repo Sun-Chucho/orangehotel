@@ -10,6 +10,7 @@ import { XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { readJson, writeJson } from "@/app/lib/storage";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
 interface CancelledKitchenTicket {
   id: string;
@@ -36,6 +37,7 @@ function formatAgo(timestamp: number): string {
 
 export default function CancelledPage() {
   const isDirector = useIsDirector();
+  const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<Role>("manager");
   const [cancelledTab, setCancelledTab] = useState<"kitchen" | "barista">("kitchen");
   const [cancelled, setCancelled] = useState<CancelledKitchenTicket[]>([]);
@@ -68,15 +70,21 @@ export default function CancelledPage() {
   );
   const canViewAllTabs = role === "manager" || role === "director";
 
-  const clearAll = () => {
+  const clearAll = async () => {
     if (isDirector) return;
-    if (!window.confirm("Clear all cancelled orders?")) return;
+    const approved = await confirm({
+      title: "Clear Cancelled Orders",
+      description: "Are you sure you want to clear all cancelled orders?",
+      actionLabel: "Clear All",
+    });
+    if (!approved) return;
     setCancelled([]);
     writeJson(STORAGE_CANCELLED, []);
   };
 
   return (
     <div className="space-y-6">
+      {dialog}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Cancelled Orders</h1>

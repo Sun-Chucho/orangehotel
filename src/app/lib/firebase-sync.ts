@@ -10,6 +10,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-company-stock",
   "orange-hotel-inventory-items",
   "orange-hotel-main-store-items",
+  "orange-hotel-stock-logic",
   "orange-hotel-store-movements",
   "orange-hotel-store-usage",
   "orange-hotel-cancelled-tickets",
