@@ -34,7 +34,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['manager', 'director'] },
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'director', 'cashier'] },
-  { label: 'Inventory Control', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Kitchen Stock', href: '/dashboard/inventory/kitchen-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Barista Stock', href: '/dashboard/inventory/barista-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Stock Control', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
   { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director', 'inventory'] },
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: ['manager', 'director'] },
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['manager', 'director', 'kitchen', 'barista'] },
@@ -42,7 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['manager', 'director'] },
+  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['director'] },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager', 'director'] },
 ];
 

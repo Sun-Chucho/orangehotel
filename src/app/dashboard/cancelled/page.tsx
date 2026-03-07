@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Role } from "@/app/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -34,8 +35,17 @@ function formatAgo(timestamp: number): string {
 
 export default function CancelledPage() {
   const isDirector = useIsDirector();
+  const [role, setRole] = useState<Role>("manager");
   const [cancelledTab, setCancelledTab] = useState<"kitchen" | "barista">("kitchen");
   const [cancelled, setCancelled] = useState<CancelledKitchenTicket[]>([]);
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    if (savedRole) {
+      setRole(savedRole);
+      setCancelledTab(savedRole === "barista" ? "barista" : "kitchen");
+    }
+  }, []);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_CANCELLED) ?? localStorage.getItem(LEGACY_STORAGE_CANCELLED);
@@ -60,6 +70,7 @@ export default function CancelledPage() {
     () => cancelled.filter((ticket) => (ticket.source ?? "kitchen") === cancelledTab),
     [cancelled, cancelledTab],
   );
+  const canViewAllTabs = role === "manager" || role === "director";
 
   const clearAll = () => {
     if (isDirector) return;
@@ -96,12 +107,14 @@ export default function CancelledPage() {
               <CardTitle className="text-xl font-black uppercase tracking-tight">Cancelled Queue</CardTitle>
               <CardDescription>Kitchen and barista orders that were cancelled</CardDescription>
             </div>
-            <Tabs value={cancelledTab} onValueChange={(value) => setCancelledTab(value as "kitchen" | "barista")}>
-              <TabsList className="h-10">
-                <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">Kitchen</TabsTrigger>
-                <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">Barista</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {canViewAllTabs && (
+              <Tabs value={cancelledTab} onValueChange={(value) => setCancelledTab(value as "kitchen" | "barista")}>
+                <TabsList className="h-10">
+                  <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">Kitchen</TabsTrigger>
+                  <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">Barista</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">

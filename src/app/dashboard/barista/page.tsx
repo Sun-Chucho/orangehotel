@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Role } from "@/app/lib/mock-data";
 import {
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
   StoreMovementLog,
   StoreUsageLog,
 } from "@/app/lib/inventory-transfer";
+import { printDepartmentReceipt } from "@/app/lib/receipt-print";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +87,9 @@ const normalizeCategory = (value: string): Exclude<BaristaCategory, "all"> => {
 
 export default function BaristaPage() {
   const isDirector = useIsDirector();
+  const [role, setRole] = useState<Role | null>(null);
+  const isManager = role === "manager";
+  const [managerTab, setManagerTab] = useState<"inventory" | "menu">("inventory");
   const [directorTab, setDirectorTab] = useState<"inventory" | "sales">("inventory");
   const [category, setCategory] = useState<BaristaCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
@@ -102,10 +107,19 @@ export default function BaristaPage() {
   const [usageLogs, setUsageLogs] = useState<StoreUsageLog[]>([]);
   const [useEntryId, setUseEntryId] = useState("");
   const [useQty, setUseQty] = useState("1");
+  const [menuName, setMenuName] = useState("");
+  const [menuPrice, setMenuPrice] = useState("");
+  const [menuPrepMinutes, setMenuPrepMinutes] = useState("10");
+  const [menuCategory, setMenuCategory] = useState<Exclude<BaristaCategory, "all">>("coffee");
 
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    setRole(savedRole);
+  }, []);
 
   useEffect(() => {
     const savedTickets = localStorage.getItem(STORAGE_TICKETS);
@@ -161,6 +175,10 @@ export default function BaristaPage() {
   useEffect(() => {
     localStorage.setItem(STORAGE_PAYMENTS, JSON.stringify(baristaPayments));
   }, [baristaPayments]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_MENU, JSON.stringify(menuItems));
+  }, [menuItems]);
 
   const loadFromStoreData = () => {
     const savedMovements = localStorage.getItem(STORAGE_STORE_MOVEMENTS);
@@ -224,6 +242,28 @@ export default function BaristaPage() {
       JSON.stringify([...next, ...existingUsage.filter((i) => i.destination !== "barista")]),
     );
     setUseQty("1");
+  };
+
+  const addMenuItem = () => {
+    if (!isManager) return;
+    const price = Number(menuPrice);
+    const prepMinutes = Number(menuPrepMinutes);
+    if (!menuName.trim() || Number.isNaN(price) || price <= 0 || Number.isNaN(prepMinutes) || prepMinutes <= 0) return;
+
+    setMenuItems((current) => [
+      {
+        id: `bm-${Date.now()}`,
+        name: menuName.trim(),
+        price,
+        prepMinutes,
+        category: menuCategory,
+      },
+      ...current,
+    ]);
+    setMenuName("");
+    setMenuPrice("");
+    setMenuPrepMinutes("10");
+    setMenuCategory("coffee");
   };
 
   const filteredMenu = useMemo(
@@ -304,20 +344,21 @@ export default function BaristaPage() {
     setShowSettlementPopup(true);
   };
 
-  const finalizeOrder = (status: BaristaPaymentStatus, method: BaristaPaymentMethod) => {
+  const finalizeOrder = async (status: BaristaPaymentStatus, method: BaristaPaymentMethod) => {
     if (isDirector) return;
     if (!pendingOrder) return;
 
     const nextSeq = ticketSeq + 1;
+    const createdAt = Date.now();
     setTicketSeq(nextSeq);
 
-    const orderId = `bt-${Date.now()}`;
+    const orderId = `bt-${createdAt}`;
     const code = `B-${nextSeq}`;
 
     const ticket: BaristaTicket = {
       id: orderId,
       code,
-      createdAt: Date.now(),
+      createdAt,
       mode: pendingOrder.mode,
       destination: pendingOrder.destination,
       lines: pendingOrder.lines,
@@ -325,10 +366,10 @@ export default function BaristaPage() {
     };
 
     const paymentRecord: BaristaPaymentRecord = {
-      id: `bp-${Date.now()}`,
+      id: `bp-${createdAt}`,
       ticketId: orderId,
       code,
-      createdAt: Date.now(),
+      createdAt,
       mode: pendingOrder.mode,
       destination: pendingOrder.destination,
       total: pendingOrder.total,
@@ -343,6 +384,22 @@ export default function BaristaPage() {
     setPendingOrder(null);
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
+
+    const printResult = await printDepartmentReceipt({
+      department: "barista",
+      code,
+      destination: pendingOrder.destination,
+      mode: pendingOrder.mode,
+      method,
+      status,
+      total: pendingOrder.total,
+      createdAt,
+      lines: pendingOrder.lines,
+    });
+
+    if (!printResult.ok && printResult.reason) {
+      window.alert(`Barista receipt was not printed: ${printResult.reason}`);
+    }
   };
 
   const deliverTicket = (id: string) => {
@@ -369,6 +426,137 @@ export default function BaristaPage() {
 
     setTickets((current) => current.filter((ticket) => ticket.id !== id));
   };
+
+  if (isManager) {
+    return (
+      <div className="space-y-6">
+        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+              <Coffee className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight">Barista Setup</h1>
+              <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
+                Inventory and menu settings for barista operations
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <Tabs value={managerTab} onValueChange={(value) => setManagerTab(value as "inventory" | "menu")}>
+          <TabsList className="h-10">
+            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+            <TabsTrigger value="menu" className="font-black uppercase text-[10px] tracking-widest">Menu Settings</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {managerTab === "inventory" ? (
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
+              <CardDescription>Received stock linked to barista operations</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/10">
+                  <TableRow>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Logic</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fromStoreEntries.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="font-bold">{entry.itemName}</TableCell>
+                      <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
+                      <TableCell className="font-bold">{entry.conversionNote}</TableCell>
+                      <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                  {fromStoreEntries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                        No barista inventory records
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Create Barista Menu Item</CardTitle>
+                <CardDescription>Set item name, category, preparation time, and price</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Input value={menuName} onChange={(event) => setMenuName(event.target.value)} placeholder="Drink or snack name" />
+                <select
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={menuCategory}
+                  onChange={(event) => setMenuCategory(event.target.value as Exclude<BaristaCategory, "all">)}
+                >
+                  <option value="espresso">Espresso</option>
+                  <option value="coffee">Coffee</option>
+                  <option value="tea">Tea</option>
+                  <option value="cold">Cold</option>
+                  <option value="snacks">Snacks</option>
+                </select>
+                <Input type="number" min="1" value={menuPrepMinutes} onChange={(event) => setMenuPrepMinutes(event.target.value)} placeholder="Prep minutes" />
+                <Input type="number" min="1" value={menuPrice} onChange={(event) => setMenuPrice(event.target.value)} placeholder="Price" />
+                <div className="md:col-span-4">
+                  <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={addMenuItem}>
+                    Add Menu Item
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Menu</CardTitle>
+                <CardDescription>Current items and selling prices</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-muted/10">
+                    <TableRow>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Category</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Prep</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Price</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {menuItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-bold">{item.name}</TableCell>
+                        <TableCell className="font-bold uppercase text-[10px] tracking-widest">{item.category}</TableCell>
+                        <TableCell className="font-bold">{item.prepMinutes} min</TableCell>
+                        <TableCell className="font-bold">TSh {item.price.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                    {menuItems.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                          No barista menu items yet
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (isDirector) {
     return (

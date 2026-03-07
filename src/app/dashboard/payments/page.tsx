@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Receipt } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 
-type PaymentsTab = "bookings" | "kitchen" | "barista";
+type PaymentsTab = "reception" | "kitchen" | "barista";
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
@@ -87,7 +87,7 @@ function formatAgo(timestamp: number): string {
 export default function PaymentsPage() {
   const isDirector = useIsDirector();
   const [role, setRole] = useState<Role>("manager");
-  const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("bookings");
+  const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("reception");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
@@ -99,7 +99,7 @@ export default function PaymentsPage() {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
     if (savedRole) {
       setRole(savedRole);
-      setPaymentsTab(savedRole === "kitchen" ? "kitchen" : savedRole === "barista" ? "barista" : "bookings");
+      setPaymentsTab(savedRole === "kitchen" ? "kitchen" : savedRole === "barista" ? "barista" : "reception");
     }
   }, []);
 
@@ -254,7 +254,7 @@ export default function PaymentsPage() {
 
   const rows = useMemo(() => {
     const base =
-      paymentsTab === "bookings"
+      paymentsTab === "reception"
         ? bookingRows
         : paymentsTab === "kitchen"
         ? kitchenRows
@@ -270,7 +270,7 @@ export default function PaymentsPage() {
       ? "Barista payment tracking only"
       : role === "cashier"
       ? "Reception payment tracking only"
-      : "Bookings, kitchen, and barista payment tracking";
+      : "Reception, kitchen, and barista payment tracking";
   const cardDescription =
     role === "kitchen"
       ? "Kitchen payments only"
@@ -278,7 +278,7 @@ export default function PaymentsPage() {
       ? "Barista payments only"
       : role === "cashier"
       ? "Reception booking payments only"
-      : "Use tabs to review bookings, kitchen, and barista payments";
+      : "Use tabs to review reception, kitchen, and barista payments";
 
   return (
     <div className="space-y-6">
@@ -316,8 +316,8 @@ export default function PaymentsPage() {
             {canViewAllTabs && (
               <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)}>
                 <TabsList className="h-10">
-                  <TabsTrigger value="bookings" className="text-[10px] font-black uppercase tracking-widest">
-                    Bookings
+                  <TabsTrigger value="reception" className="text-[10px] font-black uppercase tracking-widest">
+                    Reception
                   </TabsTrigger>
                   <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">
                     Kitchen

@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  DEFAULT_HARDWARE_SETTINGS,
+  HardwareLane,
+  HardwareSettings,
+  STORAGE_HARDWARE_SETTINGS,
+} from "@/app/lib/hardware-settings";
+import { listSystemPrinters } from "@/app/lib/receipt-print";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Bell,
   CreditCard,
+  Printer,
   Save,
   Settings,
   Shield,
@@ -16,7 +24,7 @@ import {
 } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 
-type SettingsSection = "profile" | "notifications" | "security" | "general" | "billing";
+type SettingsSection = "profile" | "notifications" | "security" | "general" | "billing" | "hardware";
 
 interface AppSettings {
   fullName: string;
@@ -50,6 +58,9 @@ export default function SettingsPage() {
   const isDirector = useIsDirector();
   const [section, setSection] = useState<SettingsSection>("profile");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [hardwareSettings, setHardwareSettings] = useState<HardwareSettings>(DEFAULT_HARDWARE_SETTINGS);
+  const [printerNames, setPrinterNames] = useState<string[]>([]);
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   useEffect(() => {
@@ -64,21 +75,56 @@ export default function SettingsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_HARDWARE_SETTINGS);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<HardwareSettings>;
+      setHardwareSettings({
+        kitchen: { ...DEFAULT_HARDWARE_SETTINGS.kitchen, ...parsed.kitchen },
+        barista: { ...DEFAULT_HARDWARE_SETTINGS.barista, ...parsed.barista },
+      });
+    } catch {
+      setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
+    }
+  }, []);
+
+  const loadPrinters = async () => {
+    setLoadingPrinters(true);
+    const printers = await listSystemPrinters();
+    setPrinterNames(printers);
+    setLoadingPrinters(false);
+  };
+
+  useEffect(() => {
+    void loadPrinters();
+  }, []);
+
   const saveChanges = () => {
     if (isDirector) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(STORAGE_HARDWARE_SETTINGS, JSON.stringify(hardwareSettings));
     setSavedAt(Date.now());
   };
 
   const resetDefaults = () => {
     if (isDirector) return;
     setSettings(DEFAULT_SETTINGS);
+    setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
   };
 
   const savedLabel = useMemo(() => {
     if (!savedAt) return "Not saved yet";
     return `Saved ${Math.max(0, Math.floor((Date.now() - savedAt) / 1000))}s ago`;
   }, [savedAt]);
+
+  const updateHardwareLane = (lane: HardwareLane, next: Partial<HardwareSettings[HardwareLane]>) => {
+    setHardwareSettings((current) => ({
+      ...current,
+      [lane]: { ...current[lane], ...next },
+    }));
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -107,6 +153,7 @@ export default function SettingsPage() {
             { id: "security", label: "Security", icon: Shield },
             { id: "general", label: "General", icon: Settings },
             { id: "billing", label: "Billing", icon: CreditCard },
+            { id: "hardware", label: "Hardware", icon: Printer },
           ].map((item) => (
             <button
               key={item.id}
@@ -245,6 +292,80 @@ export default function SettingsPage() {
               <CardContent className="pt-6 space-y-4">
                 <p className="text-sm text-muted-foreground">Billing controls are configured per role. Use the cashier and manager modules for transaction operations.</p>
                 <Button variant="outline" className="font-bold">View Recent Settlements</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "hardware" && (
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-muted/30 border-b">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-xl font-black">POS Hardware</CardTitle>
+                    <CardDescription>Configure raw receipt printing and cash drawer actions for kitchen and barista.</CardDescription>
+                  </div>
+                  <Button variant="outline" className="font-bold" onClick={() => void loadPrinters()} disabled={loadingPrinters}>
+                    {loadingPrinters ? "Loading Printers..." : "Refresh Printers"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                {(["kitchen", "barista"] as HardwareLane[]).map((lane) => (
+                  <div key={lane} className="rounded-2xl border p-5 space-y-4">
+                    <div>
+                      <h3 className="text-lg font-black uppercase tracking-tight">{lane}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Select the POS printer installed on this machine and control receipt and drawer behavior.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Printer</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        value={hardwareSettings[lane].printerName}
+                        onChange={(event) => updateHardwareLane(lane, { printerName: event.target.value })}
+                        disabled={isDirector}
+                      >
+                        <option value="">Select system printer</option>
+                        {printerNames.map((printer) => (
+                          <option key={`${lane}-${printer}`} value={printer}>
+                            {printer}
+                          </option>
+                        ))}
+                      </select>
+                      {printerNames.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          No system printers were returned. The POS hardware bridge must expose printer discovery on this machine.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/20">
+                      <div className="space-y-0.5">
+                        <Label className="text-base font-bold">Auto Print Receipt</Label>
+                        <p className="text-xs text-muted-foreground">Send a raw receipt to the selected generic printer after each completed sale.</p>
+                      </div>
+                      <Switch
+                        checked={hardwareSettings[lane].autoPrintReceipt}
+                        onCheckedChange={(checked) => updateHardwareLane(lane, { autoPrintReceipt: checked })}
+                        disabled={isDirector}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/20">
+                      <div className="space-y-0.5">
+                        <Label className="text-base font-bold">Open Cash Drawer</Label>
+                        <p className="text-xs text-muted-foreground">Send the cash drawer pulse together with the receipt print job.</p>
+                      </div>
+                      <Switch
+                        checked={hardwareSettings[lane].openDrawerOnSale}
+                        onCheckedChange={(checked) => updateHardwareLane(lane, { openDrawerOnSale: checked })}
+                        disabled={isDirector}
+                      />
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
