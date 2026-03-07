@@ -19,7 +19,7 @@ import {
 import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { readRoomsState, writeRoomsState } from "@/app/lib/rooms-storage";
+import { readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { useRouter } from "next/navigation";
 
@@ -231,11 +231,8 @@ export default function BookingPage() {
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
-    setRooms((current) => {
-      const nextRooms = current.map((room) => (room.number === roomNumber ? { ...room, status } : room));
-      writeRoomsState(nextRooms);
-      return nextRooms;
-    });
+    const nextRooms = updateRoomStatusByNumber(roomNumber, status);
+    setRooms(nextRooms);
   };
 
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {

@@ -18,3 +18,19 @@ export function readRoomsState(): Room[] {
 export function writeRoomsState(rooms: Room[]) {
   writeJson(STORAGE_ROOMS, rooms);
 }
+
+export function updateRoomStatusByNumber(roomNumber: string, status: Room["status"]): Room[] {
+  const nextRooms = readRoomsState().map((room) =>
+    room.number === roomNumber ? { ...room, status } : room,
+  );
+  writeRoomsState(nextRooms);
+  return nextRooms;
+}
+
+export function updateRoomStatusById(roomId: string, status: Room["status"]): Room[] {
+  const nextRooms = readRoomsState().map((room) =>
+    room.id === roomId ? { ...room, status } : room,
+  );
+  writeRoomsState(nextRooms);
+  return nextRooms;
+}
