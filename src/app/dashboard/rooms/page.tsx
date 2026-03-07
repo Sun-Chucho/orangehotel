@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ROOMS, Room } from "@/app/lib/mock-data";
+import { useEffect, useMemo, useState } from "react";
+import { Room, Role } from "@/app/lib/mock-data";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { readRoomsState, writeRoomsState } from "@/app/lib/rooms-storage";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type StatusFilter = "all" | Room["status"];
 type TypeFilter = "all" | Room["type"];
@@ -34,9 +35,21 @@ export default function RoomsPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
   const [rooms, setRooms] = useState<Room[]>(readRoomsState());
+  const [role, setRole] = useState<Role | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    setRole(savedRole);
+
+    const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
+      setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
+    });
+
+    return () => unsubscribeRooms();
+  }, []);
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
@@ -96,6 +109,8 @@ export default function RoomsPage() {
         return null;
     }
   };
+
+  const isRoomLocked = (room: Room) => room.status === "occupied";
 
   return (
     <div className="space-y-6">
@@ -239,12 +254,16 @@ export default function RoomsPage() {
                   <TableCell className="text-right">
                     {isDirector ? (
                       <Badge variant="outline" className="font-black uppercase text-[10px] tracking-widest">Read Only</Badge>
+                    ) : isRoomLocked(room) ? (
+                      <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 font-black uppercase text-[10px] tracking-widest">
+                        Occupied Locked
+                      </Badge>
                     ) : (
                       <div className="flex justify-end gap-1">
-                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "occupied")}>Occ</Button>
-                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "cleaning")}>Clean</Button>
-                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "available")}>Free</Button>
-                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "maintenance")}>Fix</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "occupied")} disabled={role === "cashier"}>Occ</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "cleaning")} disabled={role === "cashier"}>Clean</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "available")} disabled={role === "cashier"}>Free</Button>
+                        <Button variant="outline" size="sm" className="font-bold text-[10px]" onClick={() => confirmAndSetRoomStatus(room.id, room.number, "maintenance")} disabled={role === "cashier"}>Fix</Button>
                       </div>
                     )}
                   </TableCell>

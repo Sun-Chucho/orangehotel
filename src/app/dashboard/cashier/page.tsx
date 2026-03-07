@@ -276,6 +276,17 @@ export default function BookingPage() {
     setShowSettlementPopup(true);
   };
 
+  const confirmCreditBooking = async () => {
+    if (isDirector || !canSubmitBooking) return;
+    const approved = await confirm({
+      title: "Book Room On Credit",
+      description: `Are you sure you want to book room ${selectedRoomNumber} for ${guestName.trim()} on credit?`,
+      actionLabel: "Book On Credit",
+    });
+    if (!approved) return;
+    saveBooking("credit", "cash");
+  };
+
   const openExtendStay = (booking: BookingRecord) => {
     if (isDirector || booking.status === "checked-out") return;
     setSelectedExtendBookingId(booking.id);
@@ -687,7 +698,7 @@ export default function BookingPage() {
                 Pay Now
               </Button>
               <Button
-                onClick={() => saveBooking("credit", "cash")}
+                onClick={confirmCreditBooking}
                 className="w-full h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white"
               >
                 Credit
