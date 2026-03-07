@@ -9,6 +9,7 @@ import {
   CompanyStockItem,
   STORAGE_COMPANY_STOCK,
 } from "@/app/lib/company-stock";
+import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,49 +76,22 @@ export default function OverviewPage() {
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
     const savedShift = localStorage.getItem("orange-hotel-shift");
-    const savedTx = localStorage.getItem("orange-hotel-cashier-transactions");
-    const kitchenQueue = localStorage.getItem("orange-hotel-kitchen-tickets");
-    const baristaQueue = localStorage.getItem("orange-hotel-barista-orders");
     const companyStock = localStorage.getItem(STORAGE_COMPANY_STOCK);
     const savedInventory = localStorage.getItem(STORAGE_INVENTORY_ITEMS);
-    const kitchenPayments = localStorage.getItem("orange-hotel-kitchen-payments");
-    const baristaPayments = localStorage.getItem("orange-hotel-barista-payments");
+    const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
+    const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
+    const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
 
     if (savedRole) setRole(savedRole);
     if (savedShift) setShift(savedShift);
 
-    if (savedTx) {
-      try {
-        const parsed = JSON.parse(savedTx) as CashierTransaction[];
-        if (Array.isArray(parsed)) {
-          setBookingRevenue(
-            parsed
-              .filter((tx) => tx.status !== "credit")
-              .reduce((sum, tx) => sum + (tx.total || 0), 0),
-          );
-        }
-      } catch {
-        setBookingRevenue(0);
-      }
-    }
-
-    if (kitchenQueue) {
-      try {
-        const parsed = JSON.parse(kitchenQueue) as QueueTicket[];
-        if (Array.isArray(parsed)) setActiveKitchen(parsed.length);
-      } catch {
-        setActiveKitchen(0);
-      }
-    }
-
-    if (baristaQueue) {
-      try {
-        const parsed = JSON.parse(baristaQueue) as QueueTicket[];
-        if (Array.isArray(parsed)) setActiveBarista(parsed.length);
-      } catch {
-        setActiveBarista(0);
-      }
-    }
+    setBookingRevenue(
+      cashierSnapshot.transactions
+        .filter((tx) => tx.status !== "credit")
+        .reduce((sum, tx) => sum + (tx.total || 0), 0),
+    );
+    setActiveKitchen(kitchenSnapshot.tickets.length);
+    setActiveBarista(baristaSnapshot.tickets.length);
 
     if (companyStock) {
       try {
@@ -155,23 +129,8 @@ export default function OverviewPage() {
     let kitchenMetrics = { paid: 0, credit: 0, settledCount: 0 };
     let baristaMetrics = { paid: 0, credit: 0, settledCount: 0 };
 
-    if (kitchenPayments) {
-      try {
-        const parsed = JSON.parse(kitchenPayments) as POSPaymentRecord[];
-        if (Array.isArray(parsed)) kitchenMetrics = collectPaymentMetrics(parsed);
-      } catch {
-        kitchenMetrics = { paid: 0, credit: 0, settledCount: 0 };
-      }
-    }
-
-    if (baristaPayments) {
-      try {
-        const parsed = JSON.parse(baristaPayments) as POSPaymentRecord[];
-        if (Array.isArray(parsed)) baristaMetrics = collectPaymentMetrics(parsed);
-      } catch {
-        baristaMetrics = { paid: 0, credit: 0, settledCount: 0 };
-      }
-    }
+    kitchenMetrics = collectPaymentMetrics(kitchenSnapshot.payments);
+    baristaMetrics = collectPaymentMetrics(baristaSnapshot.payments);
 
     setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
     setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
@@ -179,10 +138,6 @@ export default function OverviewPage() {
 
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(companyStockItems));
-  }, [companyStockItems]);
 
   const lowStock = useMemo(() => inventoryItems.filter((item) => item.stock < item.minStock), [inventoryItems]);
   const occupiedRooms = useMemo(() => ROOMS.filter((room) => room.status === "occupied").length, []);
@@ -236,7 +191,7 @@ export default function OverviewPage() {
   const addCompanyStock = () => {
     const quantity = Number(assetQty);
     if (assetName.trim().length === 0 || assetDescription.trim().length === 0 || Number.isNaN(quantity) || quantity <= 0) return;
-    setCompanyStockItems((current) => [
+    const nextItems = [
       {
         id: `cs-${Date.now()}`,
         name: assetName.trim(),
@@ -245,8 +200,10 @@ export default function OverviewPage() {
         category: assetCategory,
         createdAt: Date.now(),
       },
-      ...current,
-    ]);
+      ...companyStockItems,
+    ];
+    setCompanyStockItems(nextItems);
+    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(nextItems));
     setAssetName("");
     setAssetDescription("");
     setAssetQty("1");

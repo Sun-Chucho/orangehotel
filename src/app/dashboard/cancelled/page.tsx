@@ -58,10 +58,6 @@ export default function CancelledPage() {
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_CANCELLED, JSON.stringify(cancelled));
-  }, [cancelled]);
-
   const totalCancelledValue = useMemo(
     () => cancelled.reduce((sum, ticket) => sum + ticket.total, 0),
     [cancelled],
@@ -76,6 +72,7 @@ export default function CancelledPage() {
     if (isDirector) return;
     if (!window.confirm("Clear all cancelled orders?")) return;
     setCancelled([]);
+    localStorage.setItem(STORAGE_CANCELLED, JSON.stringify([]));
   };
 
   return (

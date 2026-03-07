@@ -112,12 +112,12 @@ export default function AnalyticsPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Avg Daily Revenue", value: `TSh ${totals.avgDaily.toLocaleString()}`, trend: "+14%", icon: DollarSign },
-      { label: "Weekly Growth", value: "22.4%", trend: "+4%", icon: TrendingUp },
-      { label: "Total Guests", value: "1,248", trend: "+8%", icon: Users },
-      { label: "Booking Freq", value: "8.2/day", trend: "-2%", icon: Calendar },
+      { label: "Avg Daily Revenue", value: `TSh ${totals.avgDaily.toLocaleString()}`, trend: history.length > 0 ? "Live" : "No Data", icon: DollarSign },
+      { label: "Weekly Growth", value: history.length > 0 ? "Pending" : "0%", trend: history.length > 0 ? "Live" : "No Data", icon: TrendingUp },
+      { label: "Total Guests", value: "0", trend: "Live", icon: Users },
+      { label: "Booking Freq", value: "0/day", trend: history.length > 0 ? "Live" : "No Data", icon: Calendar },
     ],
-    [totals.avgDaily],
+    [history.length, totals.avgDaily],
   );
 
   const fnbControlMetrics = useMemo(() => {

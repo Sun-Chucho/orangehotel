@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Role } from "@/app/lib/mock-data";
-import { seedDemoDataIfNeeded } from "@/app/lib/demo-seed";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -52,7 +51,6 @@ export default function DashboardLayout({
       return;
     }
 
-    seedDemoDataIfNeeded();
     setRole(savedRole as Role);
     if (savedShift) setShift(savedShift);
     setMounted(true);

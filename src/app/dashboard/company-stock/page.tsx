@@ -37,17 +37,13 @@ export default function CompanyStockPage() {
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(items));
-  }, [items]);
-
   const filteredItems = useMemo(() => items.filter((item) => item.category === tab), [items, tab]);
 
   const addItem = () => {
     if (isDirector) return;
     const qty = Number(quantity);
     if (name.trim().length === 0 || description.trim().length === 0 || Number.isNaN(qty) || qty <= 0) return;
-    setItems((current) => [
+    const nextItems = [
       {
         id: `cs-${Date.now()}`,
         name: name.trim(),
@@ -56,8 +52,10 @@ export default function CompanyStockPage() {
         category,
         createdAt: Date.now(),
       },
-      ...current,
-    ]);
+      ...items,
+    ];
+    setItems(nextItems);
+    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(nextItems));
     setName("");
     setDescription("");
     setQuantity("1");

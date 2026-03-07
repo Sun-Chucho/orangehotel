@@ -8,14 +8,7 @@ export interface User {
   avatar: string;
 }
 
-export const USERS: User[] = [
-  { id: "u1", name: "Amina Hassan", role: "manager", avatar: "/logo.jpeg" },
-  { id: "u2", name: "Daniel Mwangi", role: "cashier", avatar: "/logo.jpeg" },
-  { id: "u3", name: "Neema Joseph", role: "kitchen", avatar: "/logo.jpeg" },
-  { id: "u4", name: "Brian Otieno", role: "barista", avatar: "/logo.jpeg" },
-  { id: "u5", name: "Grace Mushi", role: "inventory", avatar: "/logo.jpeg" },
-  { id: "u6", name: "Paul Komba", role: "director", avatar: "/logo.jpeg" },
-];
+export const USERS: User[] = [];
 
 export interface Room {
   id: string;
@@ -115,26 +108,11 @@ export interface InventoryItem {
   price?: number;
 }
 
-export const INVENTORY: InventoryItem[] = [
-  { id: "inv-1", name: "Arabica Coffee Beans", category: "Bar", stock: 18, minStock: 10, unit: "kg", price: 38000 },
-  { id: "inv-2", name: "Fresh Milk", category: "Bar", stock: 42, minStock: 20, unit: "L", price: 4200 },
-  { id: "inv-3", name: "Tea Leaves", category: "Bar", stock: 8, minStock: 12, unit: "kg", price: 16000 },
-  { id: "inv-4", name: "Rice", category: "Kitchen", stock: 50, minStock: 25, unit: "kg", price: 3200 },
-  { id: "inv-5", name: "Chicken", category: "Kitchen", stock: 36, minStock: 20, unit: "kg", price: 11500 },
-  { id: "inv-6", name: "Cooking Oil", category: "Kitchen", stock: 10, minStock: 15, unit: "L", price: 8000 },
-];
+export const INVENTORY: InventoryItem[] = [];
 
 export const SALES_HISTORY: Array<{
   date: string;
   totalRevenue: number;
   roomRevenue: number;
   foodAndDrinksRevenue: number;
-}> = [
-  { date: "2026-03-01", totalRevenue: 4860000, roomRevenue: 3720000, foodAndDrinksRevenue: 1140000 },
-  { date: "2026-03-02", totalRevenue: 5120000, roomRevenue: 3910000, foodAndDrinksRevenue: 1210000 },
-  { date: "2026-03-03", totalRevenue: 5380000, roomRevenue: 4050000, foodAndDrinksRevenue: 1330000 },
-  { date: "2026-03-04", totalRevenue: 4950000, roomRevenue: 3790000, foodAndDrinksRevenue: 1160000 },
-  { date: "2026-03-05", totalRevenue: 5610000, roomRevenue: 4240000, foodAndDrinksRevenue: 1370000 },
-  { date: "2026-03-06", totalRevenue: 5870000, roomRevenue: 4420000, foodAndDrinksRevenue: 1450000 },
-  { date: "2026-03-07", totalRevenue: 6030000, roomRevenue: 4560000, foodAndDrinksRevenue: 1470000 },
-];
+}> = [];

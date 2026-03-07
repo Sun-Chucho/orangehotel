@@ -9,6 +9,7 @@ import {
   StoreUsageLog,
 } from "@/app/lib/inventory-transfer";
 import { printDepartmentReceipt } from "@/app/lib/receipt-print";
+import { readPosState, STORAGE_BARISTA_STATE, writePosState } from "@/app/lib/storage";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -122,63 +123,19 @@ export default function BaristaPage() {
   }, []);
 
   useEffect(() => {
-    const savedTickets = localStorage.getItem(STORAGE_TICKETS);
-    const savedSeq = localStorage.getItem(STORAGE_SEQ);
-    const savedPayments = localStorage.getItem(STORAGE_PAYMENTS);
-
-    if (savedTickets) {
-      try {
-        const parsed = JSON.parse(savedTickets) as BaristaTicket[];
-        if (Array.isArray(parsed)) setTickets(parsed);
-      } catch {
-        setTickets([]);
-      }
-    }
-
-    if (savedSeq) {
-      const parsedSeq = Number(savedSeq);
-      if (!Number.isNaN(parsedSeq) && parsedSeq > 0) setTicketSeq(parsedSeq);
-    }
-
-    if (savedPayments) {
-      try {
-        const parsed = JSON.parse(savedPayments) as BaristaPaymentRecord[];
-        if (Array.isArray(parsed)) setBaristaPayments(parsed);
-      } catch {
-        setBaristaPayments([]);
-      }
-    }
+    const snapshot = readPosState<BaristaTicket, BaristaPaymentRecord, BaristaMenuItem>(
+      STORAGE_BARISTA_STATE,
+      STORAGE_TICKETS,
+      STORAGE_SEQ,
+      STORAGE_PAYMENTS,
+      STORAGE_MENU,
+      490,
+    );
+    setTickets(snapshot.tickets);
+    setTicketSeq(snapshot.ticketSeq);
+    setBaristaPayments(snapshot.payments);
+    setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : BARISTA_MENU);
   }, []);
-
-  useEffect(() => {
-    const savedMenu = localStorage.getItem(STORAGE_MENU);
-    if (!savedMenu) return;
-    try {
-      const parsed = JSON.parse(savedMenu) as BaristaMenuItem[];
-      if (Array.isArray(parsed)) {
-        const normalized = parsed.map((item) => ({ ...item, category: normalizeCategory(String(item.category)) }));
-        setMenuItems([...normalized, ...BARISTA_MENU]);
-      }
-    } catch {
-      setMenuItems(BARISTA_MENU);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_TICKETS, JSON.stringify(tickets));
-  }, [tickets]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_SEQ, String(ticketSeq));
-  }, [ticketSeq]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_PAYMENTS, JSON.stringify(baristaPayments));
-  }, [baristaPayments]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_MENU, JSON.stringify(menuItems));
-  }, [menuItems]);
 
   const loadFromStoreData = () => {
     const savedMovements = localStorage.getItem(STORAGE_STORE_MOVEMENTS);
@@ -250,7 +207,7 @@ export default function BaristaPage() {
     const prepMinutes = Number(menuPrepMinutes);
     if (!menuName.trim() || Number.isNaN(price) || price <= 0 || Number.isNaN(prepMinutes) || prepMinutes <= 0) return;
 
-    setMenuItems((current) => [
+    const nextMenuItems = [
       {
         id: `bm-${Date.now()}`,
         name: menuName.trim(),
@@ -258,8 +215,10 @@ export default function BaristaPage() {
         prepMinutes,
         category: menuCategory,
       },
-      ...current,
-    ]);
+      ...menuItems,
+    ];
+    setMenuItems(nextMenuItems);
+    writePosState(STORAGE_BARISTA_STATE, tickets, ticketSeq, baristaPayments, nextMenuItems);
     setMenuName("");
     setMenuPrice("");
     setMenuPrepMinutes("10");
@@ -377,8 +336,11 @@ export default function BaristaPage() {
       method,
     };
 
-    setTickets((current) => [ticket, ...current]);
-    setBaristaPayments((current) => [paymentRecord, ...current]);
+    const nextTickets = [ticket, ...tickets];
+    const nextPayments = [paymentRecord, ...baristaPayments];
+    setTickets(nextTickets);
+    setBaristaPayments(nextPayments);
+    writePosState(STORAGE_BARISTA_STATE, nextTickets, nextSeq, nextPayments, menuItems);
 
     setCart([]);
     setPendingOrder(null);
@@ -405,7 +367,9 @@ export default function BaristaPage() {
   const deliverTicket = (id: string) => {
     if (isDirector) return;
     if (!window.confirm("Mark this order as delivered?")) return;
-    setTickets((current) => current.filter((ticket) => ticket.id !== id));
+    const nextTickets = tickets.filter((ticket) => ticket.id !== id);
+    setTickets(nextTickets);
+    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, menuItems);
   };
 
   const cancelTicket = (id: string) => {
@@ -424,7 +388,9 @@ export default function BaristaPage() {
     const existing = existingRaw ? (JSON.parse(existingRaw) as CancelledBaristaTicket[]) : [];
     localStorage.setItem(STORAGE_CANCELLED, JSON.stringify([cancelled, ...existing]));
 
-    setTickets((current) => current.filter((ticket) => ticket.id !== id));
+    const nextTickets = tickets.filter((ticket) => ticket.id !== id);
+    setTickets(nextTickets);
+    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, menuItems);
   };
 
   if (isManager) {

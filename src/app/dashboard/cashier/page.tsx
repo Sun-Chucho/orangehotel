@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ROOMS, Room } from "@/app/lib/mock-data";
+import { readCashierState, writeCashierState } from "@/app/lib/storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -113,38 +114,15 @@ export default function BookingPage() {
   const [receiptSeq, setReceiptSeq] = useState(84920);
 
   useEffect(() => {
-    const savedTx = localStorage.getItem(STORAGE_TX);
-    const savedSeq = localStorage.getItem(STORAGE_SEQ);
-
-    if (savedTx) {
-      try {
-        const parsed = JSON.parse(savedTx) as BookingRecord[];
-        if (Array.isArray(parsed)) {
-          setTransactions(
-            parsed.map((tx) => ({
-              ...tx,
-              status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
-            })),
-          );
-        }
-      } catch {
-        setTransactions([]);
-      }
-    }
-
-    if (savedSeq) {
-      const parsedSeq = Number(savedSeq);
-      if (!Number.isNaN(parsedSeq) && parsedSeq > 0) setReceiptSeq(parsedSeq);
-    }
+    const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
+    setTransactions(
+      snapshot.transactions.map((tx) => ({
+        ...tx,
+        status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
+      })),
+    );
+    setReceiptSeq(snapshot.receiptSeq);
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_TX, JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_SEQ, String(receiptSeq));
-  }, [receiptSeq]);
 
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
   const packageConfig = selectedPackage === "none" ? null : SPECIAL_PACKAGES[selectedPackage];
@@ -217,7 +195,6 @@ export default function BookingPage() {
     if (!canSubmitBooking) return;
 
     const nextReceipt = receiptSeq + 1;
-    setReceiptSeq(nextReceipt);
 
     const tx: BookingRecord = {
       id: `tx-${Date.now()}`,
@@ -240,7 +217,10 @@ export default function BookingPage() {
       status,
     };
 
-    setTransactions((current) => [tx, ...current]);
+    const nextTransactions = [tx, ...transactions];
+    setTransactions(nextTransactions);
+    setReceiptSeq(nextReceipt);
+    writeCashierState(nextTransactions, nextReceipt);
     markRoomStatus(selectedRoomNumber, "occupied");
 
     setGuestName("");

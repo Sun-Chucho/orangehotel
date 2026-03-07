@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Role } from "@/app/lib/mock-data";
+import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeCashierState, writePosState } from "@/app/lib/storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -104,64 +105,33 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    const savedBookingTx = localStorage.getItem(STORAGE_BOOKING_TX);
-    const savedKitchenPayments = localStorage.getItem(STORAGE_KITCHEN_PAYMENTS);
-    const savedBaristaPayments = localStorage.getItem(STORAGE_BARISTA_PAYMENTS);
+    const cashierSnapshot = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920);
+    const kitchenSnapshot = readPosState<unknown, KitchenPaymentRecord, unknown>(
+      STORAGE_KITCHEN_STATE,
+      "orange-hotel-kitchen-tickets",
+      "orange-hotel-kitchen-seq",
+      STORAGE_KITCHEN_PAYMENTS,
+      "orange-hotel-kitchen-menu",
+      300,
+    );
+    const baristaSnapshot = readPosState<unknown, BaristaPaymentRecord, unknown>(
+      STORAGE_BARISTA_STATE,
+      "orange-hotel-barista-orders",
+      "orange-hotel-barista-seq",
+      STORAGE_BARISTA_PAYMENTS,
+      "orange-hotel-barista-menu",
+      490,
+    );
 
-    if (savedBookingTx) {
-      try {
-        const parsed = JSON.parse(savedBookingTx) as BookingRecord[];
-        if (Array.isArray(parsed)) {
-          setBookingTransactions(
-            parsed.map((tx) => ({
-              ...tx,
-              status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
-            })),
-          );
-        }
-      } catch {
-        setBookingTransactions([]);
-      }
-    }
-
-    if (savedKitchenPayments) {
-      try {
-        const parsed = JSON.parse(savedKitchenPayments) as KitchenPaymentRecord[];
-        if (Array.isArray(parsed)) {
-          setKitchenPayments(
-            parsed.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })),
-          );
-        }
-      } catch {
-        setKitchenPayments([]);
-      }
-    }
-
-    if (savedBaristaPayments) {
-      try {
-        const parsed = JSON.parse(savedBaristaPayments) as BaristaPaymentRecord[];
-        if (Array.isArray(parsed)) {
-          setBaristaPayments(
-            parsed.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })),
-          );
-        }
-      } catch {
-        setBaristaPayments([]);
-      }
-    }
+    setBookingTransactions(
+      cashierSnapshot.transactions.map((tx) => ({
+        ...tx,
+        status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
+      })),
+    );
+    setKitchenPayments(kitchenSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
+    setBaristaPayments(baristaSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_BOOKING_TX, JSON.stringify(bookingTransactions));
-  }, [bookingTransactions]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KITCHEN_PAYMENTS, JSON.stringify(kitchenPayments));
-  }, [kitchenPayments]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_BARISTA_PAYMENTS, JSON.stringify(baristaPayments));
-  }, [baristaPayments]);
 
   const bookingRows = useMemo<PaymentRow[]>(
     () =>
@@ -229,23 +199,25 @@ export default function PaymentsPage() {
 
     if (selectedCredit.source === "booking") {
       const mappedMethod: PaymentMethod = method === "mobile" ? "mobile-money" : method;
-      setBookingTransactions((current) =>
-        current.map((tx) =>
-          tx.id === selectedCredit.id ? { ...tx, status: "completed", payment: mappedMethod } : tx,
-        ),
+      const nextTransactions = bookingTransactions.map((tx) =>
+        tx.id === selectedCredit.id ? { ...tx, status: "completed", payment: mappedMethod } : tx,
       );
+      setBookingTransactions(nextTransactions);
+      writeCashierState(nextTransactions, readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920).receiptSeq);
     } else if (selectedCredit.source === "kitchen") {
-      setKitchenPayments((current) =>
-        current.map((tx) =>
-          tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
-        ),
+      const nextPayments = kitchenPayments.map((tx) =>
+        tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
       );
+      setKitchenPayments(nextPayments);
+      const kitchenSnapshot = readPosState<unknown, KitchenPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", STORAGE_KITCHEN_PAYMENTS, "orange-hotel-kitchen-menu", 300);
+      writePosState(STORAGE_KITCHEN_STATE, kitchenSnapshot.tickets, kitchenSnapshot.ticketSeq, nextPayments, kitchenSnapshot.menuItems);
     } else {
-      setBaristaPayments((current) =>
-        current.map((tx) =>
-          tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
-        ),
+      const nextPayments = baristaPayments.map((tx) =>
+        tx.id === selectedCredit.id ? { ...tx, status: "completed", method } : tx,
       );
+      setBaristaPayments(nextPayments);
+      const baristaSnapshot = readPosState<unknown, BaristaPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", STORAGE_BARISTA_PAYMENTS, "orange-hotel-barista-menu", 490);
+      writePosState(STORAGE_BARISTA_STATE, baristaSnapshot.tickets, baristaSnapshot.ticketSeq, nextPayments, baristaSnapshot.menuItems);
     }
 
     setShowMethodPopup(false);

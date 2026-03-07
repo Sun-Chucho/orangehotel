@@ -96,10 +96,6 @@ export function InventoryControlView({
     }
   }, []);
 
-  useEffect(() => localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(items)), [items]);
-  useEffect(() => localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(storeItems)), [storeItems]);
-  useEffect(() => localStorage.setItem(STORAGE_STORE_MOVEMENTS, JSON.stringify(movementLogs)), [movementLogs]);
-
   useEffect(() => {
     setThresholdDrafts(
       Object.fromEntries(items.map((item) => [item.id, String(item.minStock)])),
@@ -121,7 +117,9 @@ export function InventoryControlView({
     const qty = Number(qtyRaw);
     if (!name.trim() || Number.isNaN(qty) || qty < 0 || !unit.trim()) return;
 
-    setStoreItems((prev) => [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: 1, lane }, ...prev]);
+    const nextStoreItems = [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: 1, lane }, ...storeItems];
+    setStoreItems(nextStoreItems);
+    localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(nextStoreItems));
 
     if (lane === "kitchen") {
       setKitchenName("");
@@ -153,17 +151,12 @@ export function InventoryControlView({
     const destinationCategory: ItemCategory = moveDestination === "kitchen" ? "Kitchen" : "Bar";
     const normalized = selectedStoreItem.name.trim().toLowerCase();
 
-    setStoreItems((prev) => prev.map((i) => (i.id === selectedStoreItem.id ? { ...i, stock: i.stock - qty } : i)));
-
-    setItems((prev) => {
-      const existing = prev.find((i) => i.category === destinationCategory && i.name.trim().toLowerCase() === normalized);
-      if (existing) {
-        return prev.map((i) => (i.id === existing.id ? { ...i, stock: i.stock + converted } : i));
-      }
-      return [{ id: `i-${Date.now()}`, name: selectedStoreItem.name, category: destinationCategory, stock: converted, minStock: 1, unit: "units", price: 0 }, ...prev];
-    });
-
-    setMovementLogs((prev) => [
+    const nextStoreItems = storeItems.map((i) => (i.id === selectedStoreItem.id ? { ...i, stock: i.stock - qty } : i));
+    const existing = items.find((i) => i.category === destinationCategory && i.name.trim().toLowerCase() === normalized);
+    const nextItems = existing
+      ? items.map((i) => (i.id === existing.id ? { ...i, stock: i.stock + converted } : i))
+      : [{ id: `i-${Date.now()}`, name: selectedStoreItem.name, category: destinationCategory, stock: converted, minStock: 1, unit: "units", price: 0 }, ...items];
+    const nextMovementLogs = [
       {
         id: `mv-${Date.now()}`,
         itemId: selectedStoreItem.id,
@@ -177,8 +170,15 @@ export function InventoryControlView({
         convertedQty: converted,
         movedAt: Date.now(),
       },
-      ...prev,
-    ]);
+      ...movementLogs,
+    ];
+
+    setStoreItems(nextStoreItems);
+    setItems(nextItems);
+    setMovementLogs(nextMovementLogs);
+    localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(nextStoreItems));
+    localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(nextItems));
+    localStorage.setItem(STORAGE_STORE_MOVEMENTS, JSON.stringify(nextMovementLogs));
 
     if (lane === "kitchen") {
       setKitchenMoveQty("1");
@@ -290,9 +290,9 @@ export function InventoryControlView({
     if (isDirector) return;
     const nextValue = Number(thresholdDrafts[itemId]);
     if (Number.isNaN(nextValue) || nextValue < 0) return;
-    setItems((current) =>
-      current.map((item) => (item.id === itemId ? { ...item, minStock: nextValue } : item)),
-    );
+    const nextItems = items.map((item) => (item.id === itemId ? { ...item, minStock: nextValue } : item));
+    setItems(nextItems);
+    localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(nextItems));
   };
 
   const renderThresholdTable = () => (

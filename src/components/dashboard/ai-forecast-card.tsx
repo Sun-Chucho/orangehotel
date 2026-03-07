@@ -22,8 +22,10 @@ import {
 export function AIForecastCard() {
   const [forecast, setForecast] = useState<ManagerSalesForecastOutput | null>(null);
   const [loading, setLoading] = useState(false);
+  const hasHistory = SALES_HISTORY.length > 0;
 
   async function handleGenerate() {
+    if (!hasHistory) return;
     setLoading(true);
     try {
       const result = await managerSalesForecast({
@@ -54,7 +56,7 @@ export function AIForecastCard() {
           variant="outline" 
           size="sm" 
           onClick={handleGenerate} 
-          disabled={loading}
+          disabled={loading || !hasHistory}
           className="border-primary text-primary hover:bg-primary hover:text-white"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
@@ -119,9 +121,9 @@ export function AIForecastCard() {
             </div>
             <h3 className="font-semibold text-lg mb-1">AI Forecasting Offline</h3>
             <p className="text-muted-foreground max-w-sm mb-6">
-              Generate a predictive model based on your historical daily sales data.
+              {hasHistory ? "Generate a predictive model based on your historical daily sales data." : "Forecasting will unlock after real sales history is recorded."}
             </p>
-            <Button onClick={handleGenerate} disabled={loading}>
+            <Button onClick={handleGenerate} disabled={loading || !hasHistory}>
               {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Generate 7-Day Forecast
             </Button>
