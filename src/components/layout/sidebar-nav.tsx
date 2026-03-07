@@ -13,7 +13,6 @@ import {
   WalletCards,
   Utensils, 
   XCircle,
-  Coffee, 
   Users, 
   BarChart3, 
   Settings,
@@ -35,14 +34,13 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['manager', 'director'] },
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'director', 'cashier'] },
-  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
-  { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director'] },
+  { label: 'Inventory Control', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director', 'inventory'] },
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: ['manager', 'director'] },
+  { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['manager', 'director', 'kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
-  { label: 'Kitchen POS', href: '/dashboard/kitchen', icon: Utensils, roles: ['manager', 'director', 'kitchen'] },
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
-  { label: 'Barista POS', href: '/dashboard/barista', icon: Coffee, roles: ['manager', 'director', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['manager', 'director'] },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager', 'director'] },
@@ -50,12 +48,19 @@ const NAV_ITEMS: NavItem[] = [
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
   cashier: ['/dashboard/cashier'],
-  kitchen: ['/dashboard/kitchen'],
-  barista: ['/dashboard/barista'],
+  kitchen: ['/dashboard/fnb-pos'],
+  barista: ['/dashboard/fnb-pos'],
 };
 
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
+  
+  const handleNavigate = () => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      const evt = new CustomEvent("orange-hotel-sidebar-close");
+      window.dispatchEvent(evt);
+    }
+  };
   
   const filteredNav = useMemo(() => {
     const visible = NAV_ITEMS.filter(item => item.roles.includes(role));
@@ -76,7 +81,7 @@ export function SidebarNav({ role }: { role: Role }) {
   []);
 
   return (
-    <div className="flex flex-col h-full bg-black text-white border-r border-sidebar-border w-64 fixed left-0 top-0 z-40">
+    <div className="flex flex-col h-full bg-black text-white border-r border-sidebar-border w-64">
       <div className="p-8 flex justify-center">
         <Link href="/dashboard" className="group">
           <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-2xl relative">
@@ -100,11 +105,13 @@ export function SidebarNav({ role }: { role: Role }) {
           Management
         </div>
         {filteredNav.map((item) => {
-          const isActive = pathname === item.href;
+          const isFnBPosRoute = pathname === "/dashboard/fnb-pos" || pathname === "/dashboard/kitchen" || pathname === "/dashboard/barista";
+          const isActive = item.href === "/dashboard/fnb-pos" ? isFnBPosRoute : pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavigate}
               className={cn(
                 "flex items-center gap-3 px-3 py-3 rounded-xl transition-all group mb-1",
                 isActive 

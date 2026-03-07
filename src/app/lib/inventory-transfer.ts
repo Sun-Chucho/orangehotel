@@ -19,6 +19,7 @@ export interface StoreMovementLog {
   storeQtyMoved: number;
   storeUnit: string;
   conversionValue: number;
+  conversionNote: string;
   convertedQty: number;
   movedAt: number;
 }

@@ -12,15 +12,16 @@ import {
   TransferDestination,
 } from "@/app/lib/inventory-transfer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRightLeft, Plus } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 
-type InventoryTab = "stock" | "kitchen" | "barista";
+type InventoryTab = "kitchen-stock" | "barista-stock" | "stock-control";
 type ItemCategory = "Kitchen" | "Bar";
+type StockControlTab = "kitchen" | "barista";
 
 function getStockLabel(stock: number, minStock: number) {
   if (stock <= 0) return "Out";
@@ -30,7 +31,8 @@ function getStockLabel(stock: number, minStock: number) {
 
 export default function InventoryPage() {
   const isDirector = useIsDirector();
-  const [activeTab, setActiveTab] = useState<InventoryTab>("stock");
+  const [activeTab, setActiveTab] = useState<InventoryTab>("kitchen-stock");
+  const [stockControlTab, setStockControlTab] = useState<StockControlTab>("kitchen");
   const [items, setItems] = useState<InventoryItem[]>(INVENTORY);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [movementLogs, setMovementLogs] = useState<StoreMovementLog[]>([]);
@@ -42,10 +44,14 @@ export default function InventoryPage() {
   const [baristaQty, setBaristaQty] = useState("0");
   const [baristaUnit, setBaristaUnit] = useState("kg");
 
-  const [selectedStoreItemId, setSelectedStoreItemId] = useState("");
-  const [moveDestination, setMoveDestination] = useState<TransferDestination>("kitchen");
-  const [moveQty, setMoveQty] = useState("1");
-  const [conversionValue, setConversionValue] = useState("1");
+  const [selectedKitchenStoreItemId, setSelectedKitchenStoreItemId] = useState("");
+  const [selectedBaristaStoreItemId, setSelectedBaristaStoreItemId] = useState("");
+  const [kitchenMoveQty, setKitchenMoveQty] = useState("1");
+  const [baristaMoveQty, setBaristaMoveQty] = useState("1");
+  const [kitchenConversionValue, setKitchenConversionValue] = useState("1");
+  const [baristaConversionValue, setBaristaConversionValue] = useState("1");
+  const [kitchenConversionNote, setKitchenConversionNote] = useState("");
+  const [baristaConversionNote, setBaristaConversionNote] = useState("");
 
   useEffect(() => {
     const inv = localStorage.getItem(STORAGE_INVENTORY_ITEMS);
@@ -79,11 +85,10 @@ export default function InventoryPage() {
 
   const kitchenStore = useMemo(() => storeItems.filter((i) => i.lane === "kitchen"), [storeItems]);
   const baristaStore = useMemo(() => storeItems.filter((i) => i.lane === "barista"), [storeItems]);
-  const selectedStoreItem = useMemo(() => storeItems.find((i) => i.id === selectedStoreItemId), [storeItems, selectedStoreItemId]);
-  const currentLaneItems = useMemo(
-    () => items.filter((i) => i.category === (activeTab === "kitchen" ? "Kitchen" : "Bar")),
-    [items, activeTab],
-  );
+  const kitchenInventoryItems = useMemo(() => items.filter((i) => i.category === "Kitchen"), [items]);
+  const baristaInventoryItems = useMemo(() => items.filter((i) => i.category === "Bar"), [items]);
+  const selectedKitchenStoreItem = useMemo(() => kitchenStore.find((i) => i.id === selectedKitchenStoreItemId), [kitchenStore, selectedKitchenStoreItemId]);
+  const selectedBaristaStoreItem = useMemo(() => baristaStore.find((i) => i.id === selectedBaristaStoreItemId), [baristaStore, selectedBaristaStoreItemId]);
 
   const addStoreItem = (lane: StoreLane) => {
     if (isDirector) return;
@@ -107,8 +112,12 @@ export default function InventoryPage() {
     setBaristaUnit("kg");
   };
 
-  const moveFromStore = () => {
-    if (isDirector || !selectedStoreItem) return;
+  const moveFromStore = (lane: StoreLane) => {
+    const selectedStoreItem = lane === "kitchen" ? selectedKitchenStoreItem : selectedBaristaStoreItem;
+    const moveQty = lane === "kitchen" ? kitchenMoveQty : baristaMoveQty;
+    const conversionValue = lane === "kitchen" ? kitchenConversionValue : baristaConversionValue;
+    const conversionNote = (lane === "kitchen" ? kitchenConversionNote : baristaConversionNote).trim();
+    if (isDirector || !selectedStoreItem || !conversionNote) return;
 
     const qty = Number(moveQty);
     const conversion = Number(conversionValue);
@@ -117,6 +126,7 @@ export default function InventoryPage() {
     }
 
     const converted = qty * conversion;
+    const moveDestination: TransferDestination = lane;
     const destinationCategory: ItemCategory = moveDestination === "kitchen" ? "Kitchen" : "Bar";
     const normalized = selectedStoreItem.name.trim().toLowerCase();
 
@@ -140,17 +150,30 @@ export default function InventoryPage() {
         storeQtyMoved: qty,
         storeUnit: selectedStoreItem.unit,
         conversionValue: conversion,
+        conversionNote,
         convertedQty: converted,
         movedAt: Date.now(),
       },
       ...prev,
     ]);
+
+    if (lane === "kitchen") {
+      setKitchenMoveQty("1");
+      setKitchenConversionValue("1");
+      setKitchenConversionNote("");
+      return;
+    }
+
+    setBaristaMoveQty("1");
+    setBaristaConversionValue("1");
+    setBaristaConversionNote("");
   };
 
   const renderStoreCard = (lane: StoreLane, title: string, list: MainStoreItem[]) => (
     <Card className="shadow-sm">
       <CardHeader className="border-b">
         <CardTitle className="text-lg uppercase font-black">{title}</CardTitle>
+        <CardDescription>Enter and record stock received for {lane === "kitchen" ? "kitchen" : "barista"} operations.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -182,7 +205,6 @@ export default function InventoryPage() {
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -191,30 +213,162 @@ export default function InventoryPage() {
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    size="sm"
-                    className="h-8 font-black uppercase text-[10px] tracking-widest"
-                    onClick={() => {
-                      setSelectedStoreItemId(item.id);
-                      setMoveDestination(lane);
-                    }}
-                  >
-                    <ArrowRightLeft className="w-4 h-4 mr-1" /> Move
-                  </Button>
-                </TableCell>
               </TableRow>
             ))}
+            {list.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                  No stock recorded yet
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </CardContent>
     </Card>
   );
 
+  const renderInventoryTable = (title: string, inventoryItems: InventoryItem[]) => (
+    <Card className="shadow-sm">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg uppercase font-black">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {inventoryItems.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
+              </TableRow>
+            ))}
+            {inventoryItems.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                  No stock entries found
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+
+  const renderStockControl = (
+    lane: StoreLane,
+    list: MainStoreItem[],
+    selectedStoreItem: MainStoreItem | undefined,
+    selectedStoreItemId: string,
+    setSelectedStoreItemId: (value: string) => void,
+    moveQty: string,
+    setMoveQty: (value: string) => void,
+    conversionValue: string,
+    setConversionValue: (value: string) => void,
+    conversionNote: string,
+    setConversionNote: (value: string) => void,
+  ) => (
+    <div className="space-y-6">
+      <Card className="shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Stock Control</CardTitle>
+          <CardDescription>Select an item and write the movement logic, for example: 1 kg meat = 20 units.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 pt-4">
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={selectedStoreItemId}
+            onChange={(event) => setSelectedStoreItemId(event.target.value)}
+          >
+            <option value="">Select item</option>
+            {list.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ({item.stock} {item.unit})
+              </option>
+            ))}
+          </select>
+          <Input type="number" min="1" value={moveQty} onChange={(event) => setMoveQty(event.target.value)} placeholder="Qty moved" />
+          <Input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={conversionValue}
+            onChange={(event) => setConversionValue(event.target.value)}
+            placeholder="1 unit = X units"
+          />
+          <Input value={conversionNote} onChange={(event) => setConversionNote(event.target.value)} placeholder="Logic note e.g. 1 kg meat = 20 units" />
+          <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={() => moveFromStore(lane)} disabled={isDirector}>
+            <ArrowRightLeft className="w-4 h-4 mr-2" /> Record Movement
+          </Button>
+        </CardContent>
+        {selectedStoreItem && (
+          <CardContent className="pt-0">
+            <div className="rounded-md border p-3">
+              <p className="font-black">{selectedStoreItem.name}</p>
+              <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                Available: {selectedStoreItem.stock} {selectedStoreItem.unit}
+              </p>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Control Log</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Movement</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Logic</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {movementLogs
+                .filter((movement) => movement.destination === lane)
+                .map((movement) => (
+                  <TableRow key={movement.id}>
+                    <TableCell className="font-bold">{movement.itemName}</TableCell>
+                    <TableCell className="font-bold">
+                      {movement.storeQtyMoved} {movement.storeUnit} {"->"} {movement.convertedQty} units
+                    </TableCell>
+                    <TableCell className="font-bold">{movement.conversionNote}</TableCell>
+                    <TableCell className="font-bold text-sm">{new Date(movement.movedAt).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              {movementLogs.filter((movement) => movement.destination === lane).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No control records yet
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-black tracking-tight uppercase">Inventory Management</h1>
+        <h1 className="text-3xl font-black tracking-tight uppercase">Inventory Control</h1>
+        <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+          Kitchen stock, barista stock, and stock control logic in one place
+        </p>
       </header>
 
       {isDirector && (
@@ -227,104 +381,63 @@ export default function InventoryPage() {
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
         <TabsList className="h-11">
-          <TabsTrigger value="stock" className="font-black uppercase text-[10px] tracking-widest">Stock</TabsTrigger>
-          <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen</TabsTrigger>
-          <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista</TabsTrigger>
+          <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
+          <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">Barista Stock</TabsTrigger>
+          <TabsTrigger value="stock-control" className="font-black uppercase text-[10px] tracking-widest">Stock Control</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {activeTab === "stock" ? (
+      {activeTab === "kitchen-stock" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
-            {renderStoreCard("barista", "Barista Stock", baristaStore)}
-          </div>
-
-          {selectedStoreItem && (
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg uppercase font-black">Move from Store</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                <div className="md:col-span-2 rounded-md border p-3">
-                  <p className="font-black">{selectedStoreItem.name}</p>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-black mt-1">
-                    Available: {selectedStoreItem.stock} {selectedStoreItem.unit}
-                  </p>
-                </div>
-                <select
-                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={moveDestination}
-                  onChange={(event) => setMoveDestination(event.target.value as TransferDestination)}
-                >
-                  <option value="kitchen">Kitchen</option>
-                  <option value="barista">Barista</option>
-                </select>
-                <Input type="number" min="1" value={moveQty} onChange={(event) => setMoveQty(event.target.value)} placeholder="Qty to move" />
-                <Input type="number" min="0.01" step="0.01" value={conversionValue} onChange={(event) => setConversionValue(event.target.value)} placeholder="1 unit = X units" />
-                <div className="md:col-span-5">
-                  <Button className="font-black uppercase tracking-widest text-xs h-10" onClick={moveFromStore} disabled={isDirector}>
-                    Confirm Move
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="shadow-sm">
-            <CardHeader className="border-b">
-              <CardTitle className="text-lg uppercase font-black">Store Movement Log</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Moved</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Destination</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {movementLogs.map((movement) => (
-                    <TableRow key={movement.id}>
-                      <TableCell className="font-bold">{movement.itemName}</TableCell>
-                      <TableCell className="font-bold">{movement.storeQtyMoved} {movement.storeUnit} {"->"} {movement.convertedQty} units</TableCell>
-                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{movement.destination}</TableCell>
-                      <TableCell className="font-bold text-sm">{new Date(movement.movedAt).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
+          {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems)}
         </div>
-      ) : (
-        <Card className="shadow-sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-lg uppercase font-black">{activeTab === "kitchen" ? "Kitchen Inventory" : "Barista Inventory"}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {currentLaneItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-bold">{item.name}</TableCell>
-                    <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
-                    <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      )}
+
+      {activeTab === "barista-stock" && (
+        <div className="space-y-6">
+          {renderStoreCard("barista", "Barista Stock", baristaStore)}
+          {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
+        </div>
+      )}
+
+      {activeTab === "stock-control" && (
+        <Tabs value={stockControlTab} onValueChange={(value) => setStockControlTab(value as StockControlTab)}>
+          <TabsList className="h-11">
+            <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen</TabsTrigger>
+            <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista</TabsTrigger>
+          </TabsList>
+          <TabsContent value="kitchen">
+            {renderStockControl(
+              "kitchen",
+              kitchenStore,
+              selectedKitchenStoreItem,
+              selectedKitchenStoreItemId,
+              setSelectedKitchenStoreItemId,
+              kitchenMoveQty,
+              setKitchenMoveQty,
+              kitchenConversionValue,
+              setKitchenConversionValue,
+              kitchenConversionNote,
+              setKitchenConversionNote,
+            )}
+          </TabsContent>
+          <TabsContent value="barista">
+            {renderStockControl(
+              "barista",
+              baristaStore,
+              selectedBaristaStoreItem,
+              selectedBaristaStoreItemId,
+              setSelectedBaristaStoreItemId,
+              baristaMoveQty,
+              setBaristaMoveQty,
+              baristaConversionValue,
+              setBaristaConversionValue,
+              baristaConversionNote,
+              setBaristaConversionNote,
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

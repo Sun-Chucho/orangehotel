@@ -69,7 +69,7 @@ export default function CompanyStockPage() {
       <header>
         <h1 className="text-3xl font-black tracking-tight uppercase">Company Stock</h1>
         <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-          Non-consumable business assets and supplies
+          Enter and record company stock assets and supplies
         </p>
       </header>
 
@@ -84,7 +84,7 @@ export default function CompanyStockPage() {
       <Card className="shadow-sm border-none bg-white">
         <CardHeader className="border-b">
           <CardTitle className="text-lg font-black uppercase tracking-tight">Asset Register</CardTitle>
-          <CardDescription>Track towels, spoons, CCTV cameras, TVs, equipment and more</CardDescription>
+          <CardDescription>Tab where the team can enter and record towels, spoons, CCTV cameras, TVs, equipment and more</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
           {!isDirector && (

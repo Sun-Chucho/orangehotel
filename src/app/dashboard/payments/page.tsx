@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Role } from "@/app/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -85,6 +86,7 @@ function formatAgo(timestamp: number): string {
 
 export default function PaymentsPage() {
   const isDirector = useIsDirector();
+  const [role, setRole] = useState<Role>("manager");
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("bookings");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
@@ -92,6 +94,14 @@ export default function PaymentsPage() {
 
   const [selectedCredit, setSelectedCredit] = useState<{ source: "booking" | "kitchen" | "barista"; id: string } | null>(null);
   const [showMethodPopup, setShowMethodPopup] = useState(false);
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    if (savedRole) {
+      setRole(savedRole);
+      setPaymentsTab(savedRole === "kitchen" ? "kitchen" : savedRole === "barista" ? "barista" : "bookings");
+    }
+  }, []);
 
   useEffect(() => {
     const savedBookingTx = localStorage.getItem(STORAGE_BOOKING_TX);
@@ -252,13 +262,31 @@ export default function PaymentsPage() {
     return [...base].sort((a, b) => b.createdAt - a.createdAt);
   }, [paymentsTab, bookingRows, kitchenRows, baristaRows]);
 
+  const canViewAllTabs = role === "manager" || role === "director";
+  const headerDescription =
+    role === "kitchen"
+      ? "Kitchen payment tracking only"
+      : role === "barista"
+      ? "Barista payment tracking only"
+      : role === "cashier"
+      ? "Reception payment tracking only"
+      : "Bookings, kitchen, and barista payment tracking";
+  const cardDescription =
+    role === "kitchen"
+      ? "Kitchen payments only"
+      : role === "barista"
+      ? "Barista payments only"
+      : role === "cashier"
+      ? "Reception booking payments only"
+      : "Use tabs to review bookings, kitchen, and barista payments";
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Payments</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-            Bookings, kitchen, and barista payment tracking
+            {headerDescription}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -283,21 +311,23 @@ export default function PaymentsPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Payment Transactions</CardTitle>
-              <CardDescription>Use tabs to review bookings, kitchen, and barista payments</CardDescription>
+              <CardDescription>{cardDescription}</CardDescription>
             </div>
-            <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)}>
-              <TabsList className="h-10">
-                <TabsTrigger value="bookings" className="text-[10px] font-black uppercase tracking-widest">
-                  Bookings
-                </TabsTrigger>
-                <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">
-                  Kitchen
-                </TabsTrigger>
-                <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">
-                  Barista
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {canViewAllTabs && (
+              <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)}>
+                <TabsList className="h-10">
+                  <TabsTrigger value="bookings" className="text-[10px] font-black uppercase tracking-widest">
+                    Bookings
+                  </TabsTrigger>
+                  <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">
+                    Kitchen
+                  </TabsTrigger>
+                  <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">
+                    Barista
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
           </div>
         </CardHeader>
 

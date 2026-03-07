@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROOMS } from "@/app/lib/mock-data";
 import {
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
@@ -90,8 +89,8 @@ export default function BaristaPage() {
   const [category, setCategory] = useState<BaristaCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
-  const [location, setLocation] = useState("Table 1");
-  const [roomServiceRoom, setRoomServiceRoom] = useState("");
+  const [tableNumber, setTableNumber] = useState("");
+  const [roomNumber, setRoomNumber] = useState("");
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<BaristaTicket[]>([]);
@@ -237,11 +236,6 @@ export default function BaristaPage() {
     [category, menuItems, searchTerm],
   );
 
-  const serviceRooms = useMemo(
-    () => ROOMS.filter((room) => room.status === "available" || room.status === "occupied"),
-    [],
-  );
-
   const subtotal = useMemo(() => cart.reduce((sum, line) => sum + line.item.price * line.qty, 0), [cart]);
 
   const addToCart = (item: BaristaMenuItem) => {
@@ -286,13 +280,18 @@ export default function BaristaPage() {
 
     const destination =
       serviceMode === "room-service"
-        ? roomServiceRoom || "Room not selected"
+        ? `Room ${roomNumber.trim()}`
         : serviceMode === "restaurant"
-        ? location.trim() || "Restaurant"
+        ? `Table ${tableNumber.trim()}`
         : "Take Away";
 
-    if (serviceMode === "room-service" && !roomServiceRoom) {
-      window.alert("Select a room for room service.");
+    if (serviceMode === "room-service" && !roomNumber.trim()) {
+      window.alert("Enter the room number for room service.");
+      return;
+    }
+
+    if (serviceMode === "restaurant" && !tableNumber.trim()) {
+      window.alert("Enter the table number for restaurant service.");
       return;
     }
 
@@ -716,28 +715,17 @@ export default function BaristaPage() {
           <CardContent className="space-y-5">
             {serviceMode === "room-service" ? (
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room (Available & Booked-In)</label>
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={roomServiceRoom}
-                  onChange={(event) => setRoomServiceRoom(event.target.value)}
-                >
-                  <option value="">Select room</option>
-                  {serviceRooms.map((room) => (
-                    <option key={room.id} value={`Room ${room.number}`}>
-                      Room {room.number} - {room.status === "occupied" ? "Booked-In" : "Available"}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room Number</label>
+                <Input value={roomNumber} onChange={(event) => setRoomNumber(event.target.value)} placeholder="Enter room number" />
               </div>
             ) : serviceMode === "restaurant" ? (
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Destination</label>
-                <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Table 1" />
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Table Number</label>
+                <Input value={tableNumber} onChange={(event) => setTableNumber(event.target.value)} placeholder="Enter table number" />
               </div>
             ) : (
               <div className="rounded-xl border p-3 bg-muted/20">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Destination</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Service Type</p>
                 <p className="font-bold">Take Away</p>
               </div>
             )}
