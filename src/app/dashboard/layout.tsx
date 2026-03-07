@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Role } from "@/app/lib/mock-data";
-import { hydrateDefaultAppStateFromFirebase, runOneTimeBusinessDataReset } from "@/app/lib/firebase-sync";
+import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,6 @@ export default function DashboardLayout({
         return;
       }
 
-      await runOneTimeBusinessDataReset("2026-03-07-clean-firebase-db");
       await hydrateDefaultAppStateFromFirebase();
       if (!active) return;
 

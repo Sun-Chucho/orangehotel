@@ -1,4 +1,4 @@
-import { get, ref, remove, set } from "firebase/database";
+import { get, onValue, ref, remove, set } from "firebase/database";
 import { firebaseDatabase } from "@/app/lib/firebase";
 
 const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
@@ -14,6 +14,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-store-movements",
   "orange-hotel-store-usage",
   "orange-hotel-cancelled-tickets",
+  "orange-hotel-rooms-state",
   "orange-hotel-fnb-beverage-cost",
   "orange-hotel-fnb-recipe-cost",
   "orange-hotel-fnb-stock-sales",
@@ -40,6 +41,18 @@ function toStoragePath(key: string) {
   return `${FIREBASE_STORAGE_ROOT}/${key.replace(/[.#$[\]/]/g, "-")}`;
 }
 
+function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value: T | null) => void) {
+  if (typeof window === "undefined") return;
+  if (rawValue === null) {
+    localStorage.removeItem(key);
+    onChange(null);
+    return;
+  }
+
+  localStorage.setItem(key, JSON.stringify(rawValue));
+  onChange(rawValue);
+}
+
 export function syncStorageValueToFirebase<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   void set(ref(firebaseDatabase, toStoragePath(key)), value).catch((error) => {
@@ -61,6 +74,58 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
 export async function hydrateDefaultAppStateFromFirebase() {
   await Promise.all(FIREBASE_SYNC_KEYS.map((key) => hydrateStorageKeyFromFirebase(key)));
+}
+
+export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T | null) => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const emitLocalValue = () => {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      onChange(null);
+      return;
+    }
+
+    try {
+      onChange(JSON.parse(raw) as T);
+    } catch {
+      onChange(null);
+    }
+  };
+
+  const handleCustomEvent = (event: Event) => {
+    const detail = (event as CustomEvent<{ key?: string }>).detail;
+    if (detail?.key === key) emitLocalValue();
+  };
+
+  const handleStorageEvent = (event: StorageEvent) => {
+    if (event.key === key) emitLocalValue();
+  };
+
+  window.addEventListener("orange-hotel-storage-updated", handleCustomEvent as EventListener);
+  window.addEventListener("storage", handleStorageEvent);
+
+  const unsubscribe = onValue(
+    ref(firebaseDatabase, toStoragePath(key)),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        readSnapshotValue<T>(key, null, onChange);
+        return;
+      }
+      readSnapshotValue<T>(key, snapshot.val() as T, onChange);
+    },
+    (error) => {
+      console.error(`Firebase subscription failed for ${key}`, error);
+    },
+  );
+
+  return () => {
+    window.removeEventListener("orange-hotel-storage-updated", handleCustomEvent as EventListener);
+    window.removeEventListener("storage", handleStorageEvent);
+    unsubscribe();
+  };
 }
 
 export function removeStorageValueFromFirebase(key: string) {

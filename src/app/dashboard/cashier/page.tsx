@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ROOMS, Room } from "@/app/lib/mock-data";
-import { readCashierState, writeCashierState } from "@/app/lib/storage";
+import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { readRoomsState, writeRoomsState } from "@/app/lib/rooms-storage";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money";
 type TransactionTab = "completed" | "credit";
@@ -117,15 +118,31 @@ export default function BookingPage() {
   const [receiptSeq, setReceiptSeq] = useState(84920);
 
   useEffect(() => {
-    const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
+    const applyCashierSnapshot = () => {
+      const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
+      setTransactions(
+        snapshot.transactions.map((tx) => ({
+          ...tx,
+          status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
+        })),
+      );
+      setReceiptSeq(snapshot.receiptSeq);
+    };
+
+    applyCashierSnapshot();
     setRooms(readRoomsState());
-    setTransactions(
-      snapshot.transactions.map((tx) => ({
-        ...tx,
-        status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
-      })),
-    );
-    setReceiptSeq(snapshot.receiptSeq);
+
+    const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
+      applyCashierSnapshot();
+    });
+    const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
+      setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
+    });
+
+    return () => {
+      unsubscribeCashier();
+      unsubscribeRooms();
+    };
   }, []);
 
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);

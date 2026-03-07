@@ -30,12 +30,14 @@ export function readJson<T>(key: string): T | null {
 export function writeJson<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
   syncStorageValueToFirebase(key, value);
 }
 
 export function removeJson(key: string) {
   if (typeof window === "undefined") return;
   localStorage.removeItem(key);
+  window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
   removeStorageValueFromFirebase(key);
 }
 

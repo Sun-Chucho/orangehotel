@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Receipt } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentsTab = "reception" | "kitchen" | "barista";
 type PaymentMethod = "cash" | "card" | "mobile-money";
@@ -105,32 +106,46 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    const cashierSnapshot = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920);
-    const kitchenSnapshot = readPosState<unknown, KitchenPaymentRecord, unknown>(
-      STORAGE_KITCHEN_STATE,
-      "orange-hotel-kitchen-tickets",
-      "orange-hotel-kitchen-seq",
-      STORAGE_KITCHEN_PAYMENTS,
-      "orange-hotel-kitchen-menu",
-      300,
-    );
-    const baristaSnapshot = readPosState<unknown, BaristaPaymentRecord, unknown>(
-      STORAGE_BARISTA_STATE,
-      "orange-hotel-barista-orders",
-      "orange-hotel-barista-seq",
-      STORAGE_BARISTA_PAYMENTS,
-      "orange-hotel-barista-menu",
-      490,
-    );
+    const refreshPayments = () => {
+      const cashierSnapshot = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920);
+      const kitchenSnapshot = readPosState<unknown, KitchenPaymentRecord, unknown>(
+        STORAGE_KITCHEN_STATE,
+        "orange-hotel-kitchen-tickets",
+        "orange-hotel-kitchen-seq",
+        STORAGE_KITCHEN_PAYMENTS,
+        "orange-hotel-kitchen-menu",
+        300,
+      );
+      const baristaSnapshot = readPosState<unknown, BaristaPaymentRecord, unknown>(
+        STORAGE_BARISTA_STATE,
+        "orange-hotel-barista-orders",
+        "orange-hotel-barista-seq",
+        STORAGE_BARISTA_PAYMENTS,
+        "orange-hotel-barista-menu",
+        490,
+      );
 
-    setBookingTransactions(
-      cashierSnapshot.transactions.map((tx) => ({
-        ...tx,
-        status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
-      })),
-    );
-    setKitchenPayments(kitchenSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
-    setBaristaPayments(baristaSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
+      setBookingTransactions(
+        cashierSnapshot.transactions.map((tx) => ({
+          ...tx,
+          status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
+        })),
+      );
+      setKitchenPayments(kitchenSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
+      setBaristaPayments(baristaSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
+    };
+
+    refreshPayments();
+
+    const unsubscribeCashier = subscribeToSyncedStorageKey("orange-hotel-cashier-state", refreshPayments);
+    const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, refreshPayments);
+    const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, refreshPayments);
+
+    return () => {
+      unsubscribeCashier();
+      unsubscribeKitchen();
+      unsubscribeBarista();
+    };
   }, []);
 
   const bookingRows = useMemo<PaymentRow[]>(

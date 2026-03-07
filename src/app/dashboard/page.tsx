@@ -18,6 +18,7 @@ import {
   FileText,
 } from "lucide-react";
 import { readRoomsState } from "@/app/lib/rooms-storage";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 interface CashierTransaction {
   total: number;
@@ -49,24 +50,6 @@ export default function OverviewPage() {
   const [rooms, setRooms] = useState(ROOMS);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
-    const savedShift = localStorage.getItem("orange-hotel-shift");
-    const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
-    const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
-    const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
-    setRooms(readRoomsState());
-
-    if (savedRole) setRole(savedRole);
-    if (savedShift) setShift(savedShift);
-
-    setBookingRevenue(
-      cashierSnapshot.transactions
-        .filter((tx) => tx.status !== "credit")
-        .reduce((sum, tx) => sum + (tx.total || 0), 0),
-    );
-    setActiveKitchen(kitchenSnapshot.tickets.length);
-    setActiveBarista(baristaSnapshot.tickets.length);
-
     const collectPaymentMetrics = (records: POSPaymentRecord[]) => {
       const today = new Date().toDateString();
       const paid = records
@@ -82,17 +65,47 @@ export default function OverviewPage() {
       return { paid, credit, settledCount };
     };
 
-    let kitchenMetrics = { paid: 0, credit: 0, settledCount: 0 };
-    let baristaMetrics = { paid: 0, credit: 0, settledCount: 0 };
+    const refreshOverview = () => {
+      const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+      const savedShift = localStorage.getItem("orange-hotel-shift");
+      const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
+      const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
+      const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
+      setRooms(readRoomsState());
 
-    kitchenMetrics = collectPaymentMetrics(kitchenSnapshot.payments);
-    baristaMetrics = collectPaymentMetrics(baristaSnapshot.payments);
+      if (savedRole) setRole(savedRole);
+      if (savedShift) setShift(savedShift);
 
-    setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
-    setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
-    setSettledToday(kitchenMetrics.settledCount + baristaMetrics.settledCount);
+      setBookingRevenue(
+        cashierSnapshot.transactions
+          .filter((tx) => tx.status !== "credit")
+          .reduce((sum, tx) => sum + (tx.total || 0), 0),
+      );
+      setActiveKitchen(kitchenSnapshot.tickets.length);
+      setActiveBarista(baristaSnapshot.tickets.length);
 
-    setMounted(true);
+      const kitchenMetrics = collectPaymentMetrics(kitchenSnapshot.payments);
+      const baristaMetrics = collectPaymentMetrics(baristaSnapshot.payments);
+
+      setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
+      setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
+      setSettledToday(kitchenMetrics.settledCount + baristaMetrics.settledCount);
+      setMounted(true);
+    };
+
+    refreshOverview();
+
+    const unsubscribeCashier = subscribeToSyncedStorageKey("orange-hotel-cashier-state", refreshOverview);
+    const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, refreshOverview);
+    const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, refreshOverview);
+    const unsubscribeRooms = subscribeToSyncedStorageKey("orange-hotel-rooms-state", refreshOverview);
+
+    return () => {
+      unsubscribeCashier();
+      unsubscribeKitchen();
+      unsubscribeBarista();
+      unsubscribeRooms();
+    };
   }, []);
 
   const occupiedRooms = useMemo(() => rooms.filter((room) => room.status === "occupied").length, [rooms]);
