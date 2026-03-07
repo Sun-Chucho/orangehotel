@@ -21,7 +21,6 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
-import { useRouter } from "next/navigation";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type TransactionTab = "completed" | "credit";
@@ -95,7 +94,6 @@ function isOverstay(record: BookingRecord): boolean {
 export default function BookingPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
-  const router = useRouter();
   const today = new Date().toISOString().slice(0, 10);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
@@ -298,8 +296,7 @@ export default function BookingPage() {
     });
     if (!approved) return;
     saveBooking("credit", "credit");
-    router.push("/dashboard/rooms");
-    router.refresh();
+    window.location.assign("/dashboard/rooms");
   };
 
   const openExtendStay = (booking: BookingRecord) => {
