@@ -112,6 +112,9 @@ export default function BookingPage() {
 
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
+  const [selectedExtendBookingId, setSelectedExtendBookingId] = useState<string | null>(null);
+  const [extendCheckOutDate, setExtendCheckOutDate] = useState("");
+  const [extendCheckOutTime, setExtendCheckOutTime] = useState("12:00");
 
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
@@ -249,6 +252,7 @@ export default function BookingPage() {
     setReceiptSeq(nextReceipt);
     writeCashierState(nextTransactions, nextReceipt);
     markRoomStatus(selectedRoomNumber, "occupied");
+    setTransactionTab(status === "credit" ? "credit" : "completed");
 
     setGuestName("");
     setPhone("");
@@ -268,6 +272,48 @@ export default function BookingPage() {
     if (isDirector) return;
     if (!canSubmitBooking) return;
     setShowSettlementPopup(true);
+  };
+
+  const openExtendStay = (booking: BookingRecord) => {
+    if (isDirector || booking.status === "checked-out") return;
+    setSelectedExtendBookingId(booking.id);
+    setExtendCheckOutDate(booking.checkOutDate);
+    setExtendCheckOutTime(booking.checkOutTime || "12:00");
+  };
+
+  const applyExtendStay = async () => {
+    if (isDirector || !selectedExtendBookingId || !extendCheckOutDate || !extendCheckOutTime) return;
+
+    const booking = transactions.find((entry) => entry.id === selectedExtendBookingId);
+    if (!booking) return;
+
+    const nextNights = daysBetween(booking.checkInDate, extendCheckOutDate);
+    if (nextNights < 1) return;
+
+    const approved = await confirm({
+      title: "Extend Stay",
+      description: `Are you sure you want to extend ${booking.guestName} in room ${booking.roomNumber} until ${extendCheckOutDate} ${extendCheckOutTime}?`,
+      actionLabel: "Extend Stay",
+    });
+    if (!approved) return;
+
+    const nextTransactions = transactions.map((entry) =>
+      entry.id === selectedExtendBookingId
+        ? {
+            ...entry,
+            checkOutDate: extendCheckOutDate,
+            checkOutTime: extendCheckOutTime,
+            nights: nextNights,
+            total: nextNights * (entry.ratePerNight ?? 0),
+          }
+        : entry,
+    );
+
+    setTransactions(nextTransactions);
+    writeCashierState(nextTransactions, receiptSeq);
+    setSelectedExtendBookingId(null);
+    setExtendCheckOutDate("");
+    setExtendCheckOutTime("12:00");
   };
 
   return (
@@ -457,8 +503,9 @@ export default function BookingPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Room #</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest Name</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-In Date</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-Out Time</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-Out</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -467,7 +514,10 @@ export default function BookingPage() {
                   <TableCell className="font-black">{tx.roomNumber}</TableCell>
                   <TableCell className="font-bold">{tx.guestName}</TableCell>
                   <TableCell className="font-bold">{tx.checkInDate}</TableCell>
-                  <TableCell className="font-bold">{tx.checkOutTime}</TableCell>
+                  <TableCell className="font-bold">
+                    <p>{tx.checkOutDate}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">{tx.checkOutTime}</p>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Badge
@@ -490,12 +540,25 @@ export default function BookingPage() {
                       </Badge>
                     </div>
                   </TableCell>
+                  <TableCell className="text-right">
+                    {tx.status !== "checked-out" && !isDirector ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => openExtendStay(tx)}
+                        className="h-9 font-black uppercase text-[10px] tracking-widest"
+                      >
+                        Extend Stay
+                      </Button>
+                    ) : (
+                      <Badge className="bg-gray-200 text-gray-700 border-gray-200 hover:bg-gray-200">View</Badge>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
 
               {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-12 text-center">
+                  <TableCell colSpan={6} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">No bookings found</p>
@@ -541,6 +604,43 @@ export default function BookingPage() {
               <div className="flex justify-end">
                 <Button variant="outline" onClick={() => setRoomPickerOpen(false)}>
                   Close
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {selectedExtendBookingId && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Extend Stay</CardTitle>
+              <CardDescription>Update the guest check-out date and time.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">New Check-Out Date</p>
+                <Input type="date" value={extendCheckOutDate} onChange={(event) => setExtendCheckOutDate(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">New Check-Out Time</p>
+                <Input type="time" value={extendCheckOutTime} onChange={(event) => setExtendCheckOutTime(event.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedExtendBookingId(null);
+                    setExtendCheckOutDate("");
+                    setExtendCheckOutTime("12:00");
+                  }}
+                  className="h-11 font-black uppercase text-[10px] tracking-widest"
+                >
+                  Close
+                </Button>
+                <Button onClick={applyExtendStay} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                  Save Extension
                 </Button>
               </div>
             </CardContent>
