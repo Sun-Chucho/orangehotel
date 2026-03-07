@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Role, ROOMS, INVENTORY } from "@/app/lib/mock-data";
+import { Role, ROOMS, INVENTORY, InventoryItem } from "@/app/lib/mock-data";
 import {
   CompanyStockCategory,
   CompanyStockItem,
@@ -27,6 +27,7 @@ import {
   ArrowDownRight,
   FileText,
 } from "lucide-react";
+import { STORAGE_INVENTORY_ITEMS } from "@/app/lib/inventory-transfer";
 
 interface CashierTransaction {
   total: number;
@@ -69,6 +70,7 @@ export default function OverviewPage() {
   const [foodRevenue, setFoodRevenue] = useState(0);
   const [creditExposure, setCreditExposure] = useState(0);
   const [settledToday, setSettledToday] = useState(0);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(INVENTORY);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
@@ -77,6 +79,7 @@ export default function OverviewPage() {
     const kitchenQueue = localStorage.getItem("orange-hotel-kitchen-tickets");
     const baristaQueue = localStorage.getItem("orange-hotel-barista-orders");
     const companyStock = localStorage.getItem(STORAGE_COMPANY_STOCK);
+    const savedInventory = localStorage.getItem(STORAGE_INVENTORY_ITEMS);
     const kitchenPayments = localStorage.getItem("orange-hotel-kitchen-payments");
     const baristaPayments = localStorage.getItem("orange-hotel-barista-payments");
 
@@ -122,6 +125,15 @@ export default function OverviewPage() {
         if (Array.isArray(parsed)) setCompanyStockItems(parsed);
       } catch {
         setCompanyStockItems([]);
+      }
+    }
+
+    if (savedInventory) {
+      try {
+        const parsed = JSON.parse(savedInventory) as InventoryItem[];
+        if (Array.isArray(parsed)) setInventoryItems(parsed);
+      } catch {
+        setInventoryItems(INVENTORY);
       }
     }
 
@@ -172,7 +184,7 @@ export default function OverviewPage() {
     localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(companyStockItems));
   }, [companyStockItems]);
 
-  const lowStock = useMemo(() => INVENTORY.filter((item) => item.stock < item.minStock), []);
+  const lowStock = useMemo(() => inventoryItems.filter((item) => item.stock < item.minStock), [inventoryItems]);
   const occupiedRooms = useMemo(() => ROOMS.filter((room) => room.status === "occupied").length, []);
   const recentRooms = useMemo(() => ROOMS.slice(0, 4), []);
   const isDirector = role === "director";

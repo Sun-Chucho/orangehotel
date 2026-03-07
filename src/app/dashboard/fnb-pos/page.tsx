@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +11,18 @@ import { useIsDirector } from "@/hooks/use-is-director";
 
 export default function FnBPosPage() {
   const isDirector = useIsDirector();
+  const router = useRouter();
+
+  useEffect(() => {
+    const role = localStorage.getItem("orange-hotel-role");
+    if (role === "kitchen") {
+      router.replace("/dashboard/kitchen");
+      return;
+    }
+    if (role === "barista") {
+      router.replace("/dashboard/barista");
+    }
+  }, [router]);
 
   return (
     <div className="space-y-6">

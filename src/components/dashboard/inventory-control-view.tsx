@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRightLeft, Plus } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 
-export type InventoryTab = "kitchen-stock" | "barista-stock" | "stock-control";
+export type InventoryTab = "kitchen-stock" | "barista-stock" | "stock-control" | "low-stock-threshold";
 type ItemCategory = "Kitchen" | "Bar";
 type StockControlTab = "kitchen" | "barista";
 
@@ -29,7 +29,13 @@ function getStockLabel(stock: number, minStock: number) {
   return "In Stock";
 }
 
-export function InventoryControlView({ initialTab }: { initialTab: InventoryTab }) {
+export function InventoryControlView({
+  initialTab,
+  visibleTabs = ["kitchen-stock", "barista-stock", "stock-control", "low-stock-threshold"],
+}: {
+  initialTab: InventoryTab;
+  visibleTabs?: InventoryTab[];
+}) {
   const isDirector = useIsDirector();
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
   const [stockControlTab, setStockControlTab] = useState<StockControlTab>("kitchen");
@@ -52,10 +58,17 @@ export function InventoryControlView({ initialTab }: { initialTab: InventoryTab 
   const [baristaConversionValue, setBaristaConversionValue] = useState("1");
   const [kitchenConversionNote, setKitchenConversionNote] = useState("");
   const [baristaConversionNote, setBaristaConversionNote] = useState("");
+  const [thresholdDrafts, setThresholdDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) {
+      setActiveTab(initialTab);
+    }
+  }, [activeTab, initialTab, visibleTabs]);
 
   useEffect(() => {
     const inv = localStorage.getItem(STORAGE_INVENTORY_ITEMS);
@@ -86,6 +99,12 @@ export function InventoryControlView({ initialTab }: { initialTab: InventoryTab 
   useEffect(() => localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(items)), [items]);
   useEffect(() => localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(storeItems)), [storeItems]);
   useEffect(() => localStorage.setItem(STORAGE_STORE_MOVEMENTS, JSON.stringify(movementLogs)), [movementLogs]);
+
+  useEffect(() => {
+    setThresholdDrafts(
+      Object.fromEntries(items.map((item) => [item.id, String(item.minStock)])),
+    );
+  }, [items]);
 
   const kitchenStore = useMemo(() => storeItems.filter((i) => i.lane === "kitchen"), [storeItems]);
   const baristaStore = useMemo(() => storeItems.filter((i) => i.lane === "barista"), [storeItems]);
@@ -267,6 +286,74 @@ export function InventoryControlView({ initialTab }: { initialTab: InventoryTab 
     </Card>
   );
 
+  const saveThreshold = (itemId: string) => {
+    if (isDirector) return;
+    const nextValue = Number(thresholdDrafts[itemId]);
+    if (Number.isNaN(nextValue) || nextValue < 0) return;
+    setItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, minStock: nextValue } : item)),
+    );
+  };
+
+  const renderThresholdTable = () => (
+    <Card className="shadow-sm">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg uppercase font-black">Low Stock Threshold</CardTitle>
+        <CardDescription>Set the minimum stock level for each item so manager notifications appear when stock falls below that number.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Category</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Current Stock</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Threshold</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold uppercase text-[10px] tracking-widest">{item.category}</TableCell>
+                <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="w-[180px]">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={thresholdDrafts[item.id] ?? String(item.minStock)}
+                    onChange={(event) =>
+                      setThresholdDrafts((current) => ({ ...current, [item.id]: event.target.value }))
+                    }
+                    placeholder="Threshold"
+                    disabled={isDirector}
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    className="h-9 font-black uppercase text-[10px] tracking-widest"
+                    onClick={() => saveThreshold(item.id)}
+                    disabled={isDirector}
+                  >
+                    Save
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {items.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                  No inventory items found
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+
   const renderStockControl = (
     lane: StoreLane,
     list: MainStoreItem[],
@@ -383,13 +470,24 @@ export function InventoryControlView({ initialTab }: { initialTab: InventoryTab 
         </Card>
       )}
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
-        <TabsList className="h-11">
-          <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
-          <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">Barista Stock</TabsTrigger>
-          <TabsTrigger value="stock-control" className="font-black uppercase text-[10px] tracking-widest">Stock Control</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {visibleTabs.length > 1 && (
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
+          <TabsList className="h-11">
+            {visibleTabs.includes("kitchen-stock") && (
+              <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
+            )}
+            {visibleTabs.includes("barista-stock") && (
+              <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">Barista Stock</TabsTrigger>
+            )}
+            {visibleTabs.includes("stock-control") && (
+              <TabsTrigger value="stock-control" className="font-black uppercase text-[10px] tracking-widest">Stock Control</TabsTrigger>
+            )}
+            {visibleTabs.includes("low-stock-threshold") && (
+              <TabsTrigger value="low-stock-threshold" className="font-black uppercase text-[10px] tracking-widest">Low Stock Threshold</TabsTrigger>
+            )}
+          </TabsList>
+        </Tabs>
+      )}
 
       {activeTab === "kitchen-stock" && (
         <div className="space-y-6">
@@ -443,6 +541,8 @@ export function InventoryControlView({ initialTab }: { initialTab: InventoryTab 
           </TabsContent>
         </Tabs>
       )}
+
+      {activeTab === "low-stock-threshold" && renderThresholdTable()}
     </div>
   );
 }

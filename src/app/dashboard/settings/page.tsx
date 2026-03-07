@@ -54,6 +54,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   timezone: "Africa/Dar_es_Salaam",
 };
 
+const FALLBACK_PRINTERS = [
+  "Generic / Text Only",
+  "POS-80 Printer",
+  "POS-58 Printer",
+  "Kitchen Printer",
+  "Barista Printer",
+];
+
 export default function SettingsPage() {
   const isDirector = useIsDirector();
   const [section, setSection] = useState<SettingsSection>("profile");
@@ -125,6 +133,11 @@ export default function SettingsPage() {
       [lane]: { ...current[lane], ...next },
     }));
   };
+
+  const selectablePrinters = useMemo(() => {
+    const currentSelections = [hardwareSettings.kitchen.printerName, hardwareSettings.barista.printerName].filter(Boolean);
+    return Array.from(new Set([...printerNames, ...currentSelections, ...FALLBACK_PRINTERS]));
+  }, [hardwareSettings.barista.printerName, hardwareSettings.kitchen.printerName, printerNames]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -328,15 +341,21 @@ export default function SettingsPage() {
                         disabled={isDirector}
                       >
                         <option value="">Select system printer</option>
-                        {printerNames.map((printer) => (
+                        {selectablePrinters.map((printer) => (
                           <option key={`${lane}-${printer}`} value={printer}>
                             {printer}
                           </option>
                         ))}
                       </select>
+                      <Input
+                        value={hardwareSettings[lane].printerName}
+                        onChange={(event) => updateHardwareLane(lane, { printerName: event.target.value })}
+                        placeholder="Or type printer name manually"
+                        disabled={isDirector}
+                      />
                       {printerNames.length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          No system printers were returned. The POS hardware bridge must expose printer discovery on this machine.
+                          No system printers were returned automatically. Choose a fallback printer above or type the exact Windows printer name manually.
                         </p>
                       )}
                     </div>

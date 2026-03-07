@@ -37,9 +37,10 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Kitchen Stock', href: '/dashboard/inventory/kitchen-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
   { label: 'Barista Stock', href: '/dashboard/inventory/barista-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
   { label: 'Stock Control', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Low Stock Threshold', href: '/dashboard/inventory/low-stock-threshold', icon: Package, roles: ['manager', 'director', 'inventory'] },
   { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director', 'inventory'] },
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: ['manager', 'director'] },
-  { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['manager', 'director', 'kitchen', 'barista'] },
+  { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['director', 'kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
@@ -50,8 +51,8 @@ const NAV_ITEMS: NavItem[] = [
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
   cashier: ['/dashboard/cashier'],
-  kitchen: ['/dashboard/fnb-pos'],
-  barista: ['/dashboard/fnb-pos'],
+  kitchen: ['/dashboard/kitchen'],
+  barista: ['/dashboard/barista'],
 };
 
 export function SidebarNav({ role }: { role: Role }) {
@@ -65,7 +66,14 @@ export function SidebarNav({ role }: { role: Role }) {
   };
   
   const filteredNav = useMemo(() => {
-    const visible = NAV_ITEMS.filter(item => item.roles.includes(role));
+    const visible = NAV_ITEMS
+      .filter(item => item.roles.includes(role))
+      .map((item) => {
+        if (item.href !== "/dashboard/fnb-pos") return item;
+        if (role === "kitchen") return { ...item, label: "Kitchen POS", href: "/dashboard/kitchen" };
+        if (role === "barista") return { ...item, label: "Barista POS", href: "/dashboard/barista" };
+        return item;
+      });
     const priority = ROLE_NAV_PRIORITY[role];
     if (!priority || priority.length === 0) return visible;
 
@@ -108,7 +116,10 @@ export function SidebarNav({ role }: { role: Role }) {
         </div>
         {filteredNav.map((item) => {
           const isFnBPosRoute = pathname === "/dashboard/fnb-pos" || pathname === "/dashboard/kitchen" || pathname === "/dashboard/barista";
-          const isActive = item.href === "/dashboard/fnb-pos" ? isFnBPosRoute : pathname === item.href;
+          const isRolePosRoute =
+            (item.href === "/dashboard/kitchen" && pathname === "/dashboard/kitchen") ||
+            (item.href === "/dashboard/barista" && pathname === "/dashboard/barista");
+          const isActive = item.href === "/dashboard/fnb-pos" ? isFnBPosRoute : isRolePosRoute || pathname === item.href;
           return (
             <Link
               key={item.href}
