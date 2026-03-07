@@ -148,6 +148,15 @@ export default function BookingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get("tab");
+    if (requestedTab === "completed" || requestedTab === "credit") {
+      setTransactionTab(requestedTab);
+    }
+  }, []);
+
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
   const packageConfig = selectedPackage === "none" ? null : SPECIAL_PACKAGES[selectedPackage];
   const selectedRate = packageConfig
@@ -287,6 +296,10 @@ export default function BookingPage() {
     setShowSettlementPopup(true);
   };
 
+  const redirectToBookedRooms = (tab: TransactionTab) => {
+    window.location.assign(`/dashboard/cashier?tab=${tab}#booked-rooms`);
+  };
+
   const confirmCreditBooking = async () => {
     if (isDirector || !canSubmitBooking) return;
     const approved = await confirm({
@@ -296,7 +309,12 @@ export default function BookingPage() {
     });
     if (!approved) return;
     saveBooking("credit", "credit");
-    window.location.assign("/dashboard/rooms");
+    redirectToBookedRooms("credit");
+  };
+
+  const completePaidBooking = (paymentMethod: Exclude<PaymentMethod, "credit">) => {
+    saveBooking("completed", paymentMethod);
+    redirectToBookedRooms("completed");
   };
 
   const openExtendStay = (booking: BookingRecord) => {
@@ -506,7 +524,7 @@ export default function BookingPage() {
       </Card>
       )}
 
-      <Card className="border-none shadow-sm">
+      <Card id="booked-rooms" className="border-none shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -732,13 +750,13 @@ export default function BookingPage() {
               <CardDescription>Select cash, card, or mobile</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button onClick={() => saveBooking("completed", "cash")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+              <Button onClick={() => completePaidBooking("cash")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
                 Cash
               </Button>
-              <Button onClick={() => saveBooking("completed", "card")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+              <Button onClick={() => completePaidBooking("card")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
                 Card
               </Button>
-              <Button onClick={() => saveBooking("completed", "mobile-money")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+              <Button onClick={() => completePaidBooking("mobile-money")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
                 Mobile
               </Button>
               <Button
