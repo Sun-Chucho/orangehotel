@@ -9,6 +9,8 @@ import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { removeJson, STORAGE_CASHIER_STATE } from "@/app/lib/storage";
+import { getDefaultRooms, writeRoomsState } from "@/app/lib/rooms-storage";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
 
@@ -57,6 +59,14 @@ export default function DashboardLayout({
 
       await hydrateDefaultAppStateFromFirebase();
       if (!active) return;
+
+      const bookingResetVersion = "2026-03-07-reset-booking-records";
+      const bookingResetMarker = "orange-hotel-booking-reset-version";
+      if (localStorage.getItem(bookingResetMarker) !== bookingResetVersion) {
+        removeJson(STORAGE_CASHIER_STATE);
+        writeRoomsState(getDefaultRooms());
+        localStorage.setItem(bookingResetMarker, bookingResetVersion);
+      }
 
       setRole(savedRole as Role);
       if (savedShift) setShift(savedShift);

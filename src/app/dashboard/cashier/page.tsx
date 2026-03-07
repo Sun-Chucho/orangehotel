@@ -112,6 +112,7 @@ export default function BookingPage() {
 
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
+  const [showCreditRecordedPopup, setShowCreditRecordedPopup] = useState(false);
   const [selectedExtendBookingId, setSelectedExtendBookingId] = useState<string | null>(null);
   const [extendCheckOutDate, setExtendCheckOutDate] = useState("");
   const [extendCheckOutTime, setExtendCheckOutTime] = useState("12:00");
@@ -210,6 +211,7 @@ export default function BookingPage() {
     setPackageRate("");
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
+    setShowCreditRecordedPopup(status === "credit");
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
@@ -643,6 +645,25 @@ export default function BookingPage() {
                   Save Extension
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {!isDirector && showCreditRecordedPopup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Credit Booking Recorded</CardTitle>
+              <CardDescription>The room is now booked and marked occupied under credit transactions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => setShowCreditRecordedPopup(false)}
+                className="w-full h-11 font-black uppercase text-[10px] tracking-widest"
+              >
+                Close
+              </Button>
             </CardContent>
           </Card>
         </div>
