@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> = [
   { value: "kitchen-equipment", label: "Kitchen Equipment" },
@@ -30,8 +31,19 @@ export default function CompanyStockPage() {
   const [category, setCategory] = useState<CompanyStockCategory>("kitchen-equipment");
 
   useEffect(() => {
-    const saved = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
-    if (Array.isArray(saved)) setItems(saved);
+    const applyCompanyStockSnapshot = () => {
+      const saved = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
+      if (Array.isArray(saved)) {
+        setItems(saved);
+        return;
+      }
+      setItems([]);
+    };
+
+    applyCompanyStockSnapshot();
+    const unsubscribeCompanyStock = subscribeToSyncedStorageKey(STORAGE_COMPANY_STOCK, applyCompanyStockSnapshot);
+
+    return () => unsubscribeCompanyStock();
   }, []);
 
   const filteredItems = useMemo(() => items.filter((item) => item.category === tab), [items, tab]);
