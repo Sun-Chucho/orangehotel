@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, Coffee, Minus, Plus, Receipt, Search, Trash2, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type BaristaCategory = "all" | "espresso" | "coffee" | "tea" | "cold" | "snacks";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -126,18 +127,25 @@ export default function BaristaPage() {
   }, []);
 
   useEffect(() => {
-    const snapshot = readPosState<BaristaTicket, BaristaPaymentRecord, BaristaMenuItem>(
-      STORAGE_BARISTA_STATE,
-      STORAGE_TICKETS,
-      STORAGE_SEQ,
-      STORAGE_PAYMENTS,
-      STORAGE_MENU,
-      490,
-    );
-    setTickets(snapshot.tickets);
-    setTicketSeq(snapshot.ticketSeq);
-    setBaristaPayments(snapshot.payments);
-    setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : BARISTA_MENU);
+    const applyBaristaSnapshot = () => {
+      const snapshot = readPosState<BaristaTicket, BaristaPaymentRecord, BaristaMenuItem>(
+        STORAGE_BARISTA_STATE,
+        STORAGE_TICKETS,
+        STORAGE_SEQ,
+        STORAGE_PAYMENTS,
+        STORAGE_MENU,
+        490,
+      );
+      setTickets(snapshot.tickets);
+      setTicketSeq(snapshot.ticketSeq);
+      setBaristaPayments(snapshot.payments);
+      setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : BARISTA_MENU);
+    };
+
+    applyBaristaSnapshot();
+    const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyBaristaSnapshot);
+
+    return () => unsubscribeBarista();
   }, []);
 
   const loadFromStoreData = () => {
@@ -149,6 +157,13 @@ export default function BaristaPage() {
 
   useEffect(() => {
     loadFromStoreData();
+    const unsubscribeMovements = subscribeToSyncedStorageKey(STORAGE_STORE_MOVEMENTS, loadFromStoreData);
+    const unsubscribeUsage = subscribeToSyncedStorageKey(STORAGE_STORE_USAGE, loadFromStoreData);
+
+    return () => {
+      unsubscribeMovements();
+      unsubscribeUsage();
+    };
   }, []);
 
   useEffect(() => {

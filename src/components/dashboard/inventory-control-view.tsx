@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRightLeft, Plus, Save } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 export type InventoryTab =
   | "kitchen-stock"
@@ -94,16 +95,31 @@ export function InventoryControlView({
   }, [activeTab, visibleTabs]);
 
   useEffect(() => {
-    const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
-    const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS);
-    const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
-    const rules = readJson<StockLogicRule[]>(STORAGE_STOCK_LOGIC);
-    if (Array.isArray(inv)) setItems(inv);
-    if (Array.isArray(store)) {
-      setStoreItems(store.map((item) => ({ ...item, lane: item.lane === "barista" ? "barista" : "kitchen" })));
-    }
-    if (Array.isArray(moves)) setMovementLogs(moves);
-    if (Array.isArray(rules)) setLogicRules(rules);
+    const applyInventorySnapshot = () => {
+      const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
+      const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS);
+      const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
+      const rules = readJson<StockLogicRule[]>(STORAGE_STOCK_LOGIC);
+      if (Array.isArray(inv)) setItems(inv);
+      if (Array.isArray(store)) {
+        setStoreItems(store.map((item) => ({ ...item, lane: item.lane === "barista" ? "barista" : "kitchen" })));
+      }
+      if (Array.isArray(moves)) setMovementLogs(moves);
+      if (Array.isArray(rules)) setLogicRules(rules);
+    };
+
+    applyInventorySnapshot();
+    const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyInventorySnapshot);
+    const unsubscribeStore = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applyInventorySnapshot);
+    const unsubscribeMoves = subscribeToSyncedStorageKey(STORAGE_STORE_MOVEMENTS, applyInventorySnapshot);
+    const unsubscribeLogic = subscribeToSyncedStorageKey(STORAGE_STOCK_LOGIC, applyInventorySnapshot);
+
+    return () => {
+      unsubscribeInventory();
+      unsubscribeStore();
+      unsubscribeMoves();
+      unsubscribeLogic();
+    };
   }, []);
 
   const kitchenStore = useMemo(() => storeItems.filter((item) => item.lane === "kitchen"), [storeItems]);

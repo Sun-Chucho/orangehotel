@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type KitchenCategory = "all" | "breakfast" | "lunch" | "dinner";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -126,18 +127,25 @@ export default function KitchenPage() {
   }, []);
 
   useEffect(() => {
-    const snapshot = readPosState<KitchenTicket, KitchenPaymentRecord, KitchenMenuItem>(
-      STORAGE_KITCHEN_STATE,
-      STORAGE_TICKETS,
-      STORAGE_SEQ,
-      STORAGE_PAYMENTS,
-      STORAGE_MENU,
-      300,
-    );
-    setTickets(snapshot.tickets);
-    setTicketSeq(snapshot.ticketSeq);
-    setKitchenPayments(snapshot.payments);
-    setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : KITCHEN_MENU);
+    const applyKitchenSnapshot = () => {
+      const snapshot = readPosState<KitchenTicket, KitchenPaymentRecord, KitchenMenuItem>(
+        STORAGE_KITCHEN_STATE,
+        STORAGE_TICKETS,
+        STORAGE_SEQ,
+        STORAGE_PAYMENTS,
+        STORAGE_MENU,
+        300,
+      );
+      setTickets(snapshot.tickets);
+      setTicketSeq(snapshot.ticketSeq);
+      setKitchenPayments(snapshot.payments);
+      setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : KITCHEN_MENU);
+    };
+
+    applyKitchenSnapshot();
+    const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, applyKitchenSnapshot);
+
+    return () => unsubscribeKitchen();
   }, []);
 
   const loadFromStoreData = () => {
@@ -149,6 +157,13 @@ export default function KitchenPage() {
 
   useEffect(() => {
     loadFromStoreData();
+    const unsubscribeMovements = subscribeToSyncedStorageKey(STORAGE_STORE_MOVEMENTS, loadFromStoreData);
+    const unsubscribeUsage = subscribeToSyncedStorageKey(STORAGE_STORE_USAGE, loadFromStoreData);
+
+    return () => {
+      unsubscribeMovements();
+      unsubscribeUsage();
+    };
   }, []);
 
   useEffect(() => {
