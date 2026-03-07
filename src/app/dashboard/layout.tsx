@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Role } from "@/app/lib/mock-data";
+import { hydrateDefaultAppStateFromFirebase, runOneTimeBusinessDataReset } from "@/app/lib/firebase-sync";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -42,22 +43,36 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('orange-hotel-role');
-    const savedShift = localStorage.getItem('orange-hotel-shift');
-    if (!savedRole || !VALID_ROLES.includes(savedRole as Role)) {
-      localStorage.removeItem('orange-hotel-role');
-      localStorage.removeItem('orange-hotel-shift');
-      router.replace('/staff');
-      return;
+    let active = true;
+
+    async function initializeDashboard() {
+      const savedRole = localStorage.getItem('orange-hotel-role');
+      const savedShift = localStorage.getItem('orange-hotel-shift');
+      if (!savedRole || !VALID_ROLES.includes(savedRole as Role)) {
+        localStorage.removeItem('orange-hotel-role');
+        localStorage.removeItem('orange-hotel-shift');
+        router.replace('/staff');
+        return;
+      }
+
+      await runOneTimeBusinessDataReset("2026-03-07-clean-firebase-db");
+      await hydrateDefaultAppStateFromFirebase();
+      if (!active) return;
+
+      setRole(savedRole as Role);
+      if (savedShift) setShift(savedShift);
+      setMounted(true);
+
+      if (typeof window !== "undefined") {
+        setSidebarOpen(window.innerWidth >= 768);
+      }
     }
 
-    setRole(savedRole as Role);
-    if (savedShift) setShift(savedShift);
-    setMounted(true);
+    void initializeDashboard();
 
-    if (typeof window !== "undefined") {
-      setSidebarOpen(window.innerWidth >= 768);
-    }
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   useEffect(() => {

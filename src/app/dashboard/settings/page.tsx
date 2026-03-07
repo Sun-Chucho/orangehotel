@@ -7,6 +7,7 @@ import {
   HardwareSettings,
   STORAGE_HARDWARE_SETTINGS,
 } from "@/app/lib/hardware-settings";
+import { readJson, writeJson } from "@/app/lib/storage";
 import { listSystemPrinters } from "@/app/lib/receipt-print";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,11 +73,9 @@ export default function SettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-
+    const parsed = readJson<Partial<AppSettings>>(STORAGE_KEY);
+    if (!parsed) return;
     try {
-      const parsed = JSON.parse(stored) as Partial<AppSettings>;
       setSettings((current) => ({ ...current, ...parsed }));
     } catch {
       setSettings(DEFAULT_SETTINGS);
@@ -84,11 +83,9 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_HARDWARE_SETTINGS);
-    if (!stored) return;
-
+    const parsed = readJson<Partial<HardwareSettings>>(STORAGE_HARDWARE_SETTINGS);
+    if (!parsed) return;
     try {
-      const parsed = JSON.parse(stored) as Partial<HardwareSettings>;
       setHardwareSettings({
         kitchen: { ...DEFAULT_HARDWARE_SETTINGS.kitchen, ...parsed.kitchen },
         barista: { ...DEFAULT_HARDWARE_SETTINGS.barista, ...parsed.barista },
@@ -111,8 +108,8 @@ export default function SettingsPage() {
 
   const saveChanges = () => {
     if (isDirector) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    localStorage.setItem(STORAGE_HARDWARE_SETTINGS, JSON.stringify(hardwareSettings));
+    writeJson(STORAGE_KEY, settings);
+    writeJson(STORAGE_HARDWARE_SETTINGS, hardwareSettings);
     setSavedAt(Date.now());
   };
 

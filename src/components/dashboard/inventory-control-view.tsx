@@ -11,6 +11,7 @@ import {
   StoreMovementLog,
   TransferDestination,
 } from "@/app/lib/inventory-transfer";
+import { readJson, writeJson } from "@/app/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -71,29 +72,14 @@ export function InventoryControlView({
   }, [activeTab, initialTab, visibleTabs]);
 
   useEffect(() => {
-    const inv = localStorage.getItem(STORAGE_INVENTORY_ITEMS);
-    const store = localStorage.getItem(STORAGE_MAIN_STORE_ITEMS);
-    const moves = localStorage.getItem(STORAGE_STORE_MOVEMENTS);
-    if (inv) {
-      try {
-        const parsed = JSON.parse(inv) as InventoryItem[];
-        if (Array.isArray(parsed)) setItems(parsed);
-      } catch {}
+    const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
+    const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS);
+    const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
+    if (Array.isArray(inv)) setItems(inv);
+    if (Array.isArray(store)) {
+      setStoreItems(store.map((i) => ({ ...i, lane: i.lane === "barista" ? "barista" : "kitchen" })));
     }
-    if (store) {
-      try {
-        const parsed = JSON.parse(store) as Array<MainStoreItem & { lane?: StoreLane }>;
-        if (Array.isArray(parsed)) {
-          setStoreItems(parsed.map((i) => ({ ...i, lane: i.lane === "barista" ? "barista" : "kitchen" })));
-        }
-      } catch {}
-    }
-    if (moves) {
-      try {
-        const parsed = JSON.parse(moves) as StoreMovementLog[];
-        if (Array.isArray(parsed)) setMovementLogs(parsed);
-      } catch {}
-    }
+    if (Array.isArray(moves)) setMovementLogs(moves);
   }, []);
 
   useEffect(() => {
@@ -119,7 +105,7 @@ export function InventoryControlView({
 
     const nextStoreItems = [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: 1, lane }, ...storeItems];
     setStoreItems(nextStoreItems);
-    localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(nextStoreItems));
+    writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
 
     if (lane === "kitchen") {
       setKitchenName("");
@@ -176,9 +162,9 @@ export function InventoryControlView({
     setStoreItems(nextStoreItems);
     setItems(nextItems);
     setMovementLogs(nextMovementLogs);
-    localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(nextStoreItems));
-    localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(nextItems));
-    localStorage.setItem(STORAGE_STORE_MOVEMENTS, JSON.stringify(nextMovementLogs));
+    writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    writeJson(STORAGE_INVENTORY_ITEMS, nextItems);
+    writeJson(STORAGE_STORE_MOVEMENTS, nextMovementLogs);
 
     if (lane === "kitchen") {
       setKitchenMoveQty("1");
@@ -292,7 +278,7 @@ export function InventoryControlView({
     if (Number.isNaN(nextValue) || nextValue < 0) return;
     const nextItems = items.map((item) => (item.id === itemId ? { ...item, minStock: nextValue } : item));
     setItems(nextItems);
-    localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(nextItems));
+    writeJson(STORAGE_INVENTORY_ITEMS, nextItems);
   };
 
   const renderThresholdTable = () => (

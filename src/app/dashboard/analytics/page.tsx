@@ -11,6 +11,7 @@ import {
   STORAGE_STOCK_SALES,
   StockSalesRow,
 } from "@/app/lib/fnb-control";
+import { readJson } from "@/app/lib/storage";
 import {
   Area,
   AreaChart,
@@ -49,27 +50,12 @@ export default function AnalyticsPage() {
   const [stockSalesRows, setStockSalesRows] = useState<StockSalesRow[]>([]);
 
   useEffect(() => {
-    const bev = localStorage.getItem(STORAGE_BEVERAGE_COST);
-    const rec = localStorage.getItem(STORAGE_RECIPE_COST);
-    const ss = localStorage.getItem(STORAGE_STOCK_SALES);
-    if (bev) {
-      try {
-        const parsed = JSON.parse(bev) as BeverageCostRow[];
-        if (Array.isArray(parsed)) setBeverageRows(parsed);
-      } catch {}
-    }
-    if (rec) {
-      try {
-        const parsed = JSON.parse(rec) as RecipeCostRow[];
-        if (Array.isArray(parsed)) setRecipeRows(parsed);
-      } catch {}
-    }
-    if (ss) {
-      try {
-        const parsed = JSON.parse(ss) as StockSalesRow[];
-        if (Array.isArray(parsed)) setStockSalesRows(parsed);
-      } catch {}
-    }
+    const bev = readJson<BeverageCostRow[]>(STORAGE_BEVERAGE_COST);
+    const rec = readJson<RecipeCostRow[]>(STORAGE_RECIPE_COST);
+    const ss = readJson<StockSalesRow[]>(STORAGE_STOCK_SALES);
+    if (Array.isArray(bev)) setBeverageRows(bev);
+    if (Array.isArray(rec)) setRecipeRows(rec);
+    if (Array.isArray(ss)) setStockSalesRows(ss);
   }, []);
 
   const history = useMemo(() => {

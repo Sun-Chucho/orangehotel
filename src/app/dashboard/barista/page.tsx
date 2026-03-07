@@ -9,7 +9,7 @@ import {
   StoreUsageLog,
 } from "@/app/lib/inventory-transfer";
 import { printDepartmentReceipt } from "@/app/lib/receipt-print";
-import { readPosState, STORAGE_BARISTA_STATE, writePosState } from "@/app/lib/storage";
+import { readJson, readPosState, STORAGE_BARISTA_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -138,24 +138,10 @@ export default function BaristaPage() {
   }, []);
 
   const loadFromStoreData = () => {
-    const savedMovements = localStorage.getItem(STORAGE_STORE_MOVEMENTS);
-    const savedUsage = localStorage.getItem(STORAGE_STORE_USAGE);
-    if (savedMovements) {
-      try {
-        const parsed = JSON.parse(savedMovements) as StoreMovementLog[];
-        if (Array.isArray(parsed)) setFromStoreEntries(parsed.filter((entry) => entry.destination === "barista"));
-      } catch {
-        setFromStoreEntries([]);
-      }
-    }
-    if (savedUsage) {
-      try {
-        const parsed = JSON.parse(savedUsage) as StoreUsageLog[];
-        if (Array.isArray(parsed)) setUsageLogs(parsed.filter((entry) => entry.destination === "barista"));
-      } catch {
-        setUsageLogs([]);
-      }
-    }
+    const savedMovements = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
+    const savedUsage = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE);
+    setFromStoreEntries(Array.isArray(savedMovements) ? savedMovements.filter((entry) => entry.destination === "barista") : []);
+    setUsageLogs(Array.isArray(savedUsage) ? savedUsage.filter((entry) => entry.destination === "barista") : []);
   };
 
   useEffect(() => {
@@ -184,19 +170,10 @@ export default function BaristaPage() {
     };
     const next = [log, ...usageLogs];
     setUsageLogs(next);
-    const rawUsage = localStorage.getItem(STORAGE_STORE_USAGE);
-    let existingUsage: StoreUsageLog[] = [];
-    if (rawUsage) {
-      try {
-        const parsed = JSON.parse(rawUsage) as StoreUsageLog[];
-        if (Array.isArray(parsed)) existingUsage = parsed;
-      } catch {
-        existingUsage = [];
-      }
-    }
-    localStorage.setItem(
+    const existingUsage = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE) ?? [];
+    writeJson(
       STORAGE_STORE_USAGE,
-      JSON.stringify([...next, ...existingUsage.filter((i) => i.destination !== "barista")]),
+      [...next, ...existingUsage.filter((i) => i.destination !== "barista")],
     );
     setUseQty("1");
   };
@@ -384,9 +361,8 @@ export default function BaristaPage() {
       cancelledAt: Date.now(),
     };
 
-    const existingRaw = localStorage.getItem(STORAGE_CANCELLED);
-    const existing = existingRaw ? (JSON.parse(existingRaw) as CancelledBaristaTicket[]) : [];
-    localStorage.setItem(STORAGE_CANCELLED, JSON.stringify([cancelled, ...existing]));
+    const existing = readJson<CancelledBaristaTicket[]>(STORAGE_CANCELLED) ?? [];
+    writeJson(STORAGE_CANCELLED, [cancelled, ...existing]);
 
     const nextTickets = tickets.filter((ticket) => ticket.id !== id);
     setTickets(nextTickets);

@@ -9,7 +9,7 @@ import {
   CompanyStockItem,
   STORAGE_COMPANY_STOCK,
 } from "@/app/lib/company-stock";
-import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
+import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson } from "@/app/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,8 +76,8 @@ export default function OverviewPage() {
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
     const savedShift = localStorage.getItem("orange-hotel-shift");
-    const companyStock = localStorage.getItem(STORAGE_COMPANY_STOCK);
-    const savedInventory = localStorage.getItem(STORAGE_INVENTORY_ITEMS);
+    const companyStock = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
+    const savedInventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
     const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
     const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
     const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
@@ -93,23 +93,9 @@ export default function OverviewPage() {
     setActiveKitchen(kitchenSnapshot.tickets.length);
     setActiveBarista(baristaSnapshot.tickets.length);
 
-    if (companyStock) {
-      try {
-        const parsed = JSON.parse(companyStock) as CompanyStockItem[];
-        if (Array.isArray(parsed)) setCompanyStockItems(parsed);
-      } catch {
-        setCompanyStockItems([]);
-      }
-    }
+    if (Array.isArray(companyStock)) setCompanyStockItems(companyStock);
 
-    if (savedInventory) {
-      try {
-        const parsed = JSON.parse(savedInventory) as InventoryItem[];
-        if (Array.isArray(parsed)) setInventoryItems(parsed);
-      } catch {
-        setInventoryItems(INVENTORY);
-      }
-    }
+    if (Array.isArray(savedInventory)) setInventoryItems(savedInventory);
 
     const collectPaymentMetrics = (records: POSPaymentRecord[]) => {
       const today = new Date().toDateString();
@@ -203,7 +189,7 @@ export default function OverviewPage() {
       ...companyStockItems,
     ];
     setCompanyStockItems(nextItems);
-    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(nextItems));
+    writeJson(STORAGE_COMPANY_STOCK, nextItems);
     setAssetName("");
     setAssetDescription("");
     setAssetQty("1");

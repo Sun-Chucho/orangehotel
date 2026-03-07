@@ -11,6 +11,7 @@ import {
   StockDepartment,
   StockSalesRow,
 } from "@/app/lib/fnb-control";
+import { readJson, writeJson } from "@/app/lib/storage";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,32 +49,17 @@ export default function FnbSuitePage() {
   const [stockSalesUnits, setStockSalesUnits] = useState("0");
 
   useEffect(() => {
-    const bev = localStorage.getItem(STORAGE_BEVERAGE_COST);
-    const recipes = localStorage.getItem(STORAGE_RECIPE_COST);
-    const stockSales = localStorage.getItem(STORAGE_STOCK_SALES);
-    if (bev) {
-      try {
-        const parsed = JSON.parse(bev) as BeverageCostRow[];
-        if (Array.isArray(parsed)) setBeverageRows(parsed);
-      } catch {}
-    }
-    if (recipes) {
-      try {
-        const parsed = JSON.parse(recipes) as RecipeCostRow[];
-        if (Array.isArray(parsed)) setRecipeRows(parsed);
-      } catch {}
-    }
-    if (stockSales) {
-      try {
-        const parsed = JSON.parse(stockSales) as StockSalesRow[];
-        if (Array.isArray(parsed)) setStockSalesRows(parsed);
-      } catch {}
-    }
+    const bev = readJson<BeverageCostRow[]>(STORAGE_BEVERAGE_COST);
+    const recipes = readJson<RecipeCostRow[]>(STORAGE_RECIPE_COST);
+    const stockSales = readJson<StockSalesRow[]>(STORAGE_STOCK_SALES);
+    if (Array.isArray(bev)) setBeverageRows(bev);
+    if (Array.isArray(recipes)) setRecipeRows(recipes);
+    if (Array.isArray(stockSales)) setStockSalesRows(stockSales);
   }, []);
 
-  useEffect(() => localStorage.setItem(STORAGE_BEVERAGE_COST, JSON.stringify(beverageRows)), [beverageRows]);
-  useEffect(() => localStorage.setItem(STORAGE_RECIPE_COST, JSON.stringify(recipeRows)), [recipeRows]);
-  useEffect(() => localStorage.setItem(STORAGE_STOCK_SALES, JSON.stringify(stockSalesRows)), [stockSalesRows]);
+  useEffect(() => writeJson(STORAGE_BEVERAGE_COST, beverageRows), [beverageRows]);
+  useEffect(() => writeJson(STORAGE_RECIPE_COST, recipeRows), [recipeRows]);
+  useEffect(() => writeJson(STORAGE_STOCK_SALES, stockSalesRows), [stockSalesRows]);
 
   const beverageSummary = useMemo(() => {
     const totalRevenue = beverageRows.reduce((sum, row) => sum + row.salesRevenue, 0);

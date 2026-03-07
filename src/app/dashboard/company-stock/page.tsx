@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CompanyStockCategory, CompanyStockItem, STORAGE_COMPANY_STOCK } from "@/app/lib/company-stock";
+import { readJson, writeJson } from "@/app/lib/storage";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,14 +28,8 @@ export default function CompanyStockPage() {
   const [category, setCategory] = useState<CompanyStockCategory>("kitchen-equipment");
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_COMPANY_STOCK);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as CompanyStockItem[];
-      if (Array.isArray(parsed)) setItems(parsed);
-    } catch {
-      setItems([]);
-    }
+    const saved = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
+    if (Array.isArray(saved)) setItems(saved);
   }, []);
 
   const filteredItems = useMemo(() => items.filter((item) => item.category === tab), [items, tab]);
@@ -55,7 +50,7 @@ export default function CompanyStockPage() {
       ...items,
     ];
     setItems(nextItems);
-    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify(nextItems));
+    writeJson(STORAGE_COMPANY_STOCK, nextItems);
     setName("");
     setDescription("");
     setQuantity("1");

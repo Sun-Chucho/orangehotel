@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { readJson, writeJson } from "@/app/lib/storage";
 
 interface CancelledKitchenTicket {
   id: string;
@@ -48,14 +49,13 @@ export default function CancelledPage() {
   }, []);
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_CANCELLED) ?? localStorage.getItem(LEGACY_STORAGE_CANCELLED);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as CancelledKitchenTicket[];
-      if (Array.isArray(parsed)) setCancelled(parsed);
-    } catch {
-      setCancelled([]);
+    const current = readJson<CancelledKitchenTicket[]>(STORAGE_CANCELLED);
+    const legacy = readJson<CancelledKitchenTicket[]>(LEGACY_STORAGE_CANCELLED);
+    if (Array.isArray(current)) {
+      setCancelled(current);
+      return;
     }
+    if (Array.isArray(legacy)) setCancelled(legacy);
   }, []);
 
   const totalCancelledValue = useMemo(
@@ -72,7 +72,7 @@ export default function CancelledPage() {
     if (isDirector) return;
     if (!window.confirm("Clear all cancelled orders?")) return;
     setCancelled([]);
-    localStorage.setItem(STORAGE_CANCELLED, JSON.stringify([]));
+    writeJson(STORAGE_CANCELLED, []);
   };
 
   return (
