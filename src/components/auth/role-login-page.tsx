@@ -3,19 +3,23 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coffee, Package, ShieldCheck, ShoppingCart, Sun, Moon, Utensils } from "lucide-react";
+import { Building2, Coffee, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
 import { Role } from "@/app/lib/mock-data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 
 interface RoleLoginPageProps {
   role: Role;
 }
 
-const ROLE_CONFIG: Record<Role, { label: string; description: string; color: string; destination: string; icon: typeof ShieldCheck }> = {
+const DEFAULT_PASSWORD = "1234";
+
+const ROLE_CONFIG: Record<Role, { label: string; username: string; description: string; color: string; destination: string; icon: typeof ShieldCheck }> = {
   manager: {
     label: "Hotel Manager",
+    username: "manager",
     description: "Full system oversight and operations control.",
     color: "bg-orange-500",
     destination: "/dashboard",
@@ -23,6 +27,7 @@ const ROLE_CONFIG: Record<Role, { label: string; description: string; color: str
   },
   director: {
     label: "Managing Director",
+    username: "md",
     description: "Executive overview and strategic read-only controls.",
     color: "bg-emerald-700",
     destination: "/dashboard",
@@ -30,6 +35,7 @@ const ROLE_CONFIG: Record<Role, { label: string; description: string; color: str
   },
   inventory: {
     label: "Inventory Manager",
+    username: "inventory",
     description: "Stock control, movements, and procurement management.",
     color: "bg-black",
     destination: "/dashboard/inventory",
@@ -37,6 +43,7 @@ const ROLE_CONFIG: Record<Role, { label: string; description: string; color: str
   },
   cashier: {
     label: "Reception Booking",
+    username: "reception",
     description: "Bookings, guest check-in, and reception payments.",
     color: "bg-orange-600",
     destination: "/dashboard/cashier",
@@ -44,6 +51,7 @@ const ROLE_CONFIG: Record<Role, { label: string; description: string; color: str
   },
   kitchen: {
     label: "Kitchen POS",
+    username: "kitchen",
     description: "Kitchen orders, queue handling, and stock usage.",
     color: "bg-orange-700",
     destination: "/dashboard/kitchen",
@@ -51,6 +59,7 @@ const ROLE_CONFIG: Record<Role, { label: string; description: string; color: str
   },
   barista: {
     label: "Barista POS",
+    username: "barista",
     description: "Barista orders, beverage service, and stock usage.",
     color: "bg-orange-400",
     destination: "/dashboard/barista",
@@ -62,9 +71,18 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const router = useRouter();
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
+  const [username, setUsername] = useState(config.username);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
 
   const handleLogin = () => {
+    if (username.trim().toLowerCase() !== config.username || password !== DEFAULT_PASSWORD) {
+      setError("Invalid username or password.");
+      return;
+    }
+
+    setError("");
     localStorage.setItem("orange-hotel-role", role);
 
     if (role === "cashier") {
@@ -108,6 +126,35 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
               {config.description}
             </p>
 
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Username</span>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    className="pl-10 h-12"
+                    placeholder="Enter username"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Password</span>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="pl-10 h-12"
+                    placeholder="Enter password"
+                  />
+                </div>
+              </div>
+            </div>
+
             {role === "cashier" && (
               <div className="space-y-3 mb-6">
                 <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Select Shift</span>
@@ -122,6 +169,19 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                   </TabsList>
                 </Tabs>
               </div>
+            )}
+
+            <div className="mb-6 rounded-xl border bg-muted/20 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                Default Username: {config.username}
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                Default Password: {DEFAULT_PASSWORD}
+              </p>
+            </div>
+
+            {error && (
+              <p className="mb-4 text-xs font-bold text-red-600">{error}</p>
             )}
 
             <Button
