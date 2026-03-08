@@ -173,11 +173,6 @@ export default function BookingPage() {
     nights >= 1 &&
     Boolean(selectedRoomNumber);
 
-  const availableRooms = useMemo(() => {
-    const wantedType = roomType === "standard" ? "Standard" : "Platinum";
-    return rooms.filter((room) => room.type === wantedType && room.status === "available");
-  }, [roomType, rooms]);
-
   useEffect(() => {
     if (!packageConfig) {
       setPackageRate("");
@@ -194,6 +189,19 @@ export default function BookingPage() {
     () => transactions.filter((tx) => tx.status === "credit"),
     [transactions],
   );
+  const activeBookedRoomNumbers = useMemo(
+    () => new Set(transactions.filter((tx) => tx.status !== "checked-out").map((tx) => tx.roomNumber)),
+    [transactions],
+  );
+  const availableRooms = useMemo(() => {
+    const wantedType = roomType === "standard" ? "Standard" : "Platinum";
+    return rooms.filter(
+      (room) =>
+        room.type === wantedType &&
+        room.status === "available" &&
+        !activeBookedRoomNumbers.has(room.number),
+    );
+  }, [activeBookedRoomNumbers, roomType, rooms]);
   const selectedExtendBooking = useMemo(
     () => transactions.find((entry) => entry.id === selectedExtendBookingId) ?? null,
     [selectedExtendBookingId, transactions],
@@ -366,6 +374,25 @@ export default function BookingPage() {
     setSelectedExtendBookingId(null);
     setExtendCheckOutDate("");
     setExtendCheckOutTime("12:00");
+  };
+
+  const checkoutBooking = async (booking: BookingRecord) => {
+    if (isDirector || booking.status === "checked-out") return;
+
+    const approved = await confirm({
+      title: "Check Out Guest",
+      description: `Are you sure you want to check out ${booking.guestName} from room ${booking.roomNumber}?`,
+      actionLabel: "Check Out",
+    });
+    if (!approved) return;
+
+    const nextTransactions = transactions.map((entry) =>
+      entry.id === booking.id ? { ...entry, status: "checked-out" as TransactionStatus } : entry,
+    );
+
+    setTransactions(nextTransactions);
+    writeCashierState(nextTransactions, receiptSeq);
+    markRoomStatus(booking.roomNumber, "cleaning");
   };
 
   return (
@@ -579,7 +606,7 @@ export default function BookingPage() {
                             : "bg-gray-200 text-gray-600 border-gray-200 hover:bg-gray-200"
                         }
                       >
-                        Occupied
+                        {tx.status === "checked-out" ? "Checked Out" : "Occupied"}
                       </Badge>
                       <Badge
                         className={
@@ -594,13 +621,21 @@ export default function BookingPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     {tx.status !== "checked-out" && !isDirector ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => openExtendStay(tx)}
-                        className="h-9 font-black uppercase text-[10px] tracking-widest"
-                      >
-                        Extend Stay
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => openExtendStay(tx)}
+                          className="h-9 font-black uppercase text-[10px] tracking-widest"
+                        >
+                          Extend Stay
+                        </Button>
+                        <Button
+                          onClick={() => checkoutBooking(tx)}
+                          className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
+                        >
+                          Check Out
+                        </Button>
+                      </div>
                     ) : (
                       <Badge className="bg-gray-200 text-gray-700 border-gray-200 hover:bg-gray-200">View</Badge>
                     )}
