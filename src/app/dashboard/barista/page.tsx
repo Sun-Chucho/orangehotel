@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ROOMS, Role } from "@/app/lib/mock-data";
 import {
+  MainStoreItem,
+  STORAGE_MAIN_STORE_ITEMS,
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
   StoreMovementLog,
@@ -106,6 +108,7 @@ export default function BaristaPage() {
   const [menuItems, setMenuItems] = useState<BaristaMenuItem[]>(BARISTA_MENU);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
+  const [baristaStoreItems, setBaristaStoreItems] = useState<MainStoreItem[]>([]);
   const [fromStoreEntries, setFromStoreEntries] = useState<StoreMovementLog[]>([]);
   const [usageLogs, setUsageLogs] = useState<StoreUsageLog[]>([]);
   const [useEntryId, setUseEntryId] = useState("");
@@ -149,18 +152,22 @@ export default function BaristaPage() {
   }, []);
 
   const loadFromStoreData = () => {
+    const savedStoreItems = readJson<Array<MainStoreItem & { lane?: "kitchen" | "barista" }>>(STORAGE_MAIN_STORE_ITEMS);
     const savedMovements = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
     const savedUsage = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE);
+    setBaristaStoreItems(Array.isArray(savedStoreItems) ? savedStoreItems.filter((entry) => entry.lane === "barista") : []);
     setFromStoreEntries(Array.isArray(savedMovements) ? savedMovements.filter((entry) => entry.destination === "barista") : []);
     setUsageLogs(Array.isArray(savedUsage) ? savedUsage.filter((entry) => entry.destination === "barista") : []);
   };
 
   useEffect(() => {
     loadFromStoreData();
+    const unsubscribeStoreItems = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, loadFromStoreData);
     const unsubscribeMovements = subscribeToSyncedStorageKey(STORAGE_STORE_MOVEMENTS, loadFromStoreData);
     const unsubscribeUsage = subscribeToSyncedStorageKey(STORAGE_STORE_USAGE, loadFromStoreData);
 
     return () => {
+      unsubscribeStoreItems();
       unsubscribeMovements();
       unsubscribeUsage();
     };
@@ -416,31 +423,33 @@ export default function BaristaPage() {
         <Card className="border-none shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
-            <CardDescription>Received stock linked to barista operations. Menu creation now lives in Menu Create.</CardDescription>
+            <CardDescription>Store additions update here immediately. Menu creation now lives in Menu Create.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader className="bg-muted/10">
                 <TableRow>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Logic</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {fromStoreEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="font-bold">{entry.itemName}</TableCell>
-                    <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
-                    <TableCell className="font-bold">{entry.conversionNote}</TableCell>
-                    <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
+                {baristaStoreItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-bold">{item.name}</TableCell>
+                    <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                    <TableCell className="font-bold">{item.minStock}</TableCell>
+                    <TableCell className="font-black uppercase text-[10px] tracking-widest">
+                      {item.stock <= 0 ? "Out" : item.stock < item.minStock ? "Low" : "In Stock"}
+                    </TableCell>
                   </TableRow>
                 ))}
-                {fromStoreEntries.length === 0 && (
+                {baristaStoreItems.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                      No barista inventory records
+                      No barista store stock
                     </TableCell>
                   </TableRow>
                 )}
@@ -483,34 +492,36 @@ export default function BaristaPage() {
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
-              <CardDescription>Received, used, and remaining quantities</CardDescription>
+              <CardDescription>Store additions plus received, used, and remaining quantities</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader className="bg-muted/10">
                   <TableRow>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Remaining</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {fromStoreEntries.map((entry) => {
-                    const used = getUsedQty(entry.id);
-                    const remaining = Math.max(0, entry.convertedQty - used);
+                  {baristaStoreItems.map((item) => {
+                    const itemEntries = fromStoreEntries.filter((entry) => entry.itemName === item.name);
+                    const received = itemEntries.reduce((sum, entry) => sum + entry.convertedQty, 0);
+                    const used = itemEntries.reduce((sum, entry) => sum + getUsedQty(entry.id), 0);
+                    const remaining = Math.max(0, received - used);
                     return (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-bold">{entry.itemName}</TableCell>
-                        <TableCell className="font-bold">{entry.convertedQty} units</TableCell>
+                      <TableRow key={item.id}>
+                        <TableCell className="font-bold">{item.name}</TableCell>
+                        <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                        <TableCell className="font-bold">{received} units</TableCell>
                         <TableCell className="font-bold">{used} units</TableCell>
                         <TableCell className="font-bold">{remaining} units</TableCell>
-                        <TableCell className="font-bold text-sm">{new Date(entry.movedAt).toLocaleString()}</TableCell>
                       </TableRow>
                     );
                   })}
-                  {fromStoreEntries.length === 0 && (
+                  {baristaStoreItems.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                         No inventory records
@@ -722,6 +733,36 @@ export default function BaristaPage() {
                 </Table>
               ) : (
                 <div className="space-y-3 p-4">
+                  <Table>
+                    <TableHeader className="bg-muted/10">
+                      <TableRow>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Item</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {baristaStoreItems.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-bold">{item.name}</TableCell>
+                          <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                          <TableCell className="font-bold">{item.minStock}</TableCell>
+                          <TableCell className="font-black uppercase text-[10px] tracking-widest">
+                            {item.stock <= 0 ? "Out" : item.stock < item.minStock ? "Low" : "In Stock"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {baristaStoreItems.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-8 text-center opacity-40">
+                            <p className="font-black uppercase tracking-widest text-xs">No stock added from inventory yet</p>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <select
                       className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
