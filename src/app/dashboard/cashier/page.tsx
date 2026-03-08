@@ -26,8 +26,11 @@ type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type TransactionTab = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
-type BookingCurrency = "TSh";
-type SpecialPackage = "resident-no-breakfast" | "non-resident-no-breakfast";
+type BookingCurrency = "TSh" | "$";
+type SpecialPackage =
+  | "resident-with-breakfast"
+  | "non-resident-with-breakfast"
+  | "ninety-day-special";
 
 interface BookingRecord {
   id: string;
@@ -59,17 +62,23 @@ const SPECIAL_PACKAGES: Record<
   SpecialPackage,
   { label: string; currency: BookingCurrency; standardRate: number; platinumRate: number }
 > = {
-  "resident-no-breakfast": {
-    label: "Resident no Breakfast",
+  "resident-with-breakfast": {
+    label: "Resident with Breakfast",
     currency: "TSh",
-    standardRate: 80000,
+    standardRate: 100000,
     platinumRate: 120000,
   },
-  "non-resident-no-breakfast": {
-    label: "Non Resident no Breakfast",
+  "non-resident-with-breakfast": {
+    label: "Non Resident with Breakfast",
+    currency: "$",
+    standardRate: 60,
+    platinumRate: 90,
+  },
+  "ninety-day-special": {
+    label: "90 Day Special Package",
     currency: "TSh",
-    standardRate: 50000,
-    platinumRate: 70000,
+    standardRate: 70000,
+    platinumRate: 100000,
   },
 };
 
@@ -482,8 +491,9 @@ export default function BookingPage() {
               onChange={(event) => setSelectedPackage(event.target.value as SpecialPackage | "none")}
             >
               <option value="none">No special package</option>
-              <option value="resident-no-breakfast">Resident no Breakfast (Standard TSh 80,000 | Platinum TSh 120,000)</option>
-              <option value="non-resident-no-breakfast">Non Resident no Breakfast (Standard TSh 50,000 | Platinum TSh 70,000)</option>
+              <option value="resident-with-breakfast">Resident with Breakfast (Standard TSh 100,000 | Platinum TSh 120,000)</option>
+              <option value="non-resident-with-breakfast">Non Resident with Breakfast (Standard $60 | Platinum $90)</option>
+              <option value="ninety-day-special">90 Day Special Package (Standard TSh 70,000 | Platinum TSh 100,000)</option>
             </select>
 
             {packageConfig && (
