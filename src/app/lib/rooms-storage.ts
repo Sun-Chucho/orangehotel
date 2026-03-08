@@ -20,6 +20,11 @@ export function readRoomsState(): Room[] {
   return saved;
 }
 
+function hasSavedRoomsState(): boolean {
+  const saved = readJson<Room[]>(STORAGE_ROOMS);
+  return Array.isArray(saved) && saved.length > 0;
+}
+
 export function writeRoomsState(rooms: Room[]) {
   writeJson(STORAGE_ROOMS, rooms);
 }
@@ -41,6 +46,14 @@ export function updateRoomStatusById(roomId: string, status: Room["status"]): Ro
 }
 
 export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {
+  const shouldSeedFromBookings =
+    (Array.isArray(baseRooms) && baseRooms.length === 0) ||
+    (!Array.isArray(baseRooms) && !hasSavedRoomsState());
+
+  if (!shouldSeedFromBookings) {
+    return Array.isArray(baseRooms) && baseRooms.length > 0 ? baseRooms : readRoomsState();
+  }
+
   const occupiedRooms = new Set(
     bookings
       .filter((booking) => booking.status !== "checked-out")
@@ -48,8 +61,8 @@ export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseR
   );
 
   const currentRooms = Array.isArray(baseRooms) && baseRooms.length > 0 ? baseRooms : readRoomsState();
-  const nextRooms = currentRooms.map((room) =>
-    occupiedRooms.has(room.number) ? { ...room, status: "occupied" } : room,
+  const nextRooms: Room[] = currentRooms.map((room) =>
+    occupiedRooms.has(room.number) ? { ...room, status: "occupied" as Room["status"] } : room,
   );
 
   writeRoomsState(nextRooms);
