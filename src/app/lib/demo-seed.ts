@@ -186,9 +186,6 @@ export function seedDemoDataIfNeeded() {
   setValueIfMissing(STORAGE_BARISTA_SEQ, "491");
 
   setArrayIfEmpty(STORAGE_INVENTORY_ITEMS, [
-    { id: "inv-seed-1", name: "Arabica Beans", category: "Bar", stock: 22, minStock: 10, unit: "kg", price: 38000 },
-    { id: "inv-seed-2", name: "Milk", category: "Bar", stock: 36, minStock: 20, unit: "L", price: 4200 },
-    { id: "inv-seed-3", name: "Sugar", category: "Bar", stock: 25, minStock: 8, unit: "kg", price: 2800 },
     { id: "inv-seed-4", name: "Rice", category: "Kitchen", stock: 58, minStock: 25, unit: "kg", price: 3200 },
     { id: "inv-seed-5", name: "Chicken", category: "Kitchen", stock: 30, minStock: 20, unit: "kg", price: 11500 },
     { id: "inv-seed-6", name: "Cooking Oil", category: "Kitchen", stock: 14, minStock: 15, unit: "L", price: 8000 },
@@ -202,18 +199,6 @@ export function seedDemoDataIfNeeded() {
   ]);
 
   setArrayIfEmpty(STORAGE_STORE_MOVEMENTS, [
-    {
-      id: "mv-seed-1",
-      itemId: "store-1",
-      itemName: "Coffee Beans Sack",
-      source: "store",
-      destination: "barista",
-      storeQtyMoved: 2,
-      storeUnit: "sack",
-      conversionValue: 5,
-      convertedQty: 10,
-      movedAt: hoursAgo(11),
-    },
     {
       id: "mv-seed-2",
       itemId: "store-3",
@@ -229,7 +214,6 @@ export function seedDemoDataIfNeeded() {
   ]);
 
   setArrayIfEmpty(STORAGE_STORE_USAGE, [
-    { id: "su-seed-1", movementId: "mv-seed-1", destination: "barista", quantityUsed: 4, usedAt: hoursAgo(5) },
     { id: "su-seed-2", movementId: "mv-seed-2", destination: "kitchen", quantityUsed: 9, usedAt: hoursAgo(4) },
   ]);
 

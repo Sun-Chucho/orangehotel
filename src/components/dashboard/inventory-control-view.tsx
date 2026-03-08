@@ -8,9 +8,11 @@ import {
   STORAGE_MAIN_STORE_ITEMS,
   STORAGE_STOCK_LOGIC,
   STORAGE_STORE_MOVEMENTS,
+  STORAGE_STORE_USAGE,
   StockLogicRule,
   StoreLane,
   StoreMovementLog,
+  StoreUsageLog,
   TransferDestination,
 } from "@/app/lib/inventory-transfer";
 import { readJson, writeJson } from "@/app/lib/storage";
@@ -19,7 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRightLeft, Plus, Save } from "lucide-react";
+import { ArrowRightLeft, Plus, Save, Trash2 } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -86,6 +88,13 @@ export function InventoryControlView({
 
   useEffect(() => {
     setActiveTab(initialTab);
+    if (initialTab === "barista-stock") {
+      setStockControlTab("barista");
+      setStockMovementTab("barista");
+    } else if (initialTab === "kitchen-stock") {
+      setStockControlTab("kitchen");
+      setStockMovementTab("kitchen");
+    }
   }, [initialTab]);
 
   useEffect(() => {
@@ -286,7 +295,7 @@ export function InventoryControlView({
           ...items,
         ];
 
-    const nextMovementLogs = [
+    const nextMovementLogs: StoreMovementLog[] = [
       {
         id: `mv-${Date.now()}`,
         itemId: selectedItem.id,
@@ -318,6 +327,68 @@ export function InventoryControlView({
     setBaristaMoveQty("1");
   };
 
+  const clearDepartmentInventory = async (lane: StoreLane) => {
+    if (isDirector) return;
+
+    const label = lane === "kitchen" ? "Kitchen" : "Bar";
+    const destinationCategory: ItemCategory = lane === "kitchen" ? "Kitchen" : "Bar";
+    const laneMovementIds = movementLogs
+      .filter((movement) => movement.destination === lane)
+      .map((movement) => movement.id);
+
+    const approved = await confirm({
+      title: `Clear ${label} Inventory`,
+      description: `Are you sure you want to clear all ${label.toLowerCase()} stock, movement logs, logic rules, and usage records?`,
+      actionLabel: `Clear ${label}`,
+    });
+    if (!approved) return;
+
+    const nextItems = items.filter((item) => item.category !== destinationCategory);
+    const nextStoreItems = storeItems.filter((item) => item.lane !== lane);
+    const nextMovementLogs = movementLogs.filter((movement) => movement.destination !== lane);
+    const nextLogicRules = logicRules.filter((rule) => rule.destination !== lane);
+    const usageLogs = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE) ?? [];
+    const nextUsageLogs = usageLogs.filter(
+      (entry) => entry.destination !== lane && !laneMovementIds.includes(entry.movementId),
+    );
+
+    setItems(nextItems);
+    setStoreItems(nextStoreItems);
+    setMovementLogs(nextMovementLogs);
+    setLogicRules(nextLogicRules);
+
+    writeJson(STORAGE_INVENTORY_ITEMS, nextItems);
+    writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    writeJson(STORAGE_STORE_MOVEMENTS, nextMovementLogs);
+    writeJson(STORAGE_STOCK_LOGIC, nextLogicRules);
+    writeJson(STORAGE_STORE_USAGE, nextUsageLogs);
+
+    if (lane === "kitchen") {
+      setKitchenName("");
+      setKitchenQty("0");
+      setKitchenUnit("kg");
+      setKitchenThreshold("1");
+      setSelectedKitchenRuleItemId("");
+      setKitchenDepartmentUnit("portion");
+      setKitchenUnitToMenu("1");
+      setKitchenLogicNote("");
+      setSelectedKitchenMoveItemId("");
+      setKitchenMoveQty("1");
+      return;
+    }
+
+    setBaristaName("");
+    setBaristaQty("0");
+    setBaristaUnit("kg");
+    setBaristaThreshold("1");
+    setSelectedBaristaRuleItemId("");
+    setBaristaDepartmentUnit("cup");
+    setBaristaUnitToMenu("1");
+    setBaristaLogicNote("");
+    setSelectedBaristaMoveItemId("");
+    setBaristaMoveQty("1");
+  };
+
   const renderStoreCard = (lane: StoreLane, title: string, list: MainStoreItem[]) => (
     <Card className="shadow-sm">
       <CardHeader className="border-b">
@@ -325,7 +396,7 @@ export function InventoryControlView({
         <CardDescription>Enter stock quantity and low stock threshold together.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
           <Input
             value={lane === "kitchen" ? kitchenName : baristaName}
             onChange={(event) => (lane === "kitchen" ? setKitchenName(event.target.value) : setBaristaName(event.target.value))}
@@ -352,6 +423,14 @@ export function InventoryControlView({
           />
           <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
             <Plus className="w-4 h-4 mr-2" /> Add Stock
+          </Button>
+          <Button
+            variant="outline"
+            className="h-10 font-black uppercase text-[10px] tracking-widest"
+            onClick={() => clearDepartmentInventory(lane)}
+            disabled={isDirector}
+          >
+            <Trash2 className="w-4 h-4 mr-2" /> Clear {lane === "kitchen" ? "Kitchen" : "Bar"}
           </Button>
         </div>
 
