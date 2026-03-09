@@ -57,6 +57,37 @@ function readParsedLocalValue<T>(key: string) {
   }
 }
 
+function mirrorCanonicalStateToLegacyLocal(key: string, value: unknown) {
+  if (typeof window === "undefined" || value === null || value === undefined) return;
+
+  if (key === "orange-hotel-cashier-state") {
+    const snapshot = value as { transactions?: unknown[]; receiptSeq?: number };
+    localStorage.setItem("orange-hotel-cashier-transactions", JSON.stringify(Array.isArray(snapshot.transactions) ? snapshot.transactions : []));
+    localStorage.setItem("orange-hotel-cashier-seq", String(Number.isFinite(snapshot.receiptSeq) ? snapshot.receiptSeq : 84920));
+    localStorage.removeItem("orange-hotel-demo-seed-version");
+    return;
+  }
+
+  if (key === "orange-hotel-kitchen-state") {
+    const snapshot = value as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+    localStorage.setItem("orange-hotel-kitchen-tickets", JSON.stringify(Array.isArray(snapshot.tickets) ? snapshot.tickets : []));
+    localStorage.setItem("orange-hotel-kitchen-seq", String(Number.isFinite(snapshot.ticketSeq) ? snapshot.ticketSeq : 300));
+    localStorage.setItem("orange-hotel-kitchen-payments", JSON.stringify(Array.isArray(snapshot.payments) ? snapshot.payments : []));
+    localStorage.setItem("orange-hotel-kitchen-menu", JSON.stringify(Array.isArray(snapshot.menuItems) ? snapshot.menuItems : []));
+    localStorage.removeItem("orange-hotel-demo-seed-version");
+    return;
+  }
+
+  if (key === "orange-hotel-barista-state") {
+    const snapshot = value as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+    localStorage.setItem("orange-hotel-barista-orders", JSON.stringify(Array.isArray(snapshot.tickets) ? snapshot.tickets : []));
+    localStorage.setItem("orange-hotel-barista-seq", String(Number.isFinite(snapshot.ticketSeq) ? snapshot.ticketSeq : 490));
+    localStorage.setItem("orange-hotel-barista-payments", JSON.stringify(Array.isArray(snapshot.payments) ? snapshot.payments : []));
+    localStorage.setItem("orange-hotel-barista-menu", JSON.stringify(Array.isArray(snapshot.menuItems) ? snapshot.menuItems : []));
+    localStorage.removeItem("orange-hotel-demo-seed-version");
+  }
+}
+
 function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
   const normalizedItems = new Map<string, InventoryItem>();
 
@@ -268,6 +299,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     if (preferredValue === null) return;
 
     localStorage.setItem(key, JSON.stringify(preferredValue));
+    mirrorCanonicalStateToLegacyLocal(key, preferredValue);
 
     if (!areSnapshotsEqual(remoteValue, preferredValue)) {
       await set(ref(firebaseDatabase, toStoragePath(key)), preferredValue);
@@ -319,6 +351,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
         const fallbackValue = (getLocalFallbackForSync(key) ?? getCanonicalDefaultValue(key)) as T | null;
         if (fallbackValue !== null) {
           localStorage.setItem(key, JSON.stringify(fallbackValue));
+          mirrorCanonicalStateToLegacyLocal(key, fallbackValue);
           void set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue).catch(() => undefined);
           onChange(fallbackValue);
           return;
@@ -326,7 +359,9 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
         readSnapshotValue<T>(key, null, onChange);
         return;
       }
-      readSnapshotValue<T>(key, snapshot.val() as T, onChange);
+      const nextValue = snapshot.val() as T;
+      mirrorCanonicalStateToLegacyLocal(key, nextValue);
+      readSnapshotValue<T>(key, nextValue, onChange);
     },
     (error) => {
       console.error(`Firebase subscription failed for ${key}`, error);
