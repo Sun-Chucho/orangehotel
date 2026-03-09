@@ -106,7 +106,7 @@ function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): Bar
       price: item.sellingPrice ?? item.price ?? 0,
       category: normalizeCategory(item.category),
       prepMinutes: 2,
-      barcode: item.barcode,
+      barcode: item.barcode || "",
     }));
 }
 
