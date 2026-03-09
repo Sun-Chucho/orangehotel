@@ -10,6 +10,7 @@ import {
   StoreMovementLog,
   StoreUsageLog,
 } from "@/app/lib/inventory-transfer";
+import { findStoreItemForMenuName, formatTotStatus, getRemainingTots, getTotLimit, isTotTrackedMenuItem } from "@/app/lib/barista-stock";
 import { printDepartmentReceipt } from "@/app/lib/receipt-print";
 import { readJson, readPosState, STORAGE_BARISTA_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { useIsDirector } from "@/hooks/use-is-director";
@@ -193,6 +194,86 @@ export default function BaristaPage() {
   const getUsedQty = (movementId: string) =>
     usageLogs.filter((entry) => entry.movementId === movementId).reduce((sum, entry) => sum + entry.quantityUsed, 0);
 
+  const updateBaristaStoreStock = (
+    lines: Array<{ name: string; qty: number }>,
+    direction: "consume" | "restore",
+  ) => {
+    const allStoreItems = readJson<Array<MainStoreItem & { lane?: "kitchen" | "barista" }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+    const otherStoreItems = allStoreItems.filter((entry) => entry.lane !== "barista");
+    const currentBaristaItems = allStoreItems
+      .filter((entry) => entry.lane === "barista")
+      .map((entry) => ({ ...entry, lane: "barista" as const }));
+    const nextBaristaItems = [...currentBaristaItems];
+
+    for (const line of lines) {
+      const matchedItem = findStoreItemForMenuName(nextBaristaItems, line.name);
+      if (!matchedItem) continue;
+
+      const itemIndex = nextBaristaItems.findIndex((entry) => entry.id === matchedItem.id);
+      if (itemIndex < 0) continue;
+
+      const currentItem = nextBaristaItems[itemIndex];
+      if (isTotTrackedMenuItem(line.name)) {
+        const totLimit = getTotLimit(currentItem);
+        if (totLimit <= 0) {
+          return { ok: false as const, error: `Missing tot limit for ${line.name}.` };
+        }
+
+        const currentTotSold = typeof currentItem.totSold === "number" && currentItem.totSold > 0 ? currentItem.totSold : 0;
+        if (direction === "consume") {
+          const remainingTots = getRemainingTots(currentItem);
+          if (line.qty > remainingTots) {
+            return { ok: false as const, error: `Not enough tots remaining for ${line.name}.` };
+          }
+
+          const totalTotSold = currentTotSold + line.qty;
+          const bottlesConsumed = Math.floor(totalTotSold / totLimit);
+          nextBaristaItems[itemIndex] = {
+            ...currentItem,
+            stock: currentItem.stock - bottlesConsumed,
+            totLimit,
+            totSold: totalTotSold % totLimit,
+          };
+          continue;
+        }
+
+        const totalTotSold = currentTotSold - line.qty;
+        if (totalTotSold >= 0) {
+          nextBaristaItems[itemIndex] = {
+            ...currentItem,
+            totLimit,
+            totSold: totalTotSold,
+          };
+          continue;
+        }
+
+        const bottlesRestored = Math.ceil(Math.abs(totalTotSold) / totLimit);
+        nextBaristaItems[itemIndex] = {
+          ...currentItem,
+          stock: currentItem.stock + bottlesRestored,
+          totLimit,
+          totSold: totalTotSold + bottlesRestored * totLimit,
+        };
+        continue;
+      }
+
+      if (direction === "consume") {
+        if (line.qty > currentItem.stock) {
+          return { ok: false as const, error: `Not enough stock for ${line.name}.` };
+        }
+        nextBaristaItems[itemIndex] = { ...currentItem, stock: currentItem.stock - line.qty };
+        continue;
+      }
+
+      nextBaristaItems[itemIndex] = { ...currentItem, stock: currentItem.stock + line.qty };
+    }
+
+    const nextStoreItems = [...otherStoreItems, ...nextBaristaItems];
+    setBaristaStoreItems(nextBaristaItems);
+    writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    return { ok: true as const };
+  };
+
   const addUsage = async () => {
     const qty = Number(useQty);
     const entry = fromStoreEntries.find((item) => item.id === useEntryId);
@@ -309,6 +390,12 @@ export default function BaristaPage() {
     if (isDirector) return;
     if (!pendingOrder) return;
 
+    const stockResult = updateBaristaStoreStock(pendingOrder.lines, "consume");
+    if (!stockResult.ok) {
+      window.alert(stockResult.error);
+      return;
+    }
+
     const nextSeq = ticketSeq + 1;
     const createdAt = Date.now();
     setTicketSeq(nextSeq);
@@ -390,6 +477,12 @@ export default function BaristaPage() {
     });
     if (!approved) return;
 
+    const stockResult = updateBaristaStoreStock(ticket.lines, "restore");
+    if (!stockResult.ok) {
+      window.alert(stockResult.error);
+      return;
+    }
+
     const cancelled: CancelledBaristaTicket = {
       ...ticket,
       source: "barista",
@@ -431,6 +524,7 @@ export default function BaristaPage() {
                 <TableRow>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 </TableRow>
@@ -440,6 +534,7 @@ export default function BaristaPage() {
                   <TableRow key={item.id}>
                     <TableCell className="font-bold">{item.name}</TableCell>
                     <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                    <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
                     <TableCell className="font-bold">{item.minStock}</TableCell>
                     <TableCell className="font-black uppercase text-[10px] tracking-widest">
                       {item.stock <= 0 ? "Out" : item.stock < item.minStock ? "Low" : "In Stock"}
@@ -448,7 +543,7 @@ export default function BaristaPage() {
                 ))}
                 {baristaStoreItems.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                       No barista store stock
                     </TableCell>
                   </TableRow>
@@ -500,6 +595,7 @@ export default function BaristaPage() {
                   <TableRow>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Remaining</TableHead>
@@ -515,6 +611,7 @@ export default function BaristaPage() {
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.name}</TableCell>
                         <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                        <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
                         <TableCell className="font-bold">{received} units</TableCell>
                         <TableCell className="font-bold">{used} units</TableCell>
                         <TableCell className="font-bold">{remaining} units</TableCell>
@@ -523,7 +620,7 @@ export default function BaristaPage() {
                   })}
                   {baristaStoreItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                         No inventory records
                       </TableCell>
                     </TableRow>
@@ -738,6 +835,7 @@ export default function BaristaPage() {
                       <TableRow>
                         <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Item</TableHead>
                         <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
                         <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
                         <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                       </TableRow>
@@ -747,6 +845,7 @@ export default function BaristaPage() {
                         <TableRow key={item.id}>
                           <TableCell className="font-bold">{item.name}</TableCell>
                           <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                          <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
                           <TableCell className="font-bold">{item.minStock}</TableCell>
                           <TableCell className="font-black uppercase text-[10px] tracking-widest">
                             {item.stock <= 0 ? "Out" : item.stock < item.minStock ? "Low" : "In Stock"}
@@ -755,7 +854,7 @@ export default function BaristaPage() {
                       ))}
                       {baristaStoreItems.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={4} className="py-8 text-center opacity-40">
+                          <TableCell colSpan={5} className="py-8 text-center opacity-40">
                             <p className="font-black uppercase tracking-widest text-xs">No stock added from inventory yet</p>
                           </TableCell>
                         </TableRow>

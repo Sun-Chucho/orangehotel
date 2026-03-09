@@ -46,23 +46,25 @@ export function updateRoomStatusById(roomId: string, status: Room["status"]): Ro
 }
 
 export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {
-  const shouldSeedFromBookings =
-    (Array.isArray(baseRooms) && baseRooms.length === 0) ||
-    (!Array.isArray(baseRooms) && !hasSavedRoomsState());
-
-  if (!shouldSeedFromBookings) {
-    return Array.isArray(baseRooms) && baseRooms.length > 0 ? baseRooms : readRoomsState();
-  }
-
   const occupiedRooms = new Set(
     bookings
       .filter((booking) => booking.status !== "checked-out")
       .map((booking) => booking.roomNumber),
   );
 
-  const currentRooms = Array.isArray(baseRooms) && baseRooms.length > 0 ? baseRooms : readRoomsState();
+  const currentRooms =
+    Array.isArray(baseRooms) && baseRooms.length > 0
+      ? baseRooms
+      : hasSavedRoomsState()
+        ? readRoomsState()
+        : getDefaultRooms();
+
   const nextRooms: Room[] = currentRooms.map((room) =>
-    occupiedRooms.has(room.number) ? { ...room, status: "occupied" as Room["status"] } : room,
+    occupiedRooms.has(room.number)
+      ? { ...room, status: "occupied" as Room["status"] }
+      : room.status === "occupied"
+        ? { ...room, status: "available" as Room["status"] }
+        : room,
   );
 
   writeRoomsState(nextRooms);

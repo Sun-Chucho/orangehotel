@@ -8,6 +8,10 @@ export interface MainStoreItem {
   unit: string;
   minStock: number;
   lane: StoreLane;
+  size?: string;
+  buyingPrice?: number;
+  totLimit?: number;
+  totSold?: number;
 }
 
 export interface StoreMovementLog {

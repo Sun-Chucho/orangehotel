@@ -280,7 +280,14 @@ export function InventoryControlView({
 
     const nextItems = existingInventoryItem
       ? items.map((item) =>
-          item.id === existingInventoryItem.id ? { ...item, stock: item.stock + convertedQty, minStock: selectedItem.minStock } : item,
+          item.id === existingInventoryItem.id
+            ? {
+                ...item,
+                stock: item.stock + convertedQty,
+                minStock: selectedItem.minStock,
+                price: selectedItem.buyingPrice ?? item.price ?? 0,
+              }
+            : item,
         )
       : [
           {
@@ -290,7 +297,7 @@ export function InventoryControlView({
             stock: convertedQty,
             minStock: selectedItem.minStock,
             unit: rule.departmentUnit,
-            price: 0,
+            price: selectedItem.buyingPrice ?? 0,
           },
           ...items,
         ];
@@ -438,7 +445,9 @@ export function InventoryControlView({
           <TableHeader>
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Size</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Low Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
             </TableRow>
@@ -447,14 +456,18 @@ export function InventoryControlView({
             {list.map((item) => (
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold">{item.size ?? "-"}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="font-bold">
+                  {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
+                </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
               </TableRow>
             ))}
             {list.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock recorded yet
                 </TableCell>
               </TableRow>
@@ -476,6 +489,7 @@ export function InventoryControlView({
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock</TableHead>
             </TableRow>
@@ -485,13 +499,16 @@ export function InventoryControlView({
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="font-bold">
+                  {typeof item.price === "number" && item.price > 0 ? `TSh ${item.price.toLocaleString()}` : "-"}
+                </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
               </TableRow>
             ))}
             {inventoryItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock entries found
                 </TableCell>
               </TableRow>

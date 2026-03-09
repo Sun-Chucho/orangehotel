@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Coffee, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
 import { Role } from "@/app/lib/mock-data";
@@ -9,9 +9,17 @@ import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { LoginProfiles, STORAGE_LOGIN_PROFILES } from "@/app/lib/login-profiles";
+import { readJson, writeJson } from "@/app/lib/storage";
 
 interface RoleLoginPageProps {
   role: Role;
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
 const DEFAULT_PASSWORD = "1234";
@@ -74,15 +82,79 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [username, setUsername] = useState(config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installMessage, setInstallMessage] = useState("");
   const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
 
+  useEffect(() => {
+    const applyProfiles = () => {
+      const profiles = readJson<LoginProfiles>(STORAGE_LOGIN_PROFILES);
+      const profile = profiles?.[role];
+      if (!profile) return;
+      setUsername(profile.username || config.username);
+      if (role === "cashier" && (profile.shift === "day" || profile.shift === "night")) {
+        setShift(profile.shift);
+      }
+    };
+
+    applyProfiles();
+    void hydrateStorageKeyFromFirebase(STORAGE_LOGIN_PROFILES).then(applyProfiles);
+    const unsubscribe = subscribeToSyncedStorageKey<LoginProfiles>(STORAGE_LOGIN_PROFILES, (profiles) => {
+      const profile = profiles?.[role];
+      if (!profile) return;
+      setUsername(profile.username || config.username);
+      if (role === "cashier" && (profile.shift === "day" || profile.shift === "night")) {
+        setShift(profile.shift);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [config.username, role]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+      setInstallMessage("");
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+      setInstallMessage("Installed. Check your desktop or apps list.");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) {
+      setInstallMessage("If no prompt appears, use your browser menu and choose Install App.");
+      return;
+    }
+
+    await installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => undefined);
+    setInstallPrompt(null);
+  };
+
   const handleLogin = () => {
-    if (username.trim().toLowerCase() !== config.username || password !== DEFAULT_PASSWORD) {
+    if (!username.trim() || password !== DEFAULT_PASSWORD) {
       setError("Invalid username or password.");
       return;
     }
 
     setError("");
+    localStorage.setItem("orange-hotel-username", username.trim());
     localStorage.setItem("orange-hotel-role", role);
 
     if (role === "cashier") {
@@ -90,6 +162,16 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     } else {
       localStorage.removeItem("orange-hotel-shift");
     }
+
+    const profiles = readJson<LoginProfiles>(STORAGE_LOGIN_PROFILES) ?? {};
+    writeJson(STORAGE_LOGIN_PROFILES, {
+      ...profiles,
+      [role]: {
+        username: username.trim(),
+        shift: role === "cashier" ? shift : undefined,
+        updatedAt: Date.now(),
+      },
+    });
 
     router.push(config.destination);
   };
@@ -173,11 +255,29 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
             <div className="mb-6 rounded-xl border bg-muted/20 px-4 py-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                Default Username: {config.username}
+                Synced Default Username: {config.username}
               </p>
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
                 Default Password: {DEFAULT_PASSWORD}
               </p>
+            </div>
+
+            <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-orange-700">
+                Install This {config.label}
+              </p>
+              <p className="mt-1 text-xs font-medium text-orange-900">
+                Save this login page as a desktop app for this user role.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 h-10 w-full font-black uppercase tracking-widest text-[10px]"
+                onClick={handleInstall}
+              >
+                Download To Desktop
+              </Button>
+              {installMessage && <p className="mt-2 text-xs font-bold text-orange-700">{installMessage}</p>}
             </div>
 
             {error && (

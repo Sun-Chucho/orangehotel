@@ -20,6 +20,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-fnb-stock-sales",
   "orange-hotel-settings",
   "orange-hotel-hardware-settings",
+  "orange-hotel-login-profiles",
 ] as const;
 
 export const LEGACY_DEMO_KEYS = [
