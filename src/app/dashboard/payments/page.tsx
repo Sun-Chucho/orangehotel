@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Role } from "@/app/lib/mock-data";
 import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeCashierState, writePosState } from "@/app/lib/storage";
-import { readRoomsState, syncRoomsWithActiveBookings } from "@/app/lib/rooms-storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,8 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Receipt } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
-import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { Input } from "@/components/ui/input";
 
 type PaymentsTab = "reception" | "kitchen" | "barista";
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
@@ -91,7 +88,6 @@ function formatAgo(timestamp: number): string {
 
 export default function PaymentsPage() {
   const isDirector = useIsDirector();
-  const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<Role>("manager");
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("reception");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
@@ -100,14 +96,6 @@ export default function PaymentsPage() {
 
   const [selectedCredit, setSelectedCredit] = useState<{ source: "booking" | "kitchen" | "barista"; id: string } | null>(null);
   const [showMethodPopup, setShowMethodPopup] = useState(false);
-  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
-  const [editGuestName, setEditGuestName] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [editRoomNumber, setEditRoomNumber] = useState("");
-  const [editCheckInDate, setEditCheckInDate] = useState("");
-  const [editCheckOutDate, setEditCheckOutDate] = useState("");
-  const [editCheckOutTime, setEditCheckOutTime] = useState("12:00");
-  const [editTotal, setEditTotal] = useState("");
 
   useEffect(() => {
     const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
@@ -176,11 +164,6 @@ export default function PaymentsPage() {
     [bookingTransactions],
   );
 
-  const editingBooking = useMemo(
-    () => bookingTransactions.find((tx) => tx.id === editingBookingId) ?? null,
-    [bookingTransactions, editingBookingId],
-  );
-
   const kitchenRows = useMemo<PaymentRow[]>(
     () =>
       kitchenPayments.map((tx) => ({
@@ -224,73 +207,6 @@ export default function PaymentsPage() {
     if (isDirector) return;
     setSelectedCredit({ source: row.source, id: row.id });
     setShowMethodPopup(true);
-  };
-
-  const applyBookingSnapshot = (nextTransactions: BookingRecord[]) => {
-    setBookingTransactions(nextTransactions);
-    const receiptSeq = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920).receiptSeq;
-    writeCashierState(nextTransactions, receiptSeq);
-    syncRoomsWithActiveBookings(
-      nextTransactions.map((tx) => ({ roomNumber: tx.roomNumber, status: tx.status })),
-      readRoomsState(),
-    );
-  };
-
-  const openEditBooking = (bookingId: string) => {
-    const booking = bookingTransactions.find((tx) => tx.id === bookingId);
-    if (!booking) return;
-    setEditingBookingId(booking.id);
-    setEditGuestName(booking.guestName);
-    setEditPhone(booking.phone);
-    setEditRoomNumber(booking.roomNumber);
-    setEditCheckInDate(booking.checkInDate);
-    setEditCheckOutDate(booking.checkOutDate);
-    setEditCheckOutTime(booking.checkOutTime || "12:00");
-    setEditTotal(String(booking.total));
-  };
-
-  const closeEditBooking = () => {
-    setEditingBookingId(null);
-    setEditGuestName("");
-    setEditPhone("");
-    setEditRoomNumber("");
-    setEditCheckInDate("");
-    setEditCheckOutDate("");
-    setEditCheckOutTime("12:00");
-    setEditTotal("");
-  };
-
-  const saveEditedBooking = async () => {
-    if (!editingBooking) return;
-    const total = Number(editTotal);
-    if (!editGuestName.trim() || !editPhone.trim() || !editRoomNumber.trim() || !editCheckInDate || !editCheckOutDate || Number.isNaN(total) || total < 0) {
-      return;
-    }
-
-    const approved = await confirm({
-      title: "Save Booking Changes",
-      description: `Are you sure you want to update booking ${editingBooking.receiptNo}?`,
-      actionLabel: "Save Changes",
-    });
-    if (!approved) return;
-
-    const nextTransactions = bookingTransactions.map((tx) =>
-      tx.id === editingBooking.id
-        ? {
-            ...tx,
-            guestName: editGuestName.trim(),
-            phone: editPhone.trim(),
-            roomNumber: editRoomNumber.trim(),
-            checkInDate: editCheckInDate,
-            checkOutDate: editCheckOutDate,
-            checkOutTime: editCheckOutTime,
-            total,
-          }
-        : tx,
-    );
-
-    applyBookingSnapshot(nextTransactions);
-    closeEditBooking();
   };
 
   const applyPaidMethod = (method: "cash" | "card" | "mobile") => {
@@ -353,7 +269,6 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      {dialog}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">Payments</h1>
@@ -445,13 +360,6 @@ export default function PaymentsPage() {
                             Paid
                           </Button>
                         )}
-                        <Button
-                          variant="outline"
-                          onClick={() => openEditBooking(tx.id)}
-                          className="h-9 font-black uppercase text-[10px] tracking-widest"
-                        >
-                          Edit
-                        </Button>
                       </div>
                     ) : tx.status === "credit" && !isDirector ? (
                       <Button
@@ -502,36 +410,6 @@ export default function PaymentsPage() {
               <Button variant="outline" onClick={() => setShowMethodPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
                 Close
               </Button>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {editingBooking && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl">
-            <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Edit Reception Booking</CardTitle>
-              <CardDescription>Update the duplicate or incorrect booking record and save it back to finance.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Input value={editGuestName} onChange={(event) => setEditGuestName(event.target.value)} placeholder="Guest name" />
-                <Input value={editPhone} onChange={(event) => setEditPhone(event.target.value)} placeholder="Phone number" />
-                <Input value={editRoomNumber} onChange={(event) => setEditRoomNumber(event.target.value)} placeholder="Room number" />
-                <Input type="number" min="0" value={editTotal} onChange={(event) => setEditTotal(event.target.value)} placeholder="Total amount" />
-                <Input type="date" value={editCheckInDate} onChange={(event) => setEditCheckInDate(event.target.value)} />
-                <Input type="date" value={editCheckOutDate} onChange={(event) => setEditCheckOutDate(event.target.value)} />
-                <Input type="time" value={editCheckOutTime} onChange={(event) => setEditCheckOutTime(event.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={closeEditBooking} className="h-11 font-black uppercase text-[10px] tracking-widest">
-                  Close
-                </Button>
-                <Button onClick={saveEditedBooking} className="h-11 font-black uppercase text-[10px] tracking-widest">
-                  Save Booking
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </div>
