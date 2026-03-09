@@ -1,7 +1,8 @@
 import { get, onValue, ref, remove, set } from "firebase/database";
 import { firebaseDatabase } from "@/app/lib/firebase";
 import { getStoreItemLabel, type MainStoreItem } from "@/app/lib/inventory-transfer";
-import type { InventoryItem } from "@/app/lib/mock-data";
+import { ROOMS, type InventoryItem } from "@/app/lib/mock-data";
+import { DEFAULT_HARDWARE_SETTINGS } from "@/app/lib/hardware-settings";
 
 const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
 
@@ -121,6 +122,48 @@ function areSnapshotsEqual(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function getCanonicalDefaultValue(key: string) {
+  switch (key) {
+    case "orange-hotel-cashier-state":
+      return { transactions: [], receiptSeq: 84920 };
+    case "orange-hotel-kitchen-state":
+      return { tickets: [], ticketSeq: 300, payments: [], menuItems: [] };
+    case "orange-hotel-barista-state":
+      return { tickets: [], ticketSeq: 490, payments: [], menuItems: [] };
+    case "orange-hotel-company-stock":
+    case "orange-hotel-inventory-items":
+    case "orange-hotel-main-store-items":
+    case "orange-hotel-stock-logic":
+    case "orange-hotel-store-movements":
+    case "orange-hotel-store-usage":
+    case "orange-hotel-cancelled-tickets":
+    case "orange-hotel-fnb-beverage-cost":
+    case "orange-hotel-fnb-recipe-cost":
+    case "orange-hotel-fnb-stock-sales":
+    case "orange-hotel-website-bookings":
+      return [];
+    case "orange-hotel-rooms-state":
+      return ROOMS;
+    case "orange-hotel-settings":
+      return {
+        fullName: "Alex Rivera",
+        email: "alex.rivera@orange.hotel",
+        department: "Operations Management",
+        notificationsRealtime: true,
+        notificationsEmailDigest: true,
+        analyticsAdvanced: false,
+        requirePinForCheckout: true,
+        autoLockMinutes: 15,
+        currency: "TSh",
+        timezone: "Africa/Dar_es_Salaam",
+      };
+    case "orange-hotel-hardware-settings":
+      return DEFAULT_HARDWARE_SETTINGS;
+    default:
+      return null;
+  }
+}
+
 function getLocalFallbackForSync(key: string) {
   if (typeof window === "undefined") return null;
 
@@ -208,17 +251,25 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     const fallbackValue = getLocalFallbackForSync(key);
     const localValue = fallbackValue ?? readParsedLocalValue(key);
 
-    if (remoteValue === null && localValue === null) return;
+    const canonicalValue = getCanonicalDefaultValue(key);
+    if (remoteValue === null && localValue === null && canonicalValue === null) return;
 
     const remoteScore = getSnapshotScore(key, remoteValue);
     const localScore = getSnapshotScore(key, localValue);
-    const preferredValue = localScore > remoteScore ? localValue : remoteValue;
+    const canonicalScore = getSnapshotScore(key, canonicalValue);
+
+    let preferredValue = canonicalValue;
+    if (remoteScore >= localScore && remoteScore >= canonicalScore) {
+      preferredValue = remoteValue;
+    } else if (localScore >= remoteScore && localScore >= canonicalScore) {
+      preferredValue = localValue;
+    }
 
     if (preferredValue === null) return;
 
     localStorage.setItem(key, JSON.stringify(preferredValue));
 
-    if (localScore > remoteScore || !areSnapshotsEqual(remoteValue, preferredValue)) {
+    if (!areSnapshotsEqual(remoteValue, preferredValue)) {
       await set(ref(firebaseDatabase, toStoragePath(key)), preferredValue);
     }
   } catch (error) {
@@ -265,6 +316,13 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
     ref(firebaseDatabase, toStoragePath(key)),
     (snapshot) => {
       if (!snapshot.exists()) {
+        const fallbackValue = (getLocalFallbackForSync(key) ?? getCanonicalDefaultValue(key)) as T | null;
+        if (fallbackValue !== null) {
+          localStorage.setItem(key, JSON.stringify(fallbackValue));
+          void set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue).catch(() => undefined);
+          onChange(fallbackValue);
+          return;
+        }
         readSnapshotValue<T>(key, null, onChange);
         return;
       }
