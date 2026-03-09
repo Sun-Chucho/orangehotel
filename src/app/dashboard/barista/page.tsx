@@ -103,7 +103,7 @@ function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): Bar
     .map((item) => ({
       id: item.id,
       name: item.name,
-      price: item.sellingPrice,
+      price: item.sellingPrice ?? item.price ?? 0,
       category: normalizeCategory(item.category),
       prepMinutes: 2,
       barcode: item.barcode,
@@ -830,7 +830,7 @@ export default function BaristaPage() {
                       </div>
                       <h3 className="font-black text-lg leading-tight">{item.name}</h3>
                       <div className="mt-6 flex items-center justify-between">
-                      <span className="font-black">TSh {item.price.toLocaleString()}</span>
+                      <span className="font-black">TSh {(item.price || 0).toLocaleString()}</span>
                         <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center">
                           <Plus className="w-4 h-4" />
                         </div>
@@ -1063,7 +1063,7 @@ export default function BaristaPage() {
                       <div>
                         <p className="font-bold leading-tight">{line.item.name}</p>
                         <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">
-                          TSh {line.item.price.toLocaleString()} each
+                          TSh {(line.item.price || 0).toLocaleString()} each
                         </p>
                       </div>
                       <button
@@ -1084,7 +1084,7 @@ export default function BaristaPage() {
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                      <span className="font-black text-sm">TSh {(line.item.price * line.qty).toLocaleString()}</span>
+                      <span className="font-black text-sm">TSh {((line.item.price || 0) * line.qty).toLocaleString()}</span>
                     </div>
                   </div>
                 ))}
