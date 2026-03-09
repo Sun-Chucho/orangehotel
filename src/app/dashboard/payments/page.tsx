@@ -293,21 +293,6 @@ export default function PaymentsPage() {
     closeEditBooking();
   };
 
-  const deleteBooking = async (bookingId: string) => {
-    const booking = bookingTransactions.find((tx) => tx.id === bookingId);
-    if (!booking) return;
-
-    const approved = await confirm({
-      title: "Delete Reception Booking",
-      description: `Are you sure you want to delete booking ${booking.receiptNo} for ${booking.guestName}? This also removes its payment record from finance.`,
-      actionLabel: "Delete Booking",
-    });
-    if (!approved) return;
-
-    const nextTransactions = bookingTransactions.filter((tx) => tx.id !== bookingId);
-    applyBookingSnapshot(nextTransactions);
-  };
-
   const applyPaidMethod = (method: "cash" | "card" | "mobile") => {
     if (!selectedCredit) return;
 
@@ -466,12 +451,6 @@ export default function PaymentsPage() {
                           className="h-9 font-black uppercase text-[10px] tracking-widest"
                         >
                           Edit
-                        </Button>
-                        <Button
-                          onClick={() => deleteBooking(tx.id)}
-                          className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white"
-                        >
-                          Delete
                         </Button>
                       </div>
                     ) : tx.status === "credit" && !isDirector ? (
