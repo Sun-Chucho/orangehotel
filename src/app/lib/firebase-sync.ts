@@ -88,6 +88,39 @@ function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
   return Array.from(normalizedItems.values());
 }
 
+function getSnapshotScore(key: string, value: unknown): number {
+  if (value === null || value === undefined) return 0;
+
+  if (key === "orange-hotel-cashier-state") {
+    const snapshot = value as { transactions?: unknown[]; receiptSeq?: number };
+    return (Array.isArray(snapshot.transactions) ? snapshot.transactions.length * 1000 : 0) + (Number.isFinite(snapshot.receiptSeq) ? 1 : 0);
+  }
+
+  if (key === "orange-hotel-kitchen-state" || key === "orange-hotel-barista-state") {
+    const snapshot = value as { tickets?: unknown[]; payments?: unknown[]; menuItems?: unknown[]; ticketSeq?: number };
+    return (
+      (Array.isArray(snapshot.menuItems) ? snapshot.menuItems.length * 1000 : 0) +
+      (Array.isArray(snapshot.tickets) ? snapshot.tickets.length * 100 : 0) +
+      (Array.isArray(snapshot.payments) ? snapshot.payments.length * 100 : 0) +
+      (Number.isFinite(snapshot.ticketSeq) ? 1 : 0)
+    );
+  }
+
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+
+  if (typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>).length;
+  }
+
+  return 1;
+}
+
+function areSnapshotsEqual(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function getLocalFallbackForSync(key: string) {
   if (typeof window === "undefined") return null;
 
@@ -171,16 +204,23 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
   try {
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
-    if (snapshot.exists()) {
-      localStorage.setItem(key, JSON.stringify(snapshot.val()));
-      return;
-    }
-
+    const remoteValue = snapshot.exists() ? snapshot.val() : null;
     const fallbackValue = getLocalFallbackForSync(key);
-    if (fallbackValue === null) return;
+    const localValue = fallbackValue ?? readParsedLocalValue(key);
 
-    localStorage.setItem(key, JSON.stringify(fallbackValue));
-    await set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue);
+    if (remoteValue === null && localValue === null) return;
+
+    const remoteScore = getSnapshotScore(key, remoteValue);
+    const localScore = getSnapshotScore(key, localValue);
+    const preferredValue = localScore > remoteScore ? localValue : remoteValue;
+
+    if (preferredValue === null) return;
+
+    localStorage.setItem(key, JSON.stringify(preferredValue));
+
+    if (localScore > remoteScore || !areSnapshotsEqual(remoteValue, preferredValue)) {
+      await set(ref(firebaseDatabase, toStoragePath(key)), preferredValue);
+    }
   } catch (error) {
     console.error(`Firebase hydrate failed for ${key}`, error);
   }
