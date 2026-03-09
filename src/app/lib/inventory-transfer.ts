@@ -62,23 +62,62 @@ export function normalizeStockName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function adjustInventoryQuantity<T extends { name: string; category: string; stock: number }>(
-  items: T[],
-  category: "Kitchen" | "Bar",
-  itemName: string,
-  delta: number,
-) {
+export function adjustInventoryQuantity<
+  T extends {
+    name: string;
+    category: string;
+    stock: number;
+    totPerBottle?: number;
+    totSold?: number;
+    size?: string;
+  }
+>(items: T[], category: string, itemName: string, delta: number) {
   const target = normalizeStockName(itemName);
+  const isTotAdjustment = target.endsWith("tots");
 
   return items.map((item) => {
+    const itemTarget = normalizeStockName(item.name);
+    const itemWithSizeTarget = normalizeStockName(`${item.name} ${item.size ?? ""}`);
+    
     const matches =
       item.category === category &&
-      (normalizeStockName(item.name) === target || normalizeStockName(`${item.name}`) === normalizeStockName(itemName));
+      (itemTarget === target || itemWithSizeTarget === target);
 
     if (!matches) {
       return item;
     }
 
+    // TOTS Logic
+    if (isTotAdjustment && typeof item.totPerBottle === "number" && item.totPerBottle > 0) {
+      const currentTotSold = typeof item.totSold === "number" ? item.totSold : 0;
+      
+      if (delta < 0) {
+        // Sale/Consumption (delta is negative, e.g., -1 for 1 tot)
+        const totsToDeduct = Math.abs(delta);
+        const nextTotSold = currentTotSold + totsToDeduct;
+        const bottlesToDeduct = Math.floor(nextTotSold / item.totPerBottle);
+        
+        return {
+          ...item,
+          stock: Math.max(0, item.stock - bottlesToDeduct),
+          totSold: nextTotSold % item.totPerBottle,
+        };
+      } else {
+        // Intake/Restore (delta is positive)
+        const totsToAdd = delta;
+        const totalTots = (item.stock * item.totPerBottle) + (item.totPerBottle - currentTotSold) + totsToAdd;
+        const nextStock = Math.floor(totalTots / item.totPerBottle);
+        const nextTotSold = item.totPerBottle - (totalTots % item.totPerBottle);
+
+        return {
+          ...item,
+          stock: nextStock,
+          totSold: nextTotSold === item.totPerBottle ? 0 : nextTotSold,
+        };
+      }
+    }
+
+    // Standard Logic (Bottles/Units)
     return {
       ...item,
       stock: Math.max(0, item.stock + delta),

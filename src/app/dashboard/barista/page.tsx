@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CheckCircle2, Coffee, Minus, Plus, Receipt, Search, Trash2, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 
 type BaristaCategory = "all" | "espresso" | "coffee" | "tea" | "cold" | "snacks";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -39,6 +40,7 @@ interface BaristaMenuItem {
   price: number;
   category: Exclude<BaristaCategory, "all">;
   prepMinutes: number;
+  barcode?: string;
 }
 
 interface CartLine {
@@ -95,6 +97,23 @@ const normalizeCategory = (value: string): Exclude<BaristaCategory, "all"> => {
   return "coffee";
 };
 
+function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): BaristaMenuItem[] {
+  return inventory
+    .filter((item) => item.status === "ACTIVE" && item.category !== "Kitchen")
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      price: item.sellingPrice,
+      category: normalizeCategory(item.category),
+      prepMinutes: 2,
+      barcode: item.barcode,
+    }));
+}
+
+function normalizeBaristaTarget(name: string) {
+  return name.replace(/\s+TOTS$/, "").trim().toLowerCase();
+}
+
 export default function BaristaPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
@@ -109,8 +128,8 @@ export default function BaristaPage() {
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<BaristaTicket[]>([]);
-  const [ticketSeq, setTicketSeq] = useState(490);
-  const [menuItems, setMenuItems] = useState<BaristaMenuItem[]>(BARISTA_MENU);
+  const [ticketSeq, setTicketSeq] = useState(1);
+  const [menuItems, setMenuItems] = useState<BaristaMenuItem[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
   const [baristaStoreItems, setBaristaStoreItems] = useState<MainStoreItem[]>([]);
@@ -141,13 +160,27 @@ export default function BaristaPage() {
         STORAGE_TICKETS,
         STORAGE_SEQ,
         STORAGE_PAYMENTS,
-        STORAGE_MENU,
+        "__legacy_menu__", // We ignore old menu
         490,
       );
       setTickets(snapshot.tickets);
       setTicketSeq(snapshot.ticketSeq);
       setBaristaPayments(snapshot.payments);
-      setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : BARISTA_MENU);
+      
+      // Load Menu Items from Inventory
+      const inventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
+      if (inventory.length === 0) {
+        // One-time seed
+        const seed = BARISTA_INVENTORY_SEED.map(item => ({
+          ...item,
+          id: item.id || `inv-${item.barcode}`,
+          totSold: item.totSold ?? 0,
+        })) as InventoryItem[];
+        writeJson(STORAGE_INVENTORY_ITEMS, seed);
+        setMenuItems(normalizeBaristaMenuItemsFromInventory(seed));
+      } else {
+        setMenuItems(normalizeBaristaMenuItemsFromInventory(inventory));
+      }
     };
 
     applyBaristaSnapshot();
@@ -414,11 +447,14 @@ export default function BaristaPage() {
     if (isDirector) return;
     if (!pendingOrder) return;
 
-    const stockResult = updateBaristaStoreStock(pendingOrder.lines, "consume");
-    if (!stockResult.ok) {
-      window.alert(stockResult.error);
-      return;
-    }
+    const inventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
+    const itemInInv = inventory.find(i => i.name === pendingOrder.lines[0].name || normalizeBaristaTarget(i.name) === normalizeBaristaTarget(pendingOrder.lines[0].name));
+
+    const nextInventory = pendingOrder.lines.reduce((acc, line) => {
+      return adjustInventoryQuantity(acc, itemInInv?.category || "Bar", line.name, -line.qty);
+    }, inventory);
+
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
 
     const nextSeq = ticketSeq + 1;
     const createdAt = Date.now();
@@ -734,9 +770,19 @@ export default function BaristaPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search drinks..."
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    setSearchTerm(val);
+                    // Barcode Search Logic
+                    const match = menuItems.find(i => i.barcode === val.trim());
+                    if (match) {
+                      addToCart(match);
+                      setSearchTerm(""); // Clear for next scan
+                    }
+                  }}
+                  placeholder="Search drinks or scan barcode..."
                   className="pl-10 h-12"
+                  autoFocus
                 />
               </div>
 

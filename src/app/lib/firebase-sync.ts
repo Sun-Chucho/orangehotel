@@ -181,11 +181,11 @@ function areSnapshotsEqual(a: unknown, b: unknown) {
 function getCanonicalDefaultValue(key: string) {
   switch (key) {
     case "orange-hotel-cashier-state":
-      return { transactions: [], receiptSeq: 84920 };
+      return { transactions: [], receiptSeq: 1 };
     case "orange-hotel-kitchen-state":
-      return { tickets: [], ticketSeq: 300, payments: [], menuItems: [] };
+      return { tickets: [], ticketSeq: 1, payments: [], menuItems: [] };
     case "orange-hotel-barista-state":
-      return { tickets: [], ticketSeq: 490, payments: [], menuItems: [] };
+      return { tickets: [], ticketSeq: 1, payments: [], menuItems: [] };
     case "orange-hotel-company-stock":
     case "orange-hotel-inventory-items":
     case "orange-hotel-main-store-items":
@@ -495,4 +495,22 @@ export async function getRemoteRecordCounts(): Promise<Record<string, number>> {
     }),
   );
   return counts;
+}
+
+export async function wipeStorageCategory(key: string) {
+  if (typeof window === "undefined") return;
+
+  const defaultValue = getCanonicalDefaultValue(key);
+  
+  // Wipe locally
+  localStorage.setItem(key, JSON.stringify(defaultValue));
+  
+  // Wipe on Firebase
+  await set(ref(firebaseDatabase, toStoragePath(key)), defaultValue);
+  
+  // Update last synced
+  _lastSyncedAt[key] = Date.now();
+  
+  // Trigger local state updates
+  window.dispatchEvent(new CustomEvent("orange-hotel-storage-update", { detail: { key } }));
 }

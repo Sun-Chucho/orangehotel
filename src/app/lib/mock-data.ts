@@ -100,12 +100,18 @@ export const ROOMS: Room[] = [...standardRooms, ...platinumRooms];
 
 export interface InventoryItem {
   id: string;
+  barcode: string;
   name: string;
-  category: 'Kitchen' | 'Bar' | 'General';
-  stock: number;
+  category: string;
+  size: string;
+  stock: number; // Bottles or Units
+  totPerBottle?: number;
+  totSold: number; // Currently sold tots from the active bottle
+  buyingPrice: number;
+  sellingPrice: number;
+  status: 'ACTIVE' | 'INACTIVE';
   minStock: number;
   unit: string;
-  price?: number;
 }
 
 export const INVENTORY: InventoryItem[] = [];

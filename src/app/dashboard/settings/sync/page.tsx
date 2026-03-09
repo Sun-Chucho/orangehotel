@@ -6,9 +6,10 @@ import {
   getRemoteRecordCounts,
   hydrateDefaultAppStateFromFirebase,
   subscribeToConnectionStatus,
+  wipeStorageCategory,
   type SyncDiagnostics,
 } from "@/app/lib/firebase-sync";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertTriangle,
   CheckCircle2,
   Cloud,
   CloudOff,
@@ -27,8 +29,10 @@ import {
   HardDrive,
   Loader2,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
 const FRIENDLY_NAMES: Record<string, string> = {
   "orange-hotel-cashier-state": "Bookings (Cashier)",
@@ -52,11 +56,13 @@ const FRIENDLY_NAMES: Record<string, string> = {
 };
 
 export default function SyncVerificationPage() {
+  const { confirm, dialog } = useConfirmDialog();
   const [diagnostics, setDiagnostics] = useState<SyncDiagnostics | null>(null);
   const [remoteCounts, setRemoteCounts] = useState<Record<string, number> | null>(null);
   const [connected, setConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [loadingRemote, setLoadingRemote] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
 
   const refreshDiagnostics = useCallback(() => {
     setDiagnostics(getSyncDiagnostics());
@@ -87,6 +93,35 @@ export default function SyncVerificationPage() {
       setSyncing(false);
     }
   }, [fetchRemoteCounts, refreshDiagnostics]);
+
+  const handleWipe = useCallback(async (
+    keys: string[], 
+    title: string, 
+    description: string
+  ) => {
+    const approved = await confirm({
+      title,
+      description,
+      actionLabel: "Clear Data",
+    });
+
+    if (!approved) return;
+
+    setCleaning(true);
+    try {
+      await Promise.all(keys.map(key => wipeStorageCategory(key)));
+      refreshDiagnostics();
+      await fetchRemoteCounts();
+      toast({ 
+        title: "Sanitization complete", 
+        description: `Successfully wiped ${keys.length} data categories.` 
+      });
+    } catch {
+      toast({ title: "Sanitization failed", variant: "destructive" });
+    } finally {
+      setCleaning(false);
+    }
+  }, [confirm, fetchRemoteCounts, refreshDiagnostics]);
 
   useEffect(() => {
     refreshDiagnostics();
@@ -192,7 +227,95 @@ export default function SyncVerificationPage() {
         </Button>
       </div>
 
-      <Card className="shadow-sm border-none bg-white">
+      {dialog}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="border-red-100 bg-red-50/20">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <CardTitle className="text-lg font-black uppercase tracking-tight text-red-700">
+                Data Sanitization
+              </CardTitle>
+            </div>
+            <CardDescription className="text-red-600/70 font-medium">
+              Destructive actions to remove fake or test data from Firebase and local storage.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-red-100 shadow-sm">
+              <div>
+                <p className="font-black text-sm uppercase tracking-tight">Clear Transactions</p>
+                <p className="text-xs text-muted-foreground font-medium">Wipe Bookings, Kitchen, and Barista tickets.</p>
+              </div>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                disabled={cleaning}
+                onClick={() => handleWipe(
+                  ["orange-hotel-cashier-state", "orange-hotel-kitchen-state", "orange-hotel-barista-state", "orange-hotel-cancelled-tickets"],
+                  "Clear All Transactions",
+                  "This will remove all bookings, kitchen orders, and payments. This action cannot be undone."
+                )}
+                className="font-black text-[10px] uppercase tracking-widest px-4"
+              >
+                <Trash2 className="w-3 h-3 mr-2" />
+                Clear
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-red-100 shadow-sm">
+              <div>
+                <p className="font-black text-sm uppercase tracking-tight">Reset Room Status</p>
+                <p className="text-xs text-muted-foreground font-medium">Set all rooms back to 'Available'.</p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={cleaning}
+                onClick={() => handleWipe(
+                  ["orange-hotel-rooms-state"],
+                  "Reset All Rooms",
+                  "This will mark all hotel rooms as Available. Combined with clearing transactions, this starts guest management from fresh."
+                )}
+                className="font-black text-[10px] uppercase tracking-widest px-4 text-red-600 border-red-200 hover:bg-red-50"
+              >
+                <RefreshCw className="w-3 h-3 mr-2" />
+                Reset
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-red-100 shadow-sm">
+              <div>
+                <p className="font-black text-sm uppercase tracking-tight">Hard Database Reset</p>
+                <p className="text-xs text-muted-foreground font-medium">Wipe EVERYTHING and restart from defaults.</p>
+              </div>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                disabled={cleaning}
+                onClick={() => handleWipe(
+                  [
+                    "orange-hotel-cashier-state", "orange-hotel-kitchen-state", "orange-hotel-barista-state", 
+                    "orange-hotel-company-stock", "orange-hotel-inventory-items", "orange-hotel-main-store-items",
+                    "orange-hotel-stock-logic", "orange-hotel-store-movements", "orange-hotel-store-usage",
+                    "orange-hotel-cancelled-tickets", "orange-hotel-rooms-state", "orange-hotel-fnb-beverage-cost",
+                    "orange-hotel-fnb-recipe-cost", "orange-hotel-fnb-stock-sales", "orange-hotel-settings",
+                    "orange-hotel-hardware-settings", "orange-hotel-website-bookings", "orange-hotel-login-profiles"
+                  ],
+                  "FULL DATABASE WIPE",
+                  "DANGER: This will delete ALL data including inventory, configuration, and settings. The system will be completely reset to factory defaults."
+                )}
+                className="font-black text-[10px] uppercase tracking-widest px-4"
+              >
+                <Trash2 className="w-3 h-3 mr-2" />
+                Factory Reset
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-none bg-white lg:col-span-1">
         <CardHeader>
           <CardTitle className="text-lg font-black uppercase tracking-tight">
             Per-Key Sync Status
@@ -275,6 +398,7 @@ export default function SyncVerificationPage() {
           </Table>
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
