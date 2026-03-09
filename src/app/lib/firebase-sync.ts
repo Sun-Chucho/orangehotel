@@ -4,6 +4,30 @@ import { getStoreItemLabel, type MainStoreItem } from "@/app/lib/inventory-trans
 import { ROOMS, type InventoryItem } from "@/app/lib/mock-data";
 import { DEFAULT_HARDWARE_SETTINGS } from "@/app/lib/hardware-settings";
 
+// ── Connectivity monitoring ─────────────────────────────────────────────────
+let _isConnected = false;
+const _connectionListeners = new Set<(connected: boolean) => void>();
+const _lastSyncedAt: Record<string, number> = {};
+
+if (typeof window !== "undefined") {
+  onValue(ref(firebaseDatabase, ".info/connected"), (snapshot) => {
+    _isConnected = snapshot.val() === true;
+    _connectionListeners.forEach((fn) => fn(_isConnected));
+  });
+}
+
+export function isFirebaseConnected() {
+  return _isConnected;
+}
+
+export function subscribeToConnectionStatus(onChange: (connected: boolean) => void) {
+  _connectionListeners.add(onChange);
+  onChange(_isConnected);
+  return () => {
+    _connectionListeners.delete(onChange);
+  };
+}
+
 const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
 
 export const FIREBASE_SYNC_KEYS = [
@@ -24,6 +48,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-settings",
   "orange-hotel-hardware-settings",
   "orange-hotel-website-bookings",
+  "orange-hotel-login-profiles",
 ] as const;
 
 export const LEGACY_DEMO_KEYS = [
@@ -190,6 +215,8 @@ function getCanonicalDefaultValue(key: string) {
       };
     case "orange-hotel-hardware-settings":
       return DEFAULT_HARDWARE_SETTINGS;
+    case "orange-hotel-login-profiles":
+      return {};
     default:
       return null;
   }
@@ -268,9 +295,13 @@ function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value:
 
 export function syncStorageValueToFirebase<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
-  void set(ref(firebaseDatabase, toStoragePath(key)), value).catch((error) => {
-    console.error(`Firebase sync failed for ${key}`, error);
-  });
+  void set(ref(firebaseDatabase, toStoragePath(key)), value)
+    .then(() => {
+      _lastSyncedAt[key] = Date.now();
+    })
+    .catch((error) => {
+      console.error(`Firebase sync failed for ${key}`, error);
+    });
 }
 
 export async function hydrateStorageKeyFromFirebase(key: string) {
@@ -280,7 +311,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
     const remoteValue = snapshot.exists() ? snapshot.val() : null;
     const fallbackValue = getLocalFallbackForSync(key);
-    const localValue = fallbackValue ?? readParsedLocalValue(key);
+    const localValue = fallbackValue ?? readParsedLocalValue(key) ?? null;
 
     const canonicalValue = getCanonicalDefaultValue(key);
     if (remoteValue === null && localValue === null && canonicalValue === null) return;
@@ -304,6 +335,8 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     if (!areSnapshotsEqual(remoteValue, preferredValue)) {
       await set(ref(firebaseDatabase, toStoragePath(key)), preferredValue);
     }
+
+    _lastSyncedAt[key] = Date.now();
   } catch (error) {
     console.error(`Firebase hydrate failed for ${key}`, error);
   }
@@ -403,4 +436,63 @@ export async function runOneTimeBusinessDataReset(resetVersion: string) {
   clearLocalBusinessState();
   await clearFirebaseBusinessState();
   localStorage.setItem(markerKey, resetVersion);
+}
+
+// ── Sync diagnostics ────────────────────────────────────────────────────────
+
+export interface SyncKeyDiagnostic {
+  key: string;
+  localRecordCount: number;
+  lastSyncedAt: number | null;
+}
+
+export interface SyncDiagnostics {
+  connected: boolean;
+  keys: SyncKeyDiagnostic[];
+}
+
+function countRecords(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  if (Array.isArray(value)) return value.length;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length;
+  return 1;
+}
+
+export function getSyncDiagnostics(): SyncDiagnostics {
+  const keys: SyncKeyDiagnostic[] = FIREBASE_SYNC_KEYS.map((key) => {
+    const raw = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+    let localRecordCount = 0;
+    if (raw) {
+      try {
+        localRecordCount = countRecords(JSON.parse(raw));
+      } catch {
+        localRecordCount = 0;
+      }
+    }
+    return {
+      key,
+      localRecordCount,
+      lastSyncedAt: _lastSyncedAt[key] ?? null,
+    };
+  });
+
+  return {
+    connected: _isConnected,
+    keys,
+  };
+}
+
+export async function getRemoteRecordCounts(): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  await Promise.all(
+    FIREBASE_SYNC_KEYS.map(async (key) => {
+      try {
+        const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
+        counts[key] = snapshot.exists() ? countRecords(snapshot.val()) : 0;
+      } catch {
+        counts[key] = -1;
+      }
+    }),
+  );
+  return counts;
 }

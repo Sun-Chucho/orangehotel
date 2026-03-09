@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
-import { getDatabase } from "firebase/database";
+import { getDatabase, onValue, ref } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "AIzaSyAPndMWlbNFyEMU6Rl9SS9d-gLCNzGyUYs",
@@ -20,6 +20,14 @@ const measurementId =
 
 export const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const firebaseDatabase = getDatabase(firebaseApp);
+
+// Enable offline persistence: an active onValue listener on the storage root
+// ensures the SDK eagerly caches all data locally. Writes made while offline
+// are automatically queued by the Firebase SDK and replayed when the
+// connection is restored.
+if (typeof window !== "undefined") {
+  onValue(ref(firebaseDatabase, "orangeHotel/storage"), () => {}, { onlyOnce: false });
+}
 
 let analyticsPromise: Promise<Analytics | null> | null = null;
 
