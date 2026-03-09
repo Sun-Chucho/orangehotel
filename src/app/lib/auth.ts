@@ -1,5 +1,3 @@
-"use client";
-
 import { Role } from "@/app/lib/mock-data";
 
 const ROLE_ALIASES: Record<string, Role> = {

@@ -10,9 +10,7 @@ import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
-import { LoginProfiles, STORAGE_LOGIN_PROFILES } from "@/app/lib/login-profiles";
-import { readJson, writeJson } from "@/app/lib/storage";
+import { LoginProfiles, hydrateLoginProfilesFromServer, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 interface RoleLoginPageProps {
   role: Role;
@@ -87,7 +85,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
   useEffect(() => {
     const applyProfiles = () => {
-      const profiles = readJson<LoginProfiles>(STORAGE_LOGIN_PROFILES);
+      const profiles = readLocalLoginProfiles();
       const profile = profiles?.[role];
       if (!profile) return;
       setUsername(profile.username || config.username);
@@ -97,17 +95,16 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     };
 
     applyProfiles();
-    void hydrateStorageKeyFromFirebase(STORAGE_LOGIN_PROFILES).then(applyProfiles);
-    const unsubscribe = subscribeToSyncedStorageKey<LoginProfiles>(STORAGE_LOGIN_PROFILES, (profiles) => {
-      const profile = profiles?.[role];
-      if (!profile) return;
-      setUsername(profile.username || config.username);
-      if (role === "cashier" && (profile.shift === "day" || profile.shift === "night")) {
-        setShift(profile.shift);
-      }
-    });
+    void hydrateLoginProfilesFromServer().then(applyProfiles);
 
-    return () => unsubscribe();
+    const handleProfilesUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key !== STORAGE_LOGIN_PROFILES) return;
+      applyProfiles();
+    };
+
+    window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+    return () => window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
   }, [config.username, role]);
 
   useEffect(() => {
@@ -135,15 +132,18 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       localStorage.removeItem("orange-hotel-shift");
     }
 
-    const profiles = readJson<LoginProfiles>(STORAGE_LOGIN_PROFILES) ?? {};
-    writeJson(STORAGE_LOGIN_PROFILES, {
+    const profiles = readLocalLoginProfiles() ?? {};
+    const nextProfiles: LoginProfiles = {
       ...profiles,
       [role]: {
         username: username.trim(),
-        shift: role === "cashier" ? shift : undefined,
+        ...(role === "cashier" ? { shift } : {}),
         updatedAt: Date.now(),
       },
-    });
+    };
+
+    writeLocalLoginProfiles(nextProfiles);
+    void saveLoginProfileToServer(role, nextProfiles[role]!).catch(() => undefined);
 
     router.push(config.destination);
   };
