@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { CheckCircle2, LoaderCircle, MapPin, ShieldCheck, Star } from "lucide-react";
+import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 
 const INVENTORY = {
   total: 53,
@@ -131,6 +132,33 @@ export default function Home() {
       if (!response.ok) {
         setError(result?.error ?? "Booking request failed. Please try again.");
         return;
+      }
+
+      const websiteBooking: WebsiteBookingRecord = {
+        id: `web-${Date.now()}`,
+        bookingReference: result.bookingReference ?? `OH-${Date.now()}`,
+        fullName,
+        email,
+        phone,
+        roomType,
+        checkIn,
+        checkOut,
+        guests: Number(guests),
+        nights: result.nights ?? nights,
+        pricePerNight: result.pricePerNight ?? pricePerNight,
+        totalAmount: result.totalAmount ?? total,
+        currency: "TZS",
+        specialRequest,
+        source: "website",
+        status: "new",
+        createdAt: result.createdAt ?? new Date().toISOString(),
+        receptionistSeenAt: null,
+      };
+
+      try {
+        await appendWebsiteBooking(websiteBooking);
+      } catch {
+        setError("Booking was received, but receptionist live sync failed. Please notify reception with your reference.");
       }
 
       setSuccessRef(result.bookingReference ?? "REQUEST-RECEIVED");

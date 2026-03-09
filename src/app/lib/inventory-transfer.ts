@@ -53,3 +53,35 @@ export const STORAGE_MAIN_STORE_ITEMS = "orange-hotel-main-store-items";
 export const STORAGE_STORE_MOVEMENTS = "orange-hotel-store-movements";
 export const STORAGE_STORE_USAGE = "orange-hotel-store-usage";
 export const STORAGE_STOCK_LOGIC = "orange-hotel-stock-logic";
+
+export function getStoreItemLabel(item: Pick<MainStoreItem, "name" | "size">) {
+  return item.size ? `${item.name} ${item.size}` : item.name;
+}
+
+export function normalizeStockName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function adjustInventoryQuantity<T extends { name: string; category: string; stock: number }>(
+  items: T[],
+  category: "Kitchen" | "Bar",
+  itemName: string,
+  delta: number,
+) {
+  const target = normalizeStockName(itemName);
+
+  return items.map((item) => {
+    const matches =
+      item.category === category &&
+      (normalizeStockName(item.name) === target || normalizeStockName(`${item.name}`) === normalizeStockName(itemName));
+
+    if (!matches) {
+      return item;
+    }
+
+    return {
+      ...item,
+      stock: Math.max(0, item.stock + delta),
+    };
+  });
+}

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROOMS, Role } from "@/app/lib/mock-data";
+import { InventoryItem, ROOMS, Role } from "@/app/lib/mock-data";
 import {
+  adjustInventoryQuantity,
   MainStoreItem,
   STORAGE_MAIN_STORE_ITEMS,
+  STORAGE_INVENTORY_ITEMS,
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
   StoreMovementLog,
@@ -215,10 +217,13 @@ export default function KitchenPage() {
     const next = [log, ...usageLogs];
     setUsageLogs(next);
     const existingUsage = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE) ?? [];
+    const existingInventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
+    const nextInventory = adjustInventoryQuantity(existingInventory, "Kitchen", entry.itemName, -qty);
     writeJson(
       STORAGE_STORE_USAGE,
       [...next, ...existingUsage.filter((i) => i.destination !== "kitchen")],
     );
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
     setUseQty("1");
   };
 

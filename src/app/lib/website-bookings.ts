@@ -1,6 +1,9 @@
+import { ref, runTransaction } from "firebase/database";
+import { firebaseDatabase } from "@/app/lib/firebase";
 import { readJson, writeJson } from "@/app/lib/storage";
 
 export const STORAGE_WEBSITE_BOOKINGS = "orange-hotel-website-bookings";
+const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
 
 export type WebsiteBookingStatus = "new" | "seen";
 export type WebsiteRoomType = "standard" | "platinum";
@@ -33,6 +36,20 @@ export function readWebsiteBookings() {
 
 export function writeWebsiteBookings(bookings: WebsiteBookingRecord[]) {
   writeJson(STORAGE_WEBSITE_BOOKINGS, bookings);
+}
+
+function toStoragePath(key: string) {
+  return `${FIREBASE_STORAGE_ROOT}/${key.replace(/[.#$[\]/]/g, "-")}`;
+}
+
+export async function appendWebsiteBooking(booking: WebsiteBookingRecord) {
+  await runTransaction(ref(firebaseDatabase, toStoragePath(STORAGE_WEBSITE_BOOKINGS)), (currentValue) => {
+    const currentBookings = Array.isArray(currentValue) ? (currentValue as WebsiteBookingRecord[]) : [];
+    if (currentBookings.some((entry) => entry.bookingReference === booking.bookingReference)) {
+      return currentBookings;
+    }
+    return [booking, ...currentBookings];
+  });
 }
 
 export function markWebsiteBookingsSeen(bookings: WebsiteBookingRecord[], bookingIds?: string[]) {

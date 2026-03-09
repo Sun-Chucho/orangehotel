@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROOMS, Role } from "@/app/lib/mock-data";
+import { InventoryItem, ROOMS, Role } from "@/app/lib/mock-data";
 import {
+  adjustInventoryQuantity,
   MainStoreItem,
+  getStoreItemLabel,
   STORAGE_MAIN_STORE_ITEMS,
+  STORAGE_INVENTORY_ITEMS,
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
   StoreMovementLog,
@@ -204,6 +207,7 @@ export default function BaristaPage() {
       .filter((entry) => entry.lane === "barista")
       .map((entry) => ({ ...entry, lane: "barista" as const }));
     const nextBaristaItems = [...currentBaristaItems];
+    let nextInventoryItems = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
 
     for (const line of lines) {
       const matchedItem = findStoreItemForMenuName(nextBaristaItems, line.name);
@@ -213,6 +217,7 @@ export default function BaristaPage() {
       if (itemIndex < 0) continue;
 
       const currentItem = nextBaristaItems[itemIndex];
+      const inventoryLabel = getStoreItemLabel(currentItem);
       if (isTotTrackedMenuItem(line.name)) {
         const totLimit = getTotLimit(currentItem);
         if (totLimit <= 0) {
@@ -234,6 +239,7 @@ export default function BaristaPage() {
             totLimit,
             totSold: totalTotSold % totLimit,
           };
+          nextInventoryItems = adjustInventoryQuantity(nextInventoryItems, "Bar", inventoryLabel, -bottlesConsumed);
           continue;
         }
 
@@ -254,6 +260,7 @@ export default function BaristaPage() {
           totLimit,
           totSold: totalTotSold + bottlesRestored * totLimit,
         };
+        nextInventoryItems = adjustInventoryQuantity(nextInventoryItems, "Bar", inventoryLabel, bottlesRestored);
         continue;
       }
 
@@ -262,15 +269,18 @@ export default function BaristaPage() {
           return { ok: false as const, error: `Not enough stock for ${line.name}.` };
         }
         nextBaristaItems[itemIndex] = { ...currentItem, stock: currentItem.stock - line.qty };
+        nextInventoryItems = adjustInventoryQuantity(nextInventoryItems, "Bar", inventoryLabel, -line.qty);
         continue;
       }
 
       nextBaristaItems[itemIndex] = { ...currentItem, stock: currentItem.stock + line.qty };
+      nextInventoryItems = adjustInventoryQuantity(nextInventoryItems, "Bar", inventoryLabel, line.qty);
     }
 
     const nextStoreItems = [...otherStoreItems, ...nextBaristaItems];
     setBaristaStoreItems(nextBaristaItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventoryItems);
     return { ok: true as const };
   };
 
@@ -296,10 +306,13 @@ export default function BaristaPage() {
     const next = [log, ...usageLogs];
     setUsageLogs(next);
     const existingUsage = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE) ?? [];
+    const existingInventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
+    const nextInventory = adjustInventoryQuantity(existingInventory, "Bar", entry.itemName, -qty);
     writeJson(
       STORAGE_STORE_USAGE,
       [...next, ...existingUsage.filter((i) => i.destination !== "barista")],
     );
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
     setUseQty("1");
   };
 

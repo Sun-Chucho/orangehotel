@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { INVENTORY, InventoryItem } from "@/app/lib/mock-data";
 import {
+  getStoreItemLabel,
   MainStoreItem,
+  normalizeStockName,
   STORAGE_INVENTORY_ITEMS,
   STORAGE_MAIN_STORE_ITEMS,
   STORAGE_STOCK_LOGIC,
@@ -179,10 +181,25 @@ export function InventoryControlView({
     });
     if (!approved) return;
 
-    const nextStoreItems = [
-      { id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane },
-      ...storeItems,
-    ];
+    const existingItem = storeItems.find(
+      (item) =>
+        item.lane === lane &&
+        normalizeStockName(item.name) === normalizeStockName(name) &&
+        normalizeStockName(item.unit) === normalizeStockName(unit),
+    );
+
+    const nextStoreItems = existingItem
+      ? storeItems.map((item) =>
+          item.id === existingItem.id
+            ? {
+                ...item,
+                stock: item.stock + qty,
+                unit,
+                minStock: threshold,
+              }
+            : item,
+        )
+      : [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane }, ...storeItems];
 
     setStoreItems(nextStoreItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
@@ -268,14 +285,15 @@ export function InventoryControlView({
 
     const convertedQty = moveQty * rule.unitToMenu;
     const destinationCategory: ItemCategory = lane === "kitchen" ? "Kitchen" : "Bar";
-    const normalizedName = selectedItem.name.trim().toLowerCase();
+    const itemLabel = getStoreItemLabel(selectedItem);
+    const normalizedName = normalizeStockName(itemLabel);
 
     const nextStoreItems = storeItems.map((item) =>
       item.id === selectedItem.id ? { ...item, stock: item.stock - moveQty } : item,
     );
 
     const existingInventoryItem = items.find(
-      (item) => item.category === destinationCategory && item.name.trim().toLowerCase() === normalizedName,
+      (item) => item.category === destinationCategory && normalizeStockName(item.name) === normalizedName,
     );
 
     const nextItems = existingInventoryItem
@@ -286,13 +304,14 @@ export function InventoryControlView({
                 stock: item.stock + convertedQty,
                 minStock: selectedItem.minStock,
                 price: selectedItem.buyingPrice ?? item.price ?? 0,
+                name: itemLabel,
               }
             : item,
         )
       : [
           {
             id: `i-${Date.now()}`,
-            name: selectedItem.name,
+            name: itemLabel,
             category: destinationCategory,
             stock: convertedQty,
             minStock: selectedItem.minStock,
@@ -306,7 +325,7 @@ export function InventoryControlView({
       {
         id: `mv-${Date.now()}`,
         itemId: selectedItem.id,
-        itemName: selectedItem.name,
+        itemName: itemLabel,
         source: "store",
         destination: lane,
         storeQtyMoved: moveQty,
