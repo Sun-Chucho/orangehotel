@@ -14,7 +14,7 @@ import {
   StoreMovementLog,
   StoreUsageLog,
 } from "@/app/lib/inventory-transfer";
-import { findStoreItemForMenuName, formatTotStatus, getRemainingTots, getTotLimit, isTotTrackedMenuItem } from "@/app/lib/barista-stock";
+import { findStoreItemForMenuName, formatTotStatus, getMenuStockStatus, getRemainingTots, getTotLimit, isTotTrackedMenuItem, normalizeBaristaMenuItems } from "@/app/lib/barista-stock";
 import { printDepartmentReceipt } from "@/app/lib/receipt-print";
 import { readJson, readPosState, STORAGE_BARISTA_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { useIsDirector } from "@/hooks/use-is-director";
@@ -181,6 +181,16 @@ export default function BaristaPage() {
   useEffect(() => {
     if (queueTab === "from-store") loadFromStoreData();
   }, [queueTab]);
+
+  useEffect(() => {
+    if (menuItems.length === 0) return;
+
+    const normalizedMenuItems = normalizeBaristaMenuItems(menuItems, baristaStoreItems);
+    if (JSON.stringify(normalizedMenuItems) === JSON.stringify(menuItems)) return;
+
+    setMenuItems(normalizedMenuItems);
+    writePosState(STORAGE_BARISTA_STATE, tickets, ticketSeq, baristaPayments, normalizedMenuItems);
+  }, [baristaPayments, baristaStoreItems, menuItems, ticketSeq, tickets]);
 
   useEffect(() => {
     if (serviceMode === "restaurant") {
@@ -750,30 +760,37 @@ export default function BaristaPage() {
               </Tabs>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredMenu.map((item) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredMenu.map((item) => {
+                  const stockStatus = getMenuStockStatus(baristaStoreItems, item.name);
+                  return (
                   <button
                     key={item.id}
-                    onClick={() => addToCart(item)}
-                    className="text-left bg-white border rounded-2xl p-5 hover:border-primary/50 hover:shadow-md transition-all"
+                    onClick={() => {
+                      if (!stockStatus.available) return;
+                      addToCart(item);
+                    }}
+                    disabled={!stockStatus.available}
+                    className="text-left bg-white border rounded-2xl p-5 hover:border-primary/50 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <Badge variant="outline" className="uppercase text-[9px] font-black tracking-widest">
-                        {item.category}
+                          {item.category}
                       </Badge>
-                      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                        {item.prepMinutes} min
-                      </span>
-                    </div>
-                    <h3 className="font-black text-lg leading-tight">{item.name}</h3>
-                    <div className="mt-6 flex items-center justify-between">
-                      <span className="font-black">TSh {item.price.toLocaleString()}</span>
-                      <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center">
-                        <Plus className="w-4 h-4" />
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-right">
+                          <span className="block">{stockStatus.label}</span>
+                          {item.prepMinutes} min
+                        </span>
                       </div>
-                    </div>
+                      <h3 className="font-black text-lg leading-tight">{item.name}</h3>
+                      <div className="mt-6 flex items-center justify-between">
+                      <span className="font-black">TSh {item.price.toLocaleString()}</span>
+                        <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                      </div>
                   </button>
-                ))}
+                )})}
 
                 {filteredMenu.length === 0 && (
                   <div className="col-span-full text-center py-10 opacity-50">

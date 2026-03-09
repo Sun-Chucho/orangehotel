@@ -52,3 +52,58 @@ export function findStoreItemForMenuName(items: MainStoreItem[], menuName: strin
   const target = getMenuBaseLabel(menuName).trim().toLowerCase();
   return items.find((item) => getBaristaStoreLabel(item).trim().toLowerCase() === target);
 }
+
+export function normalizeBaristaMenuItems<
+  T extends {
+    id: string;
+    name: string;
+    price: number;
+    category: string;
+    prepMinutes: number;
+  },
+>(menuItems: T[], storeItems: MainStoreItem[]) {
+  return menuItems.map((item) => {
+    const matchedStoreItem = findStoreItemForMenuName(storeItems, item.name);
+    if (!matchedStoreItem) {
+      if (!item.name.endsWith(" Tot")) return item;
+      return {
+        ...item,
+        name: getMenuBaseLabel(item.name),
+      };
+    }
+
+    const expectedName = getTotLimit(matchedStoreItem) > 0
+      ? `${getBaristaStoreLabel(matchedStoreItem)} Tot`
+      : getBaristaStoreLabel(matchedStoreItem);
+
+    if (item.name === expectedName) return item;
+
+    return {
+      ...item,
+      name: expectedName,
+    };
+  });
+}
+
+export function getMenuStockStatus(items: MainStoreItem[], menuName: string) {
+  const matchedStoreItem = findStoreItemForMenuName(items, menuName);
+  if (!matchedStoreItem) {
+    return {
+      available: true,
+      label: "Menu Item",
+    };
+  }
+
+  if (isTotTrackedMenuItem(menuName)) {
+    const remainingTots = getRemainingTots(matchedStoreItem);
+    return {
+      available: remainingTots > 0,
+      label: `${remainingTots} tots left`,
+    };
+  }
+
+  return {
+    available: matchedStoreItem.stock > 0,
+    label: `${matchedStoreItem.stock} ${matchedStoreItem.unit} left`,
+  };
+}
