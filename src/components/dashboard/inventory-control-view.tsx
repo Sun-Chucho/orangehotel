@@ -68,10 +68,15 @@ export function InventoryControlView({
   const [kitchenQty, setKitchenQty] = useState("0");
   const [kitchenUnit, setKitchenUnit] = useState("kg");
   const [kitchenThreshold, setKitchenThreshold] = useState("1");
+  const [kitchenBuyingPrice, setKitchenBuyingPrice] = useState("");
+  const [kitchenSellingPrice, setKitchenSellingPrice] = useState("");
+
   const [baristaName, setBaristaName] = useState("");
   const [baristaQty, setBaristaQty] = useState("0");
   const [baristaUnit, setBaristaUnit] = useState("kg");
   const [baristaThreshold, setBaristaThreshold] = useState("1");
+  const [baristaBuyingPrice, setBaristaBuyingPrice] = useState("");
+  const [baristaSellingPrice, setBaristaSellingPrice] = useState("");
 
   const [selectedKitchenRuleItemId, setSelectedKitchenRuleItemId] = useState("");
   const [selectedBaristaRuleItemId, setSelectedBaristaRuleItemId] = useState("");
@@ -167,8 +172,13 @@ export function InventoryControlView({
     const qtyRaw = lane === "kitchen" ? kitchenQty : baristaQty;
     const unit = lane === "kitchen" ? kitchenUnit : baristaUnit;
     const thresholdRaw = lane === "kitchen" ? kitchenThreshold : baristaThreshold;
+    const buyingRaw = lane === "kitchen" ? kitchenBuyingPrice : baristaBuyingPrice;
+    const sellingRaw = lane === "kitchen" ? kitchenSellingPrice : baristaSellingPrice;
+    
     const qty = Number(qtyRaw);
     const threshold = Number(thresholdRaw);
+    const buyingPrice = Number(buyingRaw) || 0;
+    const sellingPrice = Number(sellingRaw) || 0;
 
     if (!name.trim() || Number.isNaN(qty) || qty < 0 || !unit.trim() || Number.isNaN(threshold) || threshold < 0) {
       return;
@@ -196,19 +206,53 @@ export function InventoryControlView({
                 stock: item.stock + qty,
                 unit,
                 minStock: threshold,
+                buyingPrice: buyingPrice > 0 ? buyingPrice : item.buyingPrice,
+                sellingPrice: sellingPrice > 0 ? sellingPrice : (item as any).sellingPrice,
               }
             : item,
         )
-      : [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane }, ...storeItems];
+      : [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane, buyingPrice, sellingPrice: sellingPrice }, ...storeItems];
 
     setStoreItems(nextStoreItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+
+    // Add directly to main Inventory too if applicable for Barista POS sync
+    const nextInventoryItems = [...items];
+    const category = lane === "kitchen" ? "Kitchen" : "Bar";
+    const existingInv = nextInventoryItems.find(i => i.category === category && normalizeStockName(i.name) === normalizeStockName(name));
+    
+    if (existingInv) {
+        existingInv.stock += qty;
+        if (buyingPrice > 0) existingInv.buyingPrice = buyingPrice;
+        if (sellingPrice > 0) existingInv.sellingPrice = sellingPrice;
+        if (sellingPrice > 0) existingInv.price = sellingPrice;
+    } else {
+        nextInventoryItems.unshift({
+            id: `inv-${Date.now()}`,
+            barcode: Date.now().toString(),
+            name: name.trim(),
+            category,
+            size: '',
+            stock: qty,
+            totSold: 0,
+            buyingPrice,
+            sellingPrice,
+            price: sellingPrice,
+            status: 'ACTIVE',
+            minStock: threshold,
+            unit
+        });
+    }
+    setItems(nextInventoryItems);
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventoryItems);
 
     if (lane === "kitchen") {
       setKitchenName("");
       setKitchenQty("0");
       setKitchenUnit("kg");
       setKitchenThreshold("1");
+      setKitchenBuyingPrice("");
+      setKitchenSellingPrice("");
       return;
     }
 
@@ -216,6 +260,8 @@ export function InventoryControlView({
     setBaristaQty("0");
     setBaristaUnit("kg");
     setBaristaThreshold("1");
+    setBaristaBuyingPrice("");
+    setBaristaSellingPrice("");
   };
 
   const saveLogicRule = async (lane: StoreLane) => {
@@ -400,6 +446,8 @@ export function InventoryControlView({
       setKitchenQty("0");
       setKitchenUnit("kg");
       setKitchenThreshold("1");
+      setKitchenBuyingPrice("");
+      setKitchenSellingPrice("");
       setSelectedKitchenRuleItemId("");
       setKitchenDepartmentUnit("portion");
       setKitchenUnitToMenu("1");
@@ -413,6 +461,8 @@ export function InventoryControlView({
     setBaristaQty("0");
     setBaristaUnit("kg");
     setBaristaThreshold("1");
+    setBaristaBuyingPrice("");
+    setBaristaSellingPrice("");
     setSelectedBaristaRuleItemId("");
     setBaristaDepartmentUnit("cup");
     setBaristaUnitToMenu("1");
@@ -428,11 +478,12 @@ export function InventoryControlView({
         <CardDescription>Enter stock quantity and low stock threshold together.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-2">
           <Input
             value={lane === "kitchen" ? kitchenName : baristaName}
             onChange={(event) => (lane === "kitchen" ? setKitchenName(event.target.value) : setBaristaName(event.target.value))}
             placeholder="Item name"
+            className="lg:col-span-2"
           />
           <Input
             type="number"
@@ -453,8 +504,22 @@ export function InventoryControlView({
             onChange={(event) => (lane === "kitchen" ? setKitchenThreshold(event.target.value) : setBaristaThreshold(event.target.value))}
             placeholder="Low threshold"
           />
+          <Input
+            type="number"
+            min="0"
+            value={lane === "kitchen" ? kitchenBuyingPrice : baristaBuyingPrice}
+            onChange={(event) => (lane === "kitchen" ? setKitchenBuyingPrice(event.target.value) : setBaristaBuyingPrice(event.target.value))}
+            placeholder="BP (Optional)"
+          />
+          <Input
+            type="number"
+            min="0"
+            value={lane === "kitchen" ? kitchenSellingPrice : baristaSellingPrice}
+            onChange={(event) => (lane === "kitchen" ? setKitchenSellingPrice(event.target.value) : setBaristaSellingPrice(event.target.value))}
+            placeholder="SP (Required)"
+          />
           <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
-            <Plus className="w-4 h-4 mr-2" /> Add Stock
+            <Plus className="w-4 h-4 mr-2" /> Add
           </Button>
           <Button
             variant="outline"
@@ -462,7 +527,7 @@ export function InventoryControlView({
             onClick={() => clearDepartmentInventory(lane)}
             disabled={isDirector}
           >
-            <Trash2 className="w-4 h-4 mr-2" /> Clear {lane === "kitchen" ? "Kitchen" : "Bar"}
+            <Trash2 className="w-4 h-4 mr-2" /> Clear
           </Button>
         </div>
 
@@ -473,18 +538,22 @@ export function InventoryControlView({
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Size</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Low Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {list.map((item) => (
+            {list.map((item: any) => (
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.size ?? "-"}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                 <TableCell className="font-bold">
                   {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
+                </TableCell>
+                <TableCell className="font-bold">
+                  {typeof item.sellingPrice === "number" && item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
                 </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
@@ -515,6 +584,7 @@ export function InventoryControlView({
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock</TableHead>
             </TableRow>
@@ -525,7 +595,10 @@ export function InventoryControlView({
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                 <TableCell className="font-bold">
-                  {typeof item.price === "number" && item.price > 0 ? `TSh ${item.price.toLocaleString()}` : "-"}
+                  {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
+                </TableCell>
+                <TableCell className="font-bold">
+                  {typeof item.sellingPrice === "number" && item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : (typeof item.price === "number" && item.price > 0 ? `TSh ${item.price.toLocaleString()}` : "-")}
                 </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>

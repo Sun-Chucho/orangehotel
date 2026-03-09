@@ -99,7 +99,7 @@ const normalizeCategory = (value: string): Exclude<BaristaCategory, "all"> => {
 
 function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): BaristaMenuItem[] {
   return inventory
-    .filter((item) => item.status === "ACTIVE" && item.category !== "Kitchen")
+    .filter((item) => (!item.status || item.status === "ACTIVE") && item.category !== "Kitchen")
     .map((item) => ({
       id: item.id,
       name: item.name,
