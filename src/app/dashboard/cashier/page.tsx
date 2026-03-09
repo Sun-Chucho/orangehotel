@@ -10,6 +10,7 @@ import {
   type WebsiteBookingRecord,
   writeWebsiteBookings,
 } from "@/app/lib/website-bookings";
+import { HISTORICAL_BOOKINGS } from "@/app/lib/seed-bookings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +150,22 @@ export default function BookingPage() {
         })),
       );
       setReceiptSeq(snapshot.receiptSeq);
+
+      // Historical Recovery Logic
+      const existingIds = new Set(snapshot.transactions.map((t) => t.id));
+      const missingBookings = HISTORICAL_BOOKINGS.filter((hb) => !existingIds.has(hb.id));
+
+      if (missingBookings.length > 0) {
+        const recoveredTransactions = [...snapshot.transactions, ...missingBookings].sort(
+          (a, b) => b.createdAt - a.createdAt
+        );
+        setTransactions(recoveredTransactions);
+        writeCashierState(recoveredTransactions, snapshot.receiptSeq);
+        toast({
+          title: "Bookings Recovered",
+          description: `Successfully restored ${missingBookings.length} historical records.`,
+        });
+      }
     };
 
     applyCashierSnapshot();

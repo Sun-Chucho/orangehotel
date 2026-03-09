@@ -133,9 +133,15 @@ function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
 
     normalizedItems.set(mapKey, {
       id: `inv-${item.id}`,
+      barcode: "", // Default to empty if not in store item
       name,
       category,
+      size: item.size || "",
       stock: item.stock,
+      totSold: 0,
+      buyingPrice: typeof item.buyingPrice === "number" ? item.buyingPrice : 0,
+      sellingPrice: (typeof item.buyingPrice === "number" ? item.buyingPrice : 0) * 1.5, // Heuristic or default
+      status: "ACTIVE" as const,
       minStock: item.minStock,
       unit: item.unit,
       price: typeof item.buyingPrice === "number" ? item.buyingPrice : 0,

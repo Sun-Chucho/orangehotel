@@ -311,9 +311,15 @@ export function InventoryControlView({
       : [
           {
             id: `i-${Date.now()}`,
+            barcode: "",
             name: itemLabel,
             category: destinationCategory,
+            size: selectedItem.size || "",
             stock: convertedQty,
+            totSold: 0,
+            buyingPrice: selectedItem.buyingPrice ?? 0,
+            sellingPrice: (selectedItem.buyingPrice ?? 0) * 1.5,
+            status: "ACTIVE" as const,
             minStock: selectedItem.minStock,
             unit: rule.departmentUnit,
             price: selectedItem.buyingPrice ?? 0,

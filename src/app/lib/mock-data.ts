@@ -109,6 +109,7 @@ export interface InventoryItem {
   totSold: number; // Currently sold tots from the active bottle
   buyingPrice: number;
   sellingPrice: number;
+  price?: number;
   status: 'ACTIVE' | 'INACTIVE';
   minStock: number;
   unit: string;
