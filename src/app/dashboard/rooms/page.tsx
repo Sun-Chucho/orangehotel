@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { readStoredRole } from "@/app/lib/auth";
 import { Room, Role } from "@/app/lib/mock-data";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ export default function RoomsPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    const savedRole = readStoredRole();
     setRole(savedRole);
 
     const applyRoomSnapshot = (baseRooms?: Room[]) => {

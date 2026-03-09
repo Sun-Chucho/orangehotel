@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { readStoredRole } from "@/app/lib/auth";
 import { Role } from "@/app/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -43,7 +44,7 @@ export default function CancelledPage() {
   const [cancelled, setCancelled] = useState<CancelledKitchenTicket[]>([]);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    const savedRole = readStoredRole();
     if (savedRole) {
       setRole(savedRole);
       setCancelledTab(savedRole === "barista" ? "barista" : "kitchen");

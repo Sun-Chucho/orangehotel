@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readStoredRole } from "@/app/lib/auth";
 
 export function useIsDirector() {
   const [isDirector, setIsDirector] = useState(false);
 
   useEffect(() => {
-    const role = localStorage.getItem("orange-hotel-role");
+    const role = readStoredRole();
     setIsDirector(role === "director");
   }, []);
 

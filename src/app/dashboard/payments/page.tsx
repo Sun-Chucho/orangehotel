@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { readStoredRole } from "@/app/lib/auth";
 import { Role } from "@/app/lib/mock-data";
 import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeCashierState, writePosState } from "@/app/lib/storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,7 +99,7 @@ export default function PaymentsPage() {
   const [showMethodPopup, setShowMethodPopup] = useState(false);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    const savedRole = readStoredRole();
     if (savedRole) {
       setRole(savedRole);
       setPaymentsTab(savedRole === "kitchen" ? "kitchen" : savedRole === "barista" ? "barista" : "reception");

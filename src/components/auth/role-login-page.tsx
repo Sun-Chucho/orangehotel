@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Coffee, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
@@ -116,7 +117,9 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     return () => undefined;
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
     if (!username.trim() || password !== DEFAULT_PASSWORD) {
       setError("Invalid username or password.");
       return;
@@ -168,7 +171,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
         </div>
 
         <div className="w-full max-w-md">
-          <div className="bg-white border p-8 rounded-2xl shadow-sm text-left">
+          <form className="bg-white border p-8 rounded-2xl shadow-sm text-left" onSubmit={handleLogin}>
             <div className={`${config.color} w-14 h-14 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-black/5`}>
               <config.icon className="w-8 h-8 text-white" />
             </div>
@@ -231,26 +234,17 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
               </p>
             </div>
 
-            <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-orange-700">
-                Install This {config.label}
-              </p>
-              <p className="mt-1 text-xs font-medium text-orange-900">
-                Use your browser app dropdown or install menu to install this role with the app icon.
-              </p>
-            </div>
-
             {error && (
               <p className="mb-4 text-xs font-bold text-red-600">{error}</p>
             )}
 
             <Button
+              type="submit"
               className="w-full bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest h-14 rounded-xl shadow-lg shadow-primary/20"
-              onClick={handleLogin}
             >
               Enter Dashboard
             </Button>
-          </div>
+          </form>
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ const DIRECT_ROLE_ROUTES: Record<string, string> = {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const normalizedPath = pathname.toLowerCase();
+  const normalizedPath = pathname.toLowerCase().replace(/\/+$/, "") || "/";
   const directRoute = DIRECT_ROLE_ROUTES[normalizedPath];
 
   if (directRoute && pathname !== directRoute) {

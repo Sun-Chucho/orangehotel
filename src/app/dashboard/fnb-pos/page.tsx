@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { readStoredRole } from "@/app/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ export default function FnBPosPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const role = localStorage.getItem("orange-hotel-role");
+    const role = readStoredRole();
     if (role === "kitchen") {
       router.replace("/dashboard/kitchen");
       return;

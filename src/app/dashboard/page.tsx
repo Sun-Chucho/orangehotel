@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { readStoredRole } from "@/app/lib/auth";
 import { Role, ROOMS } from "@/app/lib/mock-data";
 import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -66,7 +67,7 @@ export default function OverviewPage() {
     };
 
     const refreshOverview = () => {
-      const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+      const savedRole = readStoredRole();
       const savedShift = localStorage.getItem("orange-hotel-shift");
       const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
       const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);

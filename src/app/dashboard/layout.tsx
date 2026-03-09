@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Role } from "@/app/lib/mock-data";
+import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
@@ -46,19 +47,21 @@ export default function DashboardLayout({
     let active = true;
 
     async function initializeDashboard() {
-      const savedRole = localStorage.getItem('orange-hotel-role');
+      const savedRole = normalizeRole(localStorage.getItem('orange-hotel-role'));
       const savedShift = localStorage.getItem('orange-hotel-shift');
-      if (!savedRole || !VALID_ROLES.includes(savedRole as Role)) {
+      if (!savedRole || !VALID_ROLES.includes(savedRole)) {
         localStorage.removeItem('orange-hotel-role');
         localStorage.removeItem('orange-hotel-shift');
         router.replace('/');
         return;
       }
 
+      localStorage.setItem("orange-hotel-role", savedRole);
+
       await hydrateDefaultAppStateFromFirebase();
       if (!active) return;
 
-      setRole(savedRole as Role);
+      setRole(savedRole);
       if (savedShift) setShift(savedShift);
       setMounted(true);
 

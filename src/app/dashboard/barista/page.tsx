@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { readStoredRole } from "@/app/lib/auth";
 import { InventoryItem, ROOMS, Role } from "@/app/lib/mock-data";
 import {
   adjustInventoryQuantity,
@@ -129,7 +130,7 @@ export default function BaristaPage() {
   );
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("orange-hotel-role") as Role | null;
+    const savedRole = readStoredRole();
     setRole(savedRole);
   }, []);
 
