@@ -1,5 +1,7 @@
 import { get, onValue, ref, remove, set } from "firebase/database";
 import { firebaseDatabase } from "@/app/lib/firebase";
+import { getStoreItemLabel, type MainStoreItem } from "@/app/lib/inventory-transfer";
+import type { InventoryItem } from "@/app/lib/mock-data";
 
 const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
 
@@ -54,6 +56,38 @@ function readParsedLocalValue<T>(key: string) {
   }
 }
 
+function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
+  const normalizedItems = new Map<string, InventoryItem>();
+
+  for (const item of storeItems) {
+    const category = item.lane === "barista" ? "Bar" : "Kitchen";
+    const name = getStoreItemLabel(item);
+    const mapKey = `${category}:${name.toLowerCase()}`;
+    const existing = normalizedItems.get(mapKey);
+
+    if (existing) {
+      existing.stock += item.stock;
+      existing.minStock = Math.max(existing.minStock, item.minStock);
+      if ((!existing.price || existing.price <= 0) && typeof item.buyingPrice === "number" && item.buyingPrice > 0) {
+        existing.price = item.buyingPrice;
+      }
+      continue;
+    }
+
+    normalizedItems.set(mapKey, {
+      id: `inv-${item.id}`,
+      name,
+      category,
+      stock: item.stock,
+      minStock: item.minStock,
+      unit: item.unit,
+      price: typeof item.buyingPrice === "number" ? item.buyingPrice : 0,
+    });
+  }
+
+  return Array.from(normalizedItems.values());
+}
+
 function getLocalFallbackForSync(key: string) {
   if (typeof window === "undefined") return null;
 
@@ -102,6 +136,12 @@ function getLocalFallbackForSync(key: string) {
       payments,
       menuItems,
     };
+  }
+
+  if (key === "orange-hotel-inventory-items") {
+    const storeItems = readParsedLocalValue<MainStoreItem[]>("orange-hotel-main-store-items") ?? [];
+    if (storeItems.length === 0) return null;
+    return buildInventoryItemsFromStoreItems(storeItems);
   }
 
   return null;
