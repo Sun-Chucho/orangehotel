@@ -16,6 +16,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 50000,
     status: "checked-out" as const,
+    checkedBy: "JACKLINE",
   },
   {
     id: "hist-6-5011",
@@ -33,6 +34,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 50000,
     status: "checked-out" as const,
+    checkedBy: "MONDY",
   },
   // 7th March
   {
@@ -51,6 +53,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 100000,
     status: "checked-out" as const,
+    checkedBy: "LINDA",
   },
   {
     id: "hist-7-4001",
@@ -68,6 +71,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 70000,
     status: "checked-out" as const,
+    checkedBy: "FORTUNATA",
   },
   {
     id: "hist-7-4011",
@@ -85,6 +89,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 70000,
     status: "checked-out" as const,
+    checkedBy: "JACKLINE",
   },
   // 8th March
   {
@@ -103,6 +108,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 70000,
     status: "checked-out" as const,
+    checkedBy: "MONDY",
   },
   {
     id: "hist-8-2009",
@@ -120,6 +126,7 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 70000,
     status: "checked-out" as const,
+    checkedBy: "LINDA",
   },
   {
     id: "hist-8-2010",
@@ -137,5 +144,6 @@ export const HISTORICAL_BOOKINGS = [
     nights: 1,
     total: 70000,
     status: "checked-out" as const,
+    checkedBy: "FORTUNATA",
   },
 ];

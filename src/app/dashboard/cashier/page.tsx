@@ -60,6 +60,7 @@ interface BookingRecord {
   nights: number;
   total: number;
   status: TransactionStatus;
+  checkedBy?: string;
 }
 
 const ROOM_RATE: Record<RoomType, number> = {
@@ -147,6 +148,7 @@ export default function BookingPage() {
         snapshot.transactions.map((tx) => ({
           ...tx,
           status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
+          checkedBy: tx.checkedBy || (tx.id.startsWith("hist-") ? tx.checkedBy : "Default"),
         })),
       );
       setReceiptSeq(snapshot.receiptSeq);
@@ -384,6 +386,7 @@ export default function BookingPage() {
       nights,
       total,
       status,
+      checkedBy: localStorage.getItem("orange-hotel-username") || "Reception",
     };
 
     const nextTransactions = [tx, ...transactions];
@@ -714,6 +717,7 @@ export default function BookingPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest Name</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-In Date</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-Out</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Checked By</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
                   </>
@@ -773,6 +777,9 @@ export default function BookingPage() {
                   <TableCell className="font-bold">
                     <p>{tx.checkOutDate}</p>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">{tx.checkOutTime}</p>
+                  </TableCell>
+                  <TableCell className="font-black text-xs text-primary uppercase tracking-wider">
+                    {tx.checkedBy || "---"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

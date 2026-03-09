@@ -5,11 +5,12 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Coffee, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
-import { Role } from "@/app/lib/mock-data";
+import { Role, USERS } from "@/app/lib/mock-data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { LoginProfiles, hydrateLoginProfilesFromServer, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 interface RoleLoginPageProps {
@@ -179,6 +180,29 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
             <p className="text-sm text-muted-foreground font-medium leading-relaxed mb-6">
               {config.description}
             </p>
+
+            {role === "cashier" && (
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {USERS.filter(u => u.role === 'cashier').map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => setUsername(user.name)}
+                    className={cn(
+                      "flex flex-col items-center p-3 rounded-xl border-2 transition-all",
+                      username === user.name 
+                        ? "border-orange-500 bg-orange-50" 
+                        : "border-transparent bg-muted/30 hover:bg-muted/50"
+                    )}
+                  >
+                    <div className="w-12 h-12 rounded-full overflow-hidden mb-2 border-2 border-white shadow-sm">
+                      <Image src={user.avatar} alt={user.name} width={48} height={48} />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-tight">{user.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="space-y-4 mb-6">
               <div className="space-y-2">
