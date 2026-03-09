@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Orange Hotel Reception Booking",
   description: "Reception booking login page for Orange Hotel.",
   manifest: "/api/pwa-manifest/cashier",
+  themeColor: "#ea580c",
 };
 
 export default function ReceptionBookingEntryPage() {

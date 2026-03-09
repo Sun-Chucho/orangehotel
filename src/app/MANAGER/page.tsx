@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Orange Hotel Manager",
   description: "Hotel manager login page for Orange Hotel.",
   manifest: "/api/pwa-manifest/manager",
+  themeColor: "#d97706",
 };
 
 export default function ManagerEntryPage() {

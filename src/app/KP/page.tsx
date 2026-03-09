@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Orange Hotel Kitchen POS",
   description: "Kitchen POS login page for Orange Hotel.",
   manifest: "/api/pwa-manifest/kitchen",
+  themeColor: "#c2410c",
 };
 
 export default function KitchenPosEntryPage() {
