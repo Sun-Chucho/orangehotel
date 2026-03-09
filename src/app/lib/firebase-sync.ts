@@ -42,6 +42,71 @@ function toStoragePath(key: string) {
   return `${FIREBASE_STORAGE_ROOT}/${key.replace(/[.#$[\]/]/g, "-")}`;
 }
 
+function readParsedLocalValue<T>(key: string) {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getLocalFallbackForSync(key: string) {
+  if (typeof window === "undefined") return null;
+
+  const directValue = readParsedLocalValue(key);
+  if (directValue !== null) {
+    return directValue;
+  }
+
+  if (key === "orange-hotel-cashier-state") {
+    const transactions = readParsedLocalValue<unknown[]>("orange-hotel-cashier-transactions") ?? [];
+    const receiptSeq = Number(localStorage.getItem("orange-hotel-cashier-seq"));
+    if (transactions.length === 0 && !Number.isFinite(receiptSeq)) return null;
+    return {
+      transactions,
+      receiptSeq: Number.isFinite(receiptSeq) && receiptSeq > 0 ? receiptSeq : 84920,
+    };
+  }
+
+  if (key === "orange-hotel-kitchen-state") {
+    const tickets = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-tickets") ?? [];
+    const payments = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-payments") ?? [];
+    const menuItems = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-menu") ?? [];
+    const ticketSeq = Number(localStorage.getItem("orange-hotel-kitchen-seq"));
+    if (tickets.length === 0 && payments.length === 0 && menuItems.length === 0 && !Number.isFinite(ticketSeq)) {
+      return null;
+    }
+    return {
+      tickets,
+      ticketSeq: Number.isFinite(ticketSeq) && ticketSeq > 0 ? ticketSeq : 300,
+      payments,
+      menuItems,
+    };
+  }
+
+  if (key === "orange-hotel-barista-state") {
+    const tickets = readParsedLocalValue<unknown[]>("orange-hotel-barista-orders") ?? [];
+    const payments = readParsedLocalValue<unknown[]>("orange-hotel-barista-payments") ?? [];
+    const menuItems = readParsedLocalValue<unknown[]>("orange-hotel-barista-menu") ?? [];
+    const ticketSeq = Number(localStorage.getItem("orange-hotel-barista-seq"));
+    if (tickets.length === 0 && payments.length === 0 && menuItems.length === 0 && !Number.isFinite(ticketSeq)) {
+      return null;
+    }
+    return {
+      tickets,
+      ticketSeq: Number.isFinite(ticketSeq) && ticketSeq > 0 ? ticketSeq : 490,
+      payments,
+      menuItems,
+    };
+  }
+
+  return null;
+}
+
 function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value: T | null) => void) {
   if (typeof window === "undefined") return;
   if (rawValue === null) {
@@ -66,8 +131,16 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
   try {
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
-    if (!snapshot.exists()) return;
-    localStorage.setItem(key, JSON.stringify(snapshot.val()));
+    if (snapshot.exists()) {
+      localStorage.setItem(key, JSON.stringify(snapshot.val()));
+      return;
+    }
+
+    const fallbackValue = getLocalFallbackForSync(key);
+    if (fallbackValue === null) return;
+
+    localStorage.setItem(key, JSON.stringify(fallbackValue));
+    await set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue);
   } catch (error) {
     console.error(`Firebase hydrate failed for ${key}`, error);
   }
