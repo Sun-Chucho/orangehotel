@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import { Manrope, Playfair_Display } from 'next/font/google';
+import { Toaster } from "@/components/ui/toaster";
 import './globals.css';
 
 const manrope = Manrope({
@@ -30,6 +31,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${manrope.variable} ${playfair.variable} font-body antialiased bg-background`} suppressHydrationWarning>
         {children}
+        <Toaster />
       </body>
     </html>
   );

@@ -21,6 +21,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-settings",
   "orange-hotel-hardware-settings",
   "orange-hotel-login-profiles",
+  "orange-hotel-website-bookings",
 ] as const;
 
 export const LEGACY_DEMO_KEYS = [

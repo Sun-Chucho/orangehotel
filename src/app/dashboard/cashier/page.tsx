@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ROOMS, Room } from "@/app/lib/mock-data";
 import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
+import {
+  markWebsiteBookingsSeen,
+  readWebsiteBookings,
+  STORAGE_WEBSITE_BOOKINGS,
+  type WebsiteBookingRecord,
+  writeWebsiteBookings,
+} from "@/app/lib/website-bookings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +26,12 @@ import {
 import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { toast } from "@/hooks/use-toast";
 import { readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
-type TransactionTab = "completed" | "credit";
+type TransactionTab = "completed" | "credit" | "website";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
 type BookingCurrency = "TSh" | "$";
@@ -127,7 +135,9 @@ export default function BookingPage() {
 
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
+  const [websiteBookings, setWebsiteBookings] = useState<WebsiteBookingRecord[]>([]);
   const [receiptSeq, setReceiptSeq] = useState(84920);
+  const previousWebsiteBookingIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const applyCashierSnapshot = () => {
@@ -143,6 +153,7 @@ export default function BookingPage() {
 
     applyCashierSnapshot();
     setRooms(readRoomsState());
+    setWebsiteBookings(readWebsiteBookings());
 
     const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
       applyCashierSnapshot();
@@ -150,10 +161,17 @@ export default function BookingPage() {
     const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
       setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
     });
+    const unsubscribeWebsiteBookings = subscribeToSyncedStorageKey<WebsiteBookingRecord[]>(
+      STORAGE_WEBSITE_BOOKINGS,
+      (value) => {
+        setWebsiteBookings(Array.isArray(value) ? value : readWebsiteBookings());
+      },
+    );
 
     return () => {
       unsubscribeCashier();
       unsubscribeRooms();
+      unsubscribeWebsiteBookings();
     };
   }, []);
 
@@ -161,10 +179,27 @@ export default function BookingPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const requestedTab = params.get("tab");
-    if (requestedTab === "completed" || requestedTab === "credit") {
+    if (requestedTab === "completed" || requestedTab === "credit" || requestedTab === "website") {
       setTransactionTab(requestedTab);
     }
   }, []);
+
+  useEffect(() => {
+    const previousIds = previousWebsiteBookingIdsRef.current;
+
+    if (previousIds.length > 0) {
+      const newBookings = websiteBookings.filter((booking) => !previousIds.includes(booking.id));
+      if (newBookings.length > 0) {
+        const latestBooking = newBookings[0];
+        toast({
+          title: "New website booking",
+          description: `${latestBooking.fullName} requested a ${latestBooking.roomType} room.`,
+        });
+      }
+    }
+
+    previousWebsiteBookingIdsRef.current = websiteBookings.map((booking) => booking.id);
+  }, [websiteBookings]);
 
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
   const packageConfig = selectedPackage === "none" ? null : SPECIAL_PACKAGES[selectedPackage];
@@ -198,19 +233,25 @@ export default function BookingPage() {
     () => transactions.filter((tx) => tx.status === "credit"),
     [transactions],
   );
+  const unreadWebsiteBookings = useMemo(
+    () => websiteBookings.filter((booking) => booking.status === "new"),
+    [websiteBookings],
+  );
   const activeBookedRoomNumbers = useMemo(
     () => new Set(transactions.filter((tx) => tx.status !== "checked-out").map((tx) => tx.roomNumber)),
     [transactions],
   );
-  const availableRooms = useMemo(() => {
+  const roomPickerRooms = useMemo(() => {
     const wantedType = roomType === "standard" ? "Standard" : "Platinum";
-    return rooms.filter(
-      (room) =>
-        room.type === wantedType &&
-        room.status === "available" &&
-        !activeBookedRoomNumbers.has(room.number),
-    );
+    return rooms.filter((room) => room.type === wantedType);
   }, [activeBookedRoomNumbers, roomType, rooms]);
+  const availableRooms = useMemo(
+    () =>
+      roomPickerRooms.filter(
+        (room) => room.status === "available" && !activeBookedRoomNumbers.has(room.number),
+      ),
+    [activeBookedRoomNumbers, roomPickerRooms],
+  );
   const selectedExtendBooking = useMemo(
     () => transactions.find((entry) => entry.id === selectedExtendBookingId) ?? null,
     [selectedExtendBookingId, transactions],
@@ -233,13 +274,45 @@ export default function BookingPage() {
     .filter((tx) => (tx.status === "completed" || tx.status === "checked-out") && (tx.currency ?? "TSh") === "TSh")
     .reduce((sum, tx) => sum + tx.total, 0);
 
-  const clearBookingForm = async () => {
-    const approved = await confirm({
-      title: "Clear Booking Form",
-      description: "Are you sure you want to clear this booking form?",
-      actionLabel: "Clear Form",
-    });
-    if (!approved) return;
+  const getRoomBookingState = (room: Room) => {
+    if (activeBookedRoomNumbers.has(room.number) || room.status === "occupied") {
+      return {
+        label: "Occupied",
+        canBook: false,
+        className: "border-blue-500 bg-blue-50 text-blue-700",
+      };
+    }
+
+    if (room.status === "cleaning") {
+      return {
+        label: "Cleaning",
+        canBook: false,
+        className: "border-orange-500 bg-orange-50 text-orange-700",
+      };
+    }
+
+    if (room.status === "maintenance") {
+      return {
+        label: "Maintenance",
+        canBook: false,
+        className: "border-gray-500 bg-gray-100 text-gray-600",
+      };
+    }
+
+    return {
+      label: "Available",
+      canBook: true,
+      className: "border-green-500 bg-green-50 text-green-700",
+    };
+  };
+
+  const markWebsiteBookingsAsSeen = (bookingIds?: string[]) => {
+    const nextWebsiteBookings = markWebsiteBookingsSeen(websiteBookings, bookingIds);
+    setWebsiteBookings(nextWebsiteBookings);
+    writeWebsiteBookings(nextWebsiteBookings);
+  };
+
+  const resetBookingForm = () => {
     setGuestName("");
     setPhone("");
     setCheckInDate(today);
@@ -252,6 +325,16 @@ export default function BookingPage() {
     setPackageRate("");
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
+  };
+
+  const clearBookingForm = async () => {
+    const approved = await confirm({
+      title: "Clear Booking Form",
+      description: "Are you sure you want to clear this booking form?",
+      actionLabel: "Clear Form",
+    });
+    if (!approved) return;
+    resetBookingForm();
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
@@ -292,19 +375,7 @@ export default function BookingPage() {
     writeCashierState(nextTransactions, nextReceipt);
     markRoomStatus(selectedRoomNumber, "occupied");
     setTransactionTab(status === "credit" ? "credit" : "completed");
-
-    setGuestName("");
-    setPhone("");
-    setCheckInDate(today);
-    setCheckInTime("14:00");
-    setCheckOutDate("");
-    setCheckOutTime("12:00");
-    setSelectedRoomNumber("");
-    setRoomType("standard");
-    setSelectedPackage("none");
-    setPackageRate("");
-    setShowSettlementPopup(false);
-    setShowPayNowPopup(false);
+    resetBookingForm();
   };
 
   const openSettlementPopup = () => {
@@ -314,7 +385,7 @@ export default function BookingPage() {
   };
 
   const redirectToBookedRooms = (tab: TransactionTab) => {
-    window.location.assign(`/dashboard/cashier?tab=${tab}#booked-rooms`);
+    window.location.replace(`/dashboard/cashier?tab=${tab}&refresh=${Date.now()}#booked-rooms`);
   };
 
   const confirmCreditBooking = async () => {
@@ -422,6 +493,9 @@ export default function BookingPage() {
             TSh {todayRevenueTSh.toLocaleString()} Today
           </Badge>
         </div>
+        <Badge variant="outline" className="h-10 px-4 justify-center border-amber-500 text-amber-700 font-black uppercase text-[10px] tracking-widest bg-amber-50">
+          {unreadWebsiteBookings.length} Website Booking{unreadWebsiteBookings.length === 1 ? "" : "s"} New
+        </Badge>
       </header>
       {isDirector && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
@@ -581,24 +655,100 @@ export default function BookingPage() {
               <TabsList className="h-10">
                 <TabsTrigger value="completed" className="text-[10px] font-black uppercase tracking-widest">Completed Transactions</TabsTrigger>
                 <TabsTrigger value="credit" className="text-[10px] font-black uppercase tracking-widest">Credit Transactions</TabsTrigger>
+                <TabsTrigger value="website" className="text-[10px] font-black uppercase tracking-widest">
+                  Website Booking {unreadWebsiteBookings.length > 0 ? `(${unreadWebsiteBookings.length})` : ""}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {transactionTab === "website" && (
+            <div className="border-b bg-amber-50/60 px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-black uppercase tracking-widest text-amber-800">Website Booking Requests</p>
+                <p className="text-xs font-bold text-amber-700">New landing-page bookings sync here for Reception follow-up.</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => markWebsiteBookingsAsSeen()}
+                disabled={unreadWebsiteBookings.length === 0}
+                className="h-10 font-black uppercase text-[10px] tracking-widest border-amber-500 text-amber-800"
+              >
+                Mark All Seen
+              </Button>
+            </div>
+          )}
           <Table>
             <TableHeader className="bg-muted/10">
               <TableRow>
+                {transactionTab === "website" ? (
+                  <>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Reference</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Stay</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Contact</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
+                  </>
+                ) : (
+                  <>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Room #</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest Name</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-In Date</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-Out</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(transactionTab === "completed" ? completedTransactions : creditTransactions).map((tx) => (
+              {transactionTab === "website" &&
+                websiteBookings.map((booking) => (
+                  <TableRow key={booking.id}>
+                    <TableCell className="font-black">{booking.bookingReference}</TableCell>
+                    <TableCell className="font-bold">
+                      <p>{booking.fullName}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                        {booking.guests} Guest{booking.guests === 1 ? "" : "s"} | {booking.roomType}
+                      </p>
+                    </TableCell>
+                    <TableCell className="font-bold">
+                      <p>{booking.checkIn} to {booking.checkOut}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                        {booking.nights} Night{booking.nights === 1 ? "" : "s"} | TZS {booking.totalAmount.toLocaleString()}
+                      </p>
+                    </TableCell>
+                    <TableCell className="font-bold">
+                      <p>{booking.phone}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">{booking.email}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col items-start gap-2">
+                        <Badge className={booking.status === "new" ? "bg-amber-500 text-black hover:bg-amber-500" : "bg-emerald-600 text-white hover:bg-emerald-600"}>
+                          {booking.status === "new" ? "New" : "Seen"}
+                        </Badge>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                          {new Date(booking.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        onClick={() => markWebsiteBookingsAsSeen([booking.id])}
+                        disabled={booking.status === "seen"}
+                        className="h-9 font-black uppercase text-[10px] tracking-widest"
+                      >
+                        Mark Seen
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {transactionTab !== "website" &&
+                (transactionTab === "completed" ? completedTransactions : creditTransactions).map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell className="font-black">{tx.roomNumber}</TableCell>
                   <TableCell className="font-bold">{tx.guestName}</TableCell>
@@ -653,12 +803,16 @@ export default function BookingPage() {
                 </TableRow>
               ))}
 
-              {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
+              {((transactionTab === "website" && websiteBookings.length === 0) ||
+                (transactionTab !== "website" &&
+                  (transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0)) && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
-                      <p className="font-black uppercase tracking-widest text-xs">No bookings found</p>
+                      <p className="font-black uppercase tracking-widest text-xs">
+                        {transactionTab === "website" ? "No website bookings found" : "No bookings found"}
+                      </p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -673,29 +827,47 @@ export default function BookingPage() {
           <Card className="w-full max-w-2xl">
             <CardHeader>
               <CardTitle className="text-xl font-black uppercase tracking-tight">
-                Available {roomType === "standard" ? "Standard" : "Platinum"} Rooms
+                {roomType === "standard" ? "Standard" : "Platinum"} Rooms
               </CardTitle>
-              <CardDescription>Select a free room for this booking</CardDescription>
+              <CardDescription>Select from all rooms. Only available rooms can be booked.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest">
+                <Badge className="bg-green-50 text-green-700 border border-green-500 hover:bg-green-50">Available</Badge>
+                <Badge className="bg-blue-50 text-blue-700 border border-blue-500 hover:bg-blue-50">Occupied</Badge>
+                <Badge className="bg-orange-50 text-orange-700 border border-orange-500 hover:bg-orange-50">Cleaning</Badge>
+                <Badge className="bg-gray-100 text-gray-600 border border-gray-500 hover:bg-gray-100">Maintenance</Badge>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {availableRooms.map((room) => (
-                  <Button
-                    key={room.id}
-                    variant={selectedRoomNumber === room.number ? "default" : "outline"}
-                    onClick={() => {
-                      setSelectedRoomNumber(room.number);
-                      setRoomPickerOpen(false);
-                    }}
-                    className="h-10 font-black"
-                  >
-                    {room.number}
-                  </Button>
-                ))}
+                {roomPickerRooms.map((room) => {
+                  const roomState = getRoomBookingState(room);
+
+                  return (
+                    <Button
+                      key={room.id}
+                      type="button"
+                      variant="outline"
+                      disabled={!roomState.canBook}
+                      onClick={() => {
+                        if (!roomState.canBook) return;
+                        setSelectedRoomNumber(room.number);
+                        setRoomPickerOpen(false);
+                      }}
+                      className={`h-auto min-h-14 flex-col gap-1 border font-black ${
+                        selectedRoomNumber === room.number && roomState.canBook
+                          ? "border-primary bg-primary text-primary-foreground hover:bg-primary"
+                          : roomState.className
+                      }`}
+                    >
+                      <span>{room.number}</span>
+                      <span className="text-[10px] uppercase tracking-widest">{roomState.label}</span>
+                    </Button>
+                  );
+                })}
               </div>
 
               {availableRooms.length === 0 && (
-                <p className="text-sm font-bold text-muted-foreground">No free rooms in this category.</p>
+                <p className="text-sm font-bold text-muted-foreground">No available rooms in this category.</p>
               )}
 
               <div className="flex justify-end">

@@ -71,18 +71,23 @@ export async function GET(
   return new NextResponse(
     JSON.stringify({
       ...manifest,
+      display_override: ["standalone", "window-controls-overlay"],
       display: "standalone",
-      scope: "/",
+      scope: manifest.start_url,
+      orientation: "portrait",
+      prefer_related_applications: false,
       icons: [
         {
           src: "/logo.jpeg",
           sizes: "192x192",
           type: "image/jpeg",
+          purpose: "any maskable",
         },
         {
           src: "/logo.jpeg",
           sizes: "512x512",
           type: "image/jpeg",
+          purpose: "any maskable",
         },
       ],
     }),

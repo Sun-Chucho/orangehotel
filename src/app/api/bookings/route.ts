@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { appendServerSyncedStorageItem } from "@/app/lib/firebase-server";
+import { STORAGE_WEBSITE_BOOKINGS, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 
 export const runtime = "nodejs";
 
@@ -149,10 +151,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const bookingReference = upstreamJson?.bookingReference ?? `OH-${Date.now()}`;
+    const syncedWebsiteBooking: WebsiteBookingRecord = {
+      id: `web-${Date.now()}`,
+      bookingReference,
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      roomType: data.roomType,
+      checkIn: data.checkIn,
+      checkOut: data.checkOut,
+      guests: data.guests,
+      nights,
+      pricePerNight,
+      totalAmount,
+      currency: "TZS",
+      specialRequest: data.specialRequest,
+      source: "website",
+      status: "new",
+      createdAt: payload.createdAt,
+      receptionistSeenAt: null,
+    };
+
+    try {
+      await appendServerSyncedStorageItem(STORAGE_WEBSITE_BOOKINGS, syncedWebsiteBooking);
+    } catch (error) {
+      console.error("Website booking sync failed", error);
+    }
+
     return NextResponse.json(
       {
         ok: true,
-        bookingReference: upstreamJson?.bookingReference ?? `OH-${Date.now()}`,
+        bookingReference,
       },
       { status: 200, headers: { "Cache-Control": "no-store" } }
     );

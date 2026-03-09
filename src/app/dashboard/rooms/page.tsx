@@ -27,14 +27,16 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { readRoomsState, syncRoomsWithActiveBookings, updateRoomStatusById } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
-import { readCashierState, STORAGE_CASHIER_STATE } from "@/app/lib/storage";
+import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
 
 type StatusFilter = "all" | Room["status"];
 type TypeFilter = "all" | Room["type"];
 
 interface BookingRoomRecord {
+  id: string;
   roomNumber: string;
   status?: "completed" | "credit" | "checked-out";
+  createdAt?: number;
 }
 
 export default function RoomsPage() {
@@ -94,7 +96,27 @@ export default function RoomsPage() {
     [rooms],
   );
 
-  const setRoomStatus = (roomId: string, status: Room["status"]) => {
+  const setRoomStatus = (roomId: string, roomNumber: string, status: Room["status"]) => {
+    if (status !== "occupied") {
+      const cashierSnapshot = readCashierState<BookingRoomRecord>(
+        "orange-hotel-cashier-transactions",
+        "orange-hotel-cashier-seq",
+        84920,
+      );
+      const activeBooking = [...cashierSnapshot.transactions]
+        .filter((booking) => booking.roomNumber === roomNumber && booking.status !== "checked-out")
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+      if (activeBooking) {
+        const nextTransactions = cashierSnapshot.transactions.map((booking) =>
+          booking.id === activeBooking.id
+            ? { ...booking, status: "checked-out" as const }
+            : booking,
+        );
+        writeCashierState(nextTransactions, cashierSnapshot.receiptSeq);
+      }
+    }
+
     const nextRooms = updateRoomStatusById(roomId, status);
     setRooms(nextRooms);
   };
@@ -113,7 +135,7 @@ export default function RoomsPage() {
       actionLabel: "Update Room",
     });
     if (!approved) return;
-    setRoomStatus(roomId, status);
+    setRoomStatus(roomId, roomNumber, status);
   };
 
   const getStatusIcon = (status: Room["status"]) => {

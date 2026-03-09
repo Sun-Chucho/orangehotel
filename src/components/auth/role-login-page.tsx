@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coffee, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
+import { Building2, Coffee, Download, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
 import { Role } from "@/app/lib/mock-data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,27 @@ const ROLE_CONFIG: Record<Role, { label: string; username: string; description: 
   },
 };
 
+function downloadRoleShortcut(roleLabel: string) {
+  if (typeof window === "undefined") return;
+
+  const shortcutContents = [
+    "[InternetShortcut]",
+    `URL=${window.location.href}`,
+    "IconFile=",
+    "IconIndex=0",
+  ].join("\r\n");
+
+  const blob = new Blob([shortcutContents], { type: "application/internet-shortcut" });
+  const downloadUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = `${roleLabel.replace(/\s+/g, "-").toLowerCase()}.url`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
+
 export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const router = useRouter();
   const [shift, setShift] = useState<"day" | "night">("day");
@@ -84,6 +105,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installMessage, setInstallMessage] = useState("");
+  const [installSupported, setInstallSupported] = useState(false);
   const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
 
   useEffect(() => {
@@ -115,6 +137,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
     void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    setInstallSupported(window.isSecureContext || window.location.hostname === "localhost");
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -138,13 +161,22 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
   const handleInstall = async () => {
     if (!installPrompt) {
-      setInstallMessage("If no prompt appears, use your browser menu and choose Install App.");
+      downloadRoleShortcut(config.label);
+      setInstallMessage(
+        installSupported
+          ? "Desktop shortcut downloaded. If you need the full app install, use Chrome or Edge and choose Install App."
+          : "Desktop shortcut downloaded. Full app install requires HTTPS or localhost.",
+      );
       return;
     }
 
     await installPrompt.prompt();
-    await installPrompt.userChoice.catch(() => undefined);
+    const choice = await installPrompt.userChoice.catch(() => null);
     setInstallPrompt(null);
+    if (choice?.outcome !== "accepted") {
+      downloadRoleShortcut(config.label);
+      setInstallMessage("Install prompt dismissed. A desktop shortcut has been downloaded instead.");
+    }
   };
 
   const handleLogin = () => {
@@ -275,6 +307,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                 className="mt-3 h-10 w-full font-black uppercase tracking-widest text-[10px]"
                 onClick={handleInstall}
               >
+                <Download className="mr-2 h-4 w-4" />
                 Download To Desktop
               </Button>
               {installMessage && <p className="mt-2 text-xs font-bold text-orange-700">{installMessage}</p>}
