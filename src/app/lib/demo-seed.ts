@@ -10,6 +10,7 @@ import {
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
 } from "@/app/lib/inventory-transfer";
+import { DEFAULT_KITCHEN_MENU } from "@/app/lib/kitchen-menu";
 
 const STORAGE_CASHIER_TX = "orange-hotel-cashier-transactions";
 const STORAGE_CASHIER_SEQ = "orange-hotel-cashier-seq";
@@ -95,7 +96,7 @@ export function seedDemoDataIfNeeded() {
   ]);
   setValueIfMissing(STORAGE_CASHIER_SEQ, "84922");
 
-  setArrayIfEmpty(STORAGE_KITCHEN_MENU, []);
+  setArrayIfEmpty(STORAGE_KITCHEN_MENU, DEFAULT_KITCHEN_MENU);
   setArrayIfEmpty(STORAGE_KITCHEN_TICKETS, []);
   setArrayIfEmpty(STORAGE_KITCHEN_PAYMENTS, []);
   setValueIfMissing(STORAGE_KITCHEN_SEQ, "301");

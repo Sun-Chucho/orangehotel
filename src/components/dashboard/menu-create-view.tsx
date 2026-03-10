@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writePosState } from "@/app/lib/storage";
+import {
+  DEFAULT_KITCHEN_MENU,
+  KITCHEN_CATEGORY_LABELS,
+  KITCHEN_CATEGORY_OPTIONS,
+  KitchenMenuCategory,
+  KitchenMenuItem,
+} from "@/app/lib/kitchen-menu";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,16 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 
-type KitchenCategory = "breakfast" | "lunch" | "dinner";
 type BaristaCategory = "espresso" | "coffee" | "tea" | "cold" | "snacks";
-
-interface KitchenMenuItem {
-  id: string;
-  name: string;
-  price: number;
-  category: KitchenCategory;
-  prepMinutes: number;
-}
 
 interface BaristaMenuItem {
   id: string;
@@ -65,7 +63,7 @@ export function MenuCreateView() {
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenPrice, setKitchenPrice] = useState("");
   const [kitchenPrepMinutes, setKitchenPrepMinutes] = useState("15");
-  const [kitchenCategory, setKitchenCategory] = useState<KitchenCategory>("lunch");
+  const [kitchenCategory, setKitchenCategory] = useState<KitchenMenuCategory>("salad");
 
   const [baristaTickets, setBaristaTickets] = useState<QueueTicket[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PaymentRecord[]>([]);
@@ -88,7 +86,18 @@ export function MenuCreateView() {
     setKitchenTickets(kitchenSnapshot.tickets);
     setKitchenPayments(kitchenSnapshot.payments);
     setKitchenSeq(kitchenSnapshot.ticketSeq);
-    setKitchenMenuItems(kitchenSnapshot.menuItems);
+    if (kitchenSnapshot.menuItems.length > 0) {
+      setKitchenMenuItems(kitchenSnapshot.menuItems);
+    } else {
+      setKitchenMenuItems(DEFAULT_KITCHEN_MENU);
+      writePosState(
+        STORAGE_KITCHEN_STATE,
+        kitchenSnapshot.tickets,
+        kitchenSnapshot.ticketSeq,
+        kitchenSnapshot.payments,
+        DEFAULT_KITCHEN_MENU,
+      );
+    }
 
     const baristaSnapshot = readPosState<QueueTicket, PaymentRecord, BaristaMenuItem>(
       STORAGE_BARISTA_STATE,
@@ -111,7 +120,7 @@ export function MenuCreateView() {
     if (!kitchenName.trim() || Number.isNaN(price) || price <= 0 || Number.isNaN(prepMinutes) || prepMinutes <= 0) return;
     const approved = await confirm({
       title: "Create Kitchen Menu Item",
-      description: `Are you sure you want to add ${kitchenName.trim()} at TSh ${price.toLocaleString()}?`,
+      description: `Are you sure you want to add ${kitchenName.trim()} at $${price.toLocaleString()}?`,
       actionLabel: "Add Menu Item",
     });
     if (!approved) return;
@@ -131,7 +140,7 @@ export function MenuCreateView() {
     setKitchenName("");
     setKitchenPrice("");
     setKitchenPrepMinutes("15");
-    setKitchenCategory("lunch");
+    setKitchenCategory("salad");
   };
 
   const addBaristaMenuItem = async () => {
@@ -184,19 +193,19 @@ export function MenuCreateView() {
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Create Kitchen Menu Item</CardTitle>
-              <CardDescription>Set dish name, category, preparation time, and price.</CardDescription>
+              <CardDescription>Set dish name, section, preparation time, and selling price.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <Input value={kitchenName} onChange={(event) => setKitchenName(event.target.value)} placeholder="Dish name" disabled={isDirector} />
               <select
                 className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={kitchenCategory}
-                onChange={(event) => setKitchenCategory(event.target.value as KitchenCategory)}
+                onChange={(event) => setKitchenCategory(event.target.value as KitchenMenuCategory)}
                 disabled={isDirector}
               >
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="dinner">Dinner</option>
+                {KITCHEN_CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
               <Input type="number" min="1" value={kitchenPrepMinutes} onChange={(event) => setKitchenPrepMinutes(event.target.value)} placeholder="Prep minutes" disabled={isDirector} />
               <Input type="number" min="1" value={kitchenPrice} onChange={(event) => setKitchenPrice(event.target.value)} placeholder="Price" disabled={isDirector} />
@@ -227,9 +236,9 @@ export function MenuCreateView() {
                   {kitchenMenuItems.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-bold">{item.name}</TableCell>
-                      <TableCell className="font-bold uppercase text-[10px] tracking-widest">{item.category}</TableCell>
+                      <TableCell className="font-bold uppercase text-[10px] tracking-widest">{KITCHEN_CATEGORY_LABELS[item.category]}</TableCell>
                       <TableCell className="font-bold">{item.prepMinutes} min</TableCell>
-                      <TableCell className="font-bold">TSh {item.price.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold">${item.price.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                   {kitchenMenuItems.length === 0 && (

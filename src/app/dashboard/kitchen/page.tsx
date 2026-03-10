@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { readStoredRole } from "@/app/lib/auth";
+import {
+  DEFAULT_KITCHEN_MENU,
+  KITCHEN_CATEGORY_LABELS,
+  KITCHEN_CATEGORY_OPTIONS,
+  KitchenMenuCategory,
+  KitchenMenuItem,
+} from "@/app/lib/kitchen-menu";
 import { InventoryItem, ROOMS, Role } from "@/app/lib/mock-data";
 import {
   adjustInventoryQuantity,
@@ -26,18 +33,10 @@ import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } 
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
-type KitchenCategory = "all" | "breakfast" | "lunch" | "dinner";
+type KitchenCategory = "all" | KitchenMenuCategory;
 type ServiceMode = "restaurant" | "room-service" | "take-away";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type KitchenPaymentStatus = "completed" | "credit";
-
-interface KitchenMenuItem {
-  id: string;
-  name: string;
-  price: number;
-  category: Exclude<KitchenCategory, "all">;
-  prepMinutes: number;
-}
 
 interface CartLine {
   item: KitchenMenuItem;
@@ -78,20 +77,13 @@ interface PendingOrder {
   total: number;
 }
 
-const KITCHEN_MENU: KitchenMenuItem[] = [];
+const KITCHEN_MENU: KitchenMenuItem[] = DEFAULT_KITCHEN_MENU;
 
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
 const STORAGE_MENU = "orange-hotel-kitchen-menu";
 const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 const STORAGE_PAYMENTS = "orange-hotel-kitchen-payments";
-
-const normalizeCategory = (value: string): Exclude<KitchenCategory, "all"> => {
-  if (value === "breakfast" || value === "lunch" || value === "dinner") return value;
-  if (value === "grill" || value === "pasta") return "lunch";
-  if (value === "salad" || value === "sides" || value === "dessert") return "dinner";
-  return "lunch";
-};
 
 export default function KitchenPage() {
   const isDirector = useIsDirector();
@@ -145,7 +137,12 @@ export default function KitchenPage() {
       setTickets(snapshot.tickets);
       setTicketSeq(snapshot.ticketSeq);
       setKitchenPayments(snapshot.payments);
-      setMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : KITCHEN_MENU);
+      if (snapshot.menuItems.length > 0) {
+        setMenuItems(snapshot.menuItems);
+      } else {
+        setMenuItems(KITCHEN_MENU);
+        writePosState(STORAGE_KITCHEN_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, KITCHEN_MENU);
+      }
     };
 
     applyKitchenSnapshot();
@@ -575,7 +572,7 @@ export default function KitchenPage() {
                       <TableCell className="font-bold">{payment.destination}</TableCell>
                       <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
                       <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
-                      <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold">${payment.total.toLocaleString()}</TableCell>
                       <TableCell className="font-bold text-sm">{new Date(payment.createdAt).toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
@@ -627,13 +624,13 @@ export default function KitchenPage() {
         <Card className="border-none shadow-sm">
           <CardContent className="p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Completed Sales</p>
-            <p className="mt-2 text-2xl font-black">TSh {completedSalesTotal.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black">${completedSalesTotal.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">
           <CardContent className="p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Credit Sales</p>
-            <p className="mt-2 text-2xl font-black">TSh {creditSalesTotal.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black">${creditSalesTotal.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">
@@ -667,7 +664,7 @@ export default function KitchenPage() {
                   <TableCell className="font-bold">{payment.destination}</TableCell>
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
-                  <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
+                  <TableCell className="font-bold">${payment.total.toLocaleString()}</TableCell>
                 </TableRow>
               ))}
               {recentSales.length === 0 && (
@@ -697,11 +694,13 @@ export default function KitchenPage() {
               </div>
 
               <Tabs value={category} onValueChange={(value) => setCategory(value as KitchenCategory)}>
-                <TabsList className="w-full grid grid-cols-2 md:grid-cols-4 h-auto gap-1 bg-muted/30 p-1.5 rounded-xl">
+                <TabsList className="w-full h-auto flex flex-wrap gap-1 bg-muted/30 p-1.5 rounded-xl">
                   <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest rounded-lg">All</TabsTrigger>
-                  <TabsTrigger value="breakfast" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Breakfast</TabsTrigger>
-                  <TabsTrigger value="lunch" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Lunch</TabsTrigger>
-                  <TabsTrigger value="dinner" className="font-black uppercase text-[10px] tracking-widest rounded-lg">Dinner</TabsTrigger>
+                  {KITCHEN_CATEGORY_OPTIONS.map((option) => (
+                    <TabsTrigger key={option.value} value={option.value} className="font-black uppercase text-[10px] tracking-widest rounded-lg">
+                      {option.label}
+                    </TabsTrigger>
+                  ))}
                 </TabsList>
               </Tabs>
 
@@ -723,7 +722,7 @@ export default function KitchenPage() {
                   >
                     <div className="flex items-center justify-between mb-3">
                       <Badge variant="outline" className="uppercase text-[9px] font-black tracking-widest">
-                        {item.category}
+                        {KITCHEN_CATEGORY_LABELS[item.category]}
                       </Badge>
                       <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                         {item.prepMinutes} min
@@ -731,7 +730,7 @@ export default function KitchenPage() {
                     </div>
                     <h3 className="font-black text-lg leading-tight">{item.name}</h3>
                     <div className="mt-6 flex items-center justify-between">
-                      <span className="font-black">TSh {(item.price || 0).toLocaleString()}</span>
+                      <span className="font-black">${(item.price || 0).toLocaleString()}</span>
                       <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center">
                         <Plus className="w-4 h-4" />
                       </div>
@@ -782,7 +781,7 @@ export default function KitchenPage() {
                         <TableCell className="font-bold text-sm">
                           {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
                         </TableCell>
-                        <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
+                        <TableCell className="font-black">${ticket.total.toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                           <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
@@ -962,7 +961,7 @@ export default function KitchenPage() {
                       <div>
                         <p className="font-bold leading-tight">{line.item.name}</p>
                         <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">
-                          TSh {(line.item.price || 0).toLocaleString()} each
+                          ${(line.item.price || 0).toLocaleString()} each
                         </p>
                       </div>
                       <button
@@ -983,7 +982,7 @@ export default function KitchenPage() {
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                      <span className="font-black text-sm">TSh {((line.item.price || 0) * line.qty).toLocaleString()}</span>
+                      <span className="font-black text-sm">${((line.item.price || 0) * line.qty).toLocaleString()}</span>
                     </div>
                   </div>
                 ))}
@@ -993,7 +992,7 @@ export default function KitchenPage() {
             <div className="space-y-2 border-t pt-4">
               <div className="flex justify-between text-lg font-black pt-2">
                 <span>Total</span>
-                <span className="text-primary">TSh {subtotal.toLocaleString()}</span>
+                <span className="text-primary">${subtotal.toLocaleString()}</span>
               </div>
             </div>
 
