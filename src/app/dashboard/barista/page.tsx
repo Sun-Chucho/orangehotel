@@ -98,20 +98,38 @@ const normalizeCategory = (value: string): Exclude<BaristaCategory, "all"> => {
 };
 
 function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): BaristaMenuItem[] {
-  return inventory
+  const deduped = new Map<string, BaristaMenuItem>();
+
+  inventory
     .filter((item) => (!item.status || item.status === "ACTIVE") && item.category !== "Kitchen")
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      price: item.sellingPrice ?? item.price ?? 0,
-      category: normalizeCategory(item.category),
-      prepMinutes: 2,
-      barcode: item.barcode || "",
-    }));
+    .forEach((item) => {
+      const name = getBaristaInventoryLabel(item);
+      const key = `${normalizeBaristaTarget(name)}|${(item.category ?? "").toLowerCase()}`;
+      const nextMenuItem: BaristaMenuItem = {
+        id: item.id,
+        name,
+        price: typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
+        category: normalizeCategory(item.category),
+        prepMinutes: 2,
+        barcode: item.barcode || "",
+      };
+      const existingItem = deduped.get(key);
+      if (!existingItem || nextMenuItem.price > existingItem.price || (!!nextMenuItem.barcode && !existingItem.barcode)) {
+        deduped.set(key, nextMenuItem);
+      }
+    });
+
+  return Array.from(deduped.values());
 }
 
 function normalizeBaristaTarget(name: string) {
   return name.replace(/\s+TOTS?$/i, "").trim().toLowerCase();
+}
+
+function getBaristaInventoryLabel(item: Pick<InventoryItem, "name" | "size">) {
+  if (!item.size) return item.name.trim();
+  if (item.name.toLowerCase().includes(item.size.toLowerCase())) return item.name.trim();
+  return `${item.name} ${item.size}`.trim();
 }
 
 function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
@@ -123,10 +141,15 @@ function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
     const seedSize = seededItem.size ?? "";
     const seedBarcode = seededItem.barcode ?? "";
 
-    const existingIndex = nextInventory.findIndex((item) =>
-      (seedBarcode && item.barcode === seedBarcode) ||
-      (normalizeBaristaTarget(item.name) === normalizeBaristaTarget(seedName) && (item.size ?? "") === seedSize),
-    );
+    const existingIndex = nextInventory.findIndex((item) => {
+      const currentLabel = getBaristaInventoryLabel(item);
+      const seedLabel = `${seedName} ${seedSize}`.trim();
+      return (
+        (seedBarcode && item.barcode === seedBarcode) ||
+        normalizeBaristaTarget(currentLabel) === normalizeBaristaTarget(seedLabel) ||
+        (normalizeBaristaTarget(item.name) === normalizeBaristaTarget(seedName) && (!(item.size ?? "") || (item.size ?? "") === seedSize))
+      );
+    });
 
     if (existingIndex >= 0) {
       const currentItem = nextInventory[existingIndex];
@@ -172,7 +195,33 @@ function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
     changed = true;
   }
 
-  return { nextInventory, changed };
+  const dedupedInventory: InventoryItem[] = [];
+  const seen = new Map<string, number>();
+
+  for (const item of nextInventory) {
+    const dedupeKey = item.barcode || `${normalizeBaristaTarget(getBaristaInventoryLabel(item))}|${(item.category ?? "").toLowerCase()}`;
+    const existingAt = seen.get(dedupeKey);
+    if (existingAt === undefined) {
+      seen.set(dedupeKey, dedupedInventory.length);
+      dedupedInventory.push(item);
+      continue;
+    }
+
+    const existingItem = dedupedInventory[existingAt];
+    const preferredItem =
+      (item.size && !existingItem.size) ||
+      ((item.sellingPrice ?? 0) > (existingItem.sellingPrice ?? 0)) ||
+      ((item.stock ?? 0) > (existingItem.stock ?? 0))
+        ? item
+        : existingItem;
+
+    if (preferredItem !== existingItem) {
+      dedupedInventory[existingAt] = preferredItem;
+      changed = true;
+    }
+  }
+
+  return { nextInventory: dedupedInventory, changed };
 }
 
 export default function BaristaPage() {
