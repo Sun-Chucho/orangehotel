@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readServerSyncedStorageValue, writeServerSyncedStorageValue } from "@/app/lib/firebase-server";
-import { STORAGE_LOGIN_PROFILES, type LoginProfiles, type LoginProfileEntry } from "@/app/lib/login-profiles";
+import { STORAGE_LOGIN_PROFILES, type LoginProfiles, type LoginProfileEntry, type LoginUserAccount } from "@/app/lib/login-profiles";
 import { normalizeRole } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
@@ -11,10 +11,29 @@ function sanitizeEntry(entry: Partial<LoginProfileEntry> | null | undefined): Lo
 
   const shift = entry?.shift === "day" || entry?.shift === "night" ? entry.shift : undefined;
   const updatedAt = typeof entry?.updatedAt === "number" && Number.isFinite(entry.updatedAt) ? entry.updatedAt : Date.now();
+  const password = typeof entry?.password === "string" && entry.password.trim() ? entry.password.trim() : undefined;
+  const users = Array.isArray(entry?.users)
+    ? entry.users
+        .map((user) => {
+          const userName = typeof user?.username === "string" ? user.username.trim() : "";
+          if (!userName) return null;
+          const userPassword = typeof user?.password === "string" && user.password.trim() ? user.password.trim() : undefined;
+          const userUpdatedAt = typeof user?.updatedAt === "number" && Number.isFinite(user.updatedAt) ? user.updatedAt : updatedAt;
+          const nextUser: LoginUserAccount = {
+            username: userName,
+            ...(userPassword ? { password: userPassword } : {}),
+            updatedAt: userUpdatedAt,
+          };
+          return nextUser;
+        })
+        .filter(Boolean) as LoginUserAccount[]
+    : undefined;
 
   return {
     username,
+    ...(password ? { password } : {}),
     ...(shift ? { shift } : {}),
+    ...(users && users.length > 0 ? { users } : {}),
     updatedAt,
   };
 }

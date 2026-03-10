@@ -24,10 +24,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle2, Coffee, Minus, Plus, Receipt, Search, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Coffee, Lock, Minus, Plus, Receipt, Search, Trash2, User, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
+import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, readLocalLoginProfiles, saveLoginProfileToServer, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 type BaristaCategory = "all" | "espresso" | "coffee" | "tea" | "cold" | "snacks";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -266,6 +267,12 @@ export default function BaristaPage() {
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
+  const [accountTab, setAccountTab] = useState<"session" | "password">("session");
+  const [activeUsername, setActiveUsername] = useState("");
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [passwordFeedback, setPasswordFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
   const roomSuggestions = useMemo(() => ROOMS.map((room) => room.number), []);
   const tableSuggestions = useMemo(
@@ -276,6 +283,9 @@ export default function BaristaPage() {
   useEffect(() => {
     const savedRole = readStoredRole();
     setRole(savedRole);
+    if (typeof window !== "undefined") {
+      setActiveUsername(localStorage.getItem("orange-hotel-username") ?? "");
+    }
   }, []);
 
   useEffect(() => {
@@ -534,6 +544,58 @@ export default function BaristaPage() {
     () => [...baristaPayments].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
     [baristaPayments],
   );
+
+  const activeBaristaProfile = useMemo(() => readLocalLoginProfiles()?.barista ?? null, [activeUsername, role]);
+
+  const updateBaristaPassword = async () => {
+    if (role !== "barista") {
+      setPasswordFeedback({ type: "error", message: "Only logged-in barista users can change barista passwords." });
+      return;
+    }
+
+    const normalizedUsername = activeUsername.trim();
+    if (!normalizedUsername) {
+      setPasswordFeedback({ type: "error", message: "No active barista user found in this session." });
+      return;
+    }
+
+    const expectedPassword = getProfilePassword(activeBaristaProfile, normalizedUsername, DEFAULT_LOGIN_PASSWORD);
+    if (currentPasswordInput !== expectedPassword) {
+      setPasswordFeedback({ type: "error", message: "Current password is incorrect." });
+      return;
+    }
+
+    const nextPassword = newPasswordInput.trim();
+    if (nextPassword.length < 4) {
+      setPasswordFeedback({ type: "error", message: "New password must be at least 4 characters." });
+      return;
+    }
+
+    if (nextPassword !== confirmPasswordInput.trim()) {
+      setPasswordFeedback({ type: "error", message: "New password and confirmation do not match." });
+      return;
+    }
+
+    const profiles = readLocalLoginProfiles() ?? {};
+    const nextEntry = upsertProfileUser(profiles.barista, normalizedUsername, {
+      password: nextPassword,
+      updatedAt: Date.now(),
+    });
+    const nextProfiles = {
+      ...profiles,
+      barista: nextEntry,
+    };
+
+    writeLocalLoginProfiles(nextProfiles);
+    const saved = await saveLoginProfileToServer("barista", nextEntry);
+    setCurrentPasswordInput("");
+    setNewPasswordInput("");
+    setConfirmPasswordInput("");
+    setPasswordFeedback({
+      type: saved ? "success" : "error",
+      message: saved ? `Password updated for ${normalizedUsername}.` : "Password changed locally, but sync to server failed.",
+    });
+  };
 
   const addToCart = (item: BaristaMenuItem) => {
     if (isDirector) return;
@@ -918,6 +980,84 @@ export default function BaristaPage() {
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
           <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
             Managing Director View: Barista operations analytics and stock visibility only
+          </CardContent>
+        </Card>
+      )}
+
+      {role === "barista" && !isDirector && (
+        <Card className="border-none shadow-sm">
+          <CardHeader>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Account</CardTitle>
+                <CardDescription>Manage the active barista session and account password.</CardDescription>
+              </div>
+              <Tabs value={accountTab} onValueChange={(value) => setAccountTab(value as "session" | "password")}>
+                <TabsList className="grid w-full grid-cols-2 md:w-[260px] h-10">
+                  <TabsTrigger value="session" className="font-black uppercase text-[10px] tracking-widest">Session</TabsTrigger>
+                  <TabsTrigger value="password" className="font-black uppercase text-[10px] tracking-widest">Change Password</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {accountTab === "session" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border bg-muted/20 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">Logged In User</p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <p className="text-xl font-black">{activeUsername || "BARISTA"}</p>
+                  </div>
+                </div>
+                <div className="rounded-2xl border bg-muted/20 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">Password Control</p>
+                  <p className="mt-3 text-sm font-bold text-muted-foreground">
+                    Use the change-password tab to update only this user&apos;s login password.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Current Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input type="password" value={currentPasswordInput} onChange={(event) => setCurrentPasswordInput(event.target.value)} className="pl-10 h-11" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input type="password" value={newPasswordInput} onChange={(event) => setNewPasswordInput(event.target.value)} className="pl-10 h-11" />
+                  </div>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Confirm New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input type="password" value={confirmPasswordInput} onChange={(event) => setConfirmPasswordInput(event.target.value)} className="pl-10 h-11" />
+                  </div>
+                </div>
+                {passwordFeedback && (
+                  <div className={`rounded-xl border px-4 py-3 text-xs font-black uppercase tracking-widest md:col-span-2 ${passwordFeedback.type === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                    {passwordFeedback.message}
+                  </div>
+                )}
+                <div className="md:col-span-2 flex justify-end">
+                  <Button
+                    onClick={() => void updateBaristaPassword()}
+                    className="h-11 font-black uppercase text-[10px] tracking-widest"
+                    disabled={!currentPasswordInput || !newPasswordInput || !confirmPasswordInput}
+                  >
+                    Update Password
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

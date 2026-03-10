@@ -4,13 +4,23 @@ import { Role } from "@/app/lib/mock-data";
 
 export const STORAGE_LOGIN_PROFILES = "orange-hotel-login-profiles";
 
+export interface LoginUserAccount {
+  username: string;
+  password?: string;
+  updatedAt: number;
+}
+
 export interface LoginProfileEntry {
   username: string;
+  password?: string;
   shift?: "day" | "night";
+  users?: LoginUserAccount[];
   updatedAt: number;
 }
 
 export type LoginProfiles = Partial<Record<Role, LoginProfileEntry>>;
+
+export const DEFAULT_LOGIN_PASSWORD = "1234";
 
 function dispatchLoginProfilesUpdated() {
   window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key: STORAGE_LOGIN_PROFILES } }));
@@ -67,4 +77,38 @@ export async function saveLoginProfileToServer(role: Role, entry: LoginProfileEn
   } catch {
     return false;
   }
+}
+
+export function getProfilePassword(entry: LoginProfileEntry | null | undefined, username: string, fallback = DEFAULT_LOGIN_PASSWORD) {
+  if (!entry) return fallback;
+
+  const matchedUser = entry.users?.find((user) => user.username.trim().toLowerCase() === username.trim().toLowerCase());
+  if (matchedUser?.password?.trim()) return matchedUser.password.trim();
+  if (entry.password?.trim()) return entry.password.trim();
+  return fallback;
+}
+
+export function upsertProfileUser(
+  entry: LoginProfileEntry | null | undefined,
+  username: string,
+  updates: Partial<LoginUserAccount>,
+): LoginProfileEntry {
+  const normalizedUsername = username.trim();
+  const now = typeof updates.updatedAt === "number" && Number.isFinite(updates.updatedAt) ? updates.updatedAt : Date.now();
+  const existingUsers = Array.isArray(entry?.users) ? entry.users : [];
+  const nextUser: LoginUserAccount = {
+    username: normalizedUsername,
+    password: typeof updates.password === "string" ? updates.password.trim() : existingUsers.find((user) => user.username.toLowerCase() === normalizedUsername.toLowerCase())?.password,
+    updatedAt: now,
+  };
+
+  const otherUsers = existingUsers.filter((user) => user.username.toLowerCase() !== normalizedUsername.toLowerCase());
+
+  return {
+    username: normalizedUsername,
+    password: typeof updates.password === "string" ? updates.password.trim() : entry?.password,
+    shift: entry?.shift,
+    users: [...otherUsers, nextUser],
+    updatedAt: now,
+  };
 }

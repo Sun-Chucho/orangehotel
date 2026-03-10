@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { LoginProfiles, hydrateLoginProfilesFromServer, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
+import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, hydrateLoginProfilesFromServer, LoginProfiles, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 interface RoleLoginPageProps {
   role: Role;
@@ -21,8 +21,6 @@ interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
-
-const DEFAULT_PASSWORD = "1234";
 
 const ROLE_CONFIG: Record<Role, { label: string; username: string; description: string; color: string; destination: string; icon: typeof ShieldCheck }> = {
   manager: {
@@ -75,11 +73,17 @@ const ROLE_CONFIG: Record<Role, { label: string; username: string; description: 
   },
 };
 
+const BARISTA_USERS = [
+  { id: "barista-1", name: "ALI" },
+  { id: "barista-2", name: "USER 2" },
+] as const;
+
 export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const router = useRouter();
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
-  const [username, setUsername] = useState(config.username);
+  const selectableUsers = role === "cashier" ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name })) : role === "barista" ? [...BARISTA_USERS] : [];
+  const [username, setUsername] = useState(role === "barista" ? BARISTA_USERS[0].name : config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
@@ -88,7 +92,12 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const applyProfiles = () => {
       const profiles = readLocalLoginProfiles();
       const profile = profiles?.[role];
-      if (!profile) return;
+      if (!profile) {
+        if (role === "barista") {
+          setUsername(BARISTA_USERS[0].name);
+        }
+        return;
+      }
       setUsername(profile.username || config.username);
       if (role === "cashier" && (profile.shift === "day" || profile.shift === "night")) {
         setShift(profile.shift);
@@ -118,7 +127,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const handleLogin = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
 
-    if (!username.trim() || password !== DEFAULT_PASSWORD) {
+    const profiles = readLocalLoginProfiles() ?? {};
+    const currentProfile = profiles[role];
+    const expectedPassword = getProfilePassword(currentProfile, username, DEFAULT_LOGIN_PASSWORD);
+
+    if (!username.trim() || password !== expectedPassword) {
       setError("Invalid username or password.");
       return;
     }
@@ -133,14 +146,23 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       localStorage.removeItem("orange-hotel-shift");
     }
 
-    const profiles = readLocalLoginProfiles() ?? {};
     const nextProfiles: LoginProfiles = {
       ...profiles,
-      [role]: {
-        username: username.trim(),
-        ...(role === "cashier" ? { shift } : {}),
-        updatedAt: Date.now(),
-      },
+      [role]:
+        role === "barista"
+          ? {
+              ...upsertProfileUser(currentProfile, username.trim(), {
+                password: expectedPassword,
+                updatedAt: Date.now(),
+              }),
+              updatedAt: Date.now(),
+            }
+          : {
+              username: username.trim(),
+              password: currentProfile?.password || expectedPassword,
+              ...(role === "cashier" ? { shift } : {}),
+              updatedAt: Date.now(),
+            },
     };
 
     writeLocalLoginProfiles(nextProfiles);
@@ -181,13 +203,17 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
               {config.description}
             </p>
 
-            {role === "cashier" && (
+            {selectableUsers.length > 0 && (
               <div className="grid grid-cols-2 gap-3 mb-6">
-                {USERS.filter(u => u.role === 'cashier').map((user) => (
+                {selectableUsers.map((user) => (
                   <button
                     key={user.id}
                     type="button"
-                    onClick={() => setUsername(user.name)}
+                    onClick={() => {
+                      setUsername(user.name);
+                      setPassword("");
+                      setError("");
+                    }}
                     className={cn(
                       "flex flex-col items-center p-3 rounded-xl border-2 transition-all",
                       username === user.name 
@@ -254,7 +280,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                 Synced Default Username: {config.username}
               </p>
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                Default Password: {DEFAULT_PASSWORD}
+                Default Password: {DEFAULT_LOGIN_PASSWORD}
               </p>
             </div>
 
