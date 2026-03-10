@@ -120,7 +120,8 @@ function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
   for (const item of storeItems) {
     const category = item.lane === "barista" ? "Bar" : "Kitchen";
     const name = getStoreItemLabel(item);
-    const mapKey = `${category}:${name.toLowerCase()}`;
+    const subCategory = item.subCategory || "";
+    const mapKey = `${category}:${subCategory.toLowerCase()}:${name.toLowerCase()}:${item.unit.toLowerCase()}`;
     const existing = normalizedItems.get(mapKey);
 
     if (existing) {
@@ -142,6 +143,7 @@ function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
       barcode: "", // Default to empty if not in store item
       name,
       category,
+      subCategory,
       size: item.size || "",
       stock: item.stock,
       totSold: 0,

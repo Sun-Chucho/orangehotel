@@ -108,6 +108,7 @@ export interface InventoryItem {
   barcode: string;
   name: string;
   category: string;
+  subCategory?: string;
   size: string;
   stock: number; // Bottles or Units
   totPerBottle?: number;

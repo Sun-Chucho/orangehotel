@@ -8,6 +8,7 @@ export interface MainStoreItem {
   unit: string;
   minStock: number;
   lane: StoreLane;
+  subCategory?: string;
   size?: string;
   buyingPrice?: number;
   sellingPrice?: number;

@@ -38,6 +38,250 @@ export type InventoryTab =
 type ItemCategory = "Kitchen" | "Bar";
 type StockControlTab = "kitchen" | "barista";
 
+type KitchenCatalogEntry = {
+  name: string;
+  unit: string;
+  buyingPrice: number;
+  subCategory:
+    | "Fruits"
+    | "Vegetables"
+    | "Herbs"
+    | "Frozen - Meat"
+    | "Frozen - Fish"
+    | "Butter & Cheese"
+    | "Dry Goods"
+    | "Juices & Drinks"
+    | "Cleaning / Household";
+};
+
+const KITCHEN_CATALOG_ITEMS: KitchenCatalogEntry[] = [
+  { name: "Avocado", unit: "Each", buyingPrice: 1000, subCategory: "Fruits" },
+  { name: "Apple (red/green/pink)", unit: "Each", buyingPrice: 1000, subCategory: "Fruits" },
+  { name: "Banana ripe", unit: "Bunch", buyingPrice: 4000, subCategory: "Fruits" },
+  { name: "Blueberry 250g", unit: "Each", buyingPrice: 12500, subCategory: "Fruits" },
+  { name: "Asparagus", unit: "Kg", buyingPrice: 40000, subCategory: "Fruits" },
+  { name: "Cucumber", unit: "Kg", buyingPrice: 2500, subCategory: "Fruits" },
+  { name: "Carrots", unit: "Kg", buyingPrice: 3000, subCategory: "Fruits" },
+  { name: "Cassava", unit: "Kg", buyingPrice: 2500, subCategory: "Fruits" },
+  { name: "Mango", unit: "Each", buyingPrice: 1000, subCategory: "Fruits" },
+  { name: "Pineapple", unit: "Each", buyingPrice: 3300, subCategory: "Fruits" },
+  { name: "Watermelon", unit: "Kg", buyingPrice: 900, subCategory: "Fruits" },
+  { name: "Watermelon", unit: "Pc", buyingPrice: 5000, subCategory: "Fruits" },
+  { name: "Sweet banana", unit: "Bunch", buyingPrice: 4000, subCategory: "Fruits" },
+  { name: "Green banana / cooking banana", unit: "Bunch", buyingPrice: 7000, subCategory: "Fruits" },
+  { name: "Pawpaw", unit: "Each", buyingPrice: 3000, subCategory: "Fruits" },
+  { name: "Orange local", unit: "Each", buyingPrice: 500, subCategory: "Fruits" },
+  { name: "Lemon local", unit: "Each", buyingPrice: 300, subCategory: "Fruits" },
+  { name: "Lemon export yellow", unit: "Kg", buyingPrice: 13000, subCategory: "Fruits" },
+  { name: "Lime local", unit: "Each", buyingPrice: 300, subCategory: "Fruits" },
+  { name: "Passion fruits (yellow/black)", unit: "Kg", buyingPrice: 5000, subCategory: "Fruits" },
+  { name: "Beetroot", unit: "Kg", buyingPrice: 4000, subCategory: "Fruits" },
+  { name: "Green grapes export", unit: "Packet", buyingPrice: 12000, subCategory: "Fruits" },
+  { name: "Red grapes export", unit: "Packet", buyingPrice: 12000, subCategory: "Fruits" },
+  { name: "Cherry tomato 250g", unit: "Packet", buyingPrice: 4000, subCategory: "Fruits" },
+  { name: "Red plums export", unit: "Kg", buyingPrice: 18000, subCategory: "Fruits" },
+  { name: "Orange yellow export", unit: "Kg", buyingPrice: 12000, subCategory: "Fruits" },
+  { name: "Raspberries 250g", unit: "Packet", buyingPrice: 8000, subCategory: "Fruits" },
+  { name: "Strawberries 250g", unit: "Packet", buyingPrice: 8000, subCategory: "Fruits" },
+  { name: "Tangerine local", unit: "Each", buyingPrice: 700, subCategory: "Fruits" },
+  { name: "Tangerine export yellow", unit: "Kg", buyingPrice: 15000, subCategory: "Fruits" },
+  { name: "Green garden peas", unit: "Kg", buyingPrice: 8000, subCategory: "Fruits" },
+  { name: "Coconut dry", unit: "Pcs", buyingPrice: 2000, subCategory: "Fruits" },
+  { name: "Banana mzuzu / plantain banana", unit: "Bunch", buyingPrice: 8000, subCategory: "Fruits" },
+  { name: "Sweet melon", unit: "Kg", buyingPrice: 5000, subCategory: "Fruits" },
+  { name: "Pomegranate fruits", unit: "Each", buyingPrice: 4000, subCategory: "Fruits" },
+  { name: "Kiwi fruits", unit: "Each", buyingPrice: 3000, subCategory: "Fruits" },
+  { name: "Pears", unit: "Kg", buyingPrice: 15000, subCategory: "Fruits" },
+  { name: "Green grapefruit export", unit: "Pkt", buyingPrice: 12000, subCategory: "Fruits" },
+  { name: "Red grapes", unit: "Pkt", buyingPrice: 12000, subCategory: "Fruits" },
+  { name: "Irish potatoes", unit: "Kg", buyingPrice: 2200, subCategory: "Vegetables" },
+  { name: "Irish potato (debe)", unit: "Debe", buyingPrice: 25000, subCategory: "Vegetables" },
+  { name: "Green pepper", unit: "Kg", buyingPrice: 3000, subCategory: "Vegetables" },
+  { name: "Yellow pepper", unit: "Kg", buyingPrice: 10000, subCategory: "Vegetables" },
+  { name: "Red pepper", unit: "Kg", buyingPrice: 10000, subCategory: "Vegetables" },
+  { name: "Green beans", unit: "Kg", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "Broccoli", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
+  { name: "Cauliflower", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
+  { name: "Leeks", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
+  { name: "Zucchini", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
+  { name: "Butternut", unit: "Kg", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "Red onion", unit: "Kg", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "Red onion (sack)", unit: "Sado", buyingPrice: 10000, subCategory: "Vegetables" },
+  { name: "White onion", unit: "Kg", buyingPrice: 7000, subCategory: "Vegetables" },
+  { name: "Tomato", unit: "Kg", buyingPrice: 2500, subCategory: "Vegetables" },
+  { name: "Tomato (sack)", unit: "Sado", buyingPrice: 8000, subCategory: "Vegetables" },
+  { name: "Radish", unit: "Bunch", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "White cabbage", unit: "Each", buyingPrice: 2000, subCategory: "Vegetables" },
+  { name: "Red cabbage", unit: "Each", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "Lettuce fancy/green", unit: "Each", buyingPrice: 800, subCategory: "Vegetables" },
+  { name: "Rocket lettuce", unit: "Bunch", buyingPrice: 1000, subCategory: "Vegetables" },
+  { name: "Garlic exported", unit: "Kg", buyingPrice: 15000, subCategory: "Vegetables" },
+  { name: "Fresh chili", unit: "Kg", buyingPrice: 8000, subCategory: "Vegetables" },
+  { name: "Spinach", unit: "Bunch", buyingPrice: 500, subCategory: "Vegetables" },
+  { name: "Sweet potato", unit: "Kg", buyingPrice: 2000, subCategory: "Vegetables" },
+  { name: "Ginger", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
+  { name: "Celery", unit: "Kg", buyingPrice: 9000, subCategory: "Vegetables" },
+  { name: "Aubergine / Eggplant", unit: "Kg", buyingPrice: 2500, subCategory: "Vegetables" },
+  { name: "Sugar snaps 250g", unit: "Packet", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "Snow peas 250g", unit: "Packet", buyingPrice: 4000, subCategory: "Vegetables" },
+  { name: "Mushrooms button", unit: "Packet", buyingPrice: 12000, subCategory: "Vegetables" },
+  { name: "Mushrooms oyster", unit: "Packet", buyingPrice: 12000, subCategory: "Vegetables" },
+  { name: "Mchicha local", unit: "Bunch", buyingPrice: 700, subCategory: "Vegetables" },
+  { name: "Sukuma wiki", unit: "Bunch", buyingPrice: 700, subCategory: "Vegetables" },
+  { name: "Yam potato (magimbi)", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
+  { name: "Tamarind", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
+  { name: "Baby potato", unit: "Kg", buyingPrice: 3500, subCategory: "Vegetables" },
+  { name: "Okra / bamia", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
+  { name: "Bitter tomato / ngogwe", unit: "Kg", buyingPrice: 3000, subCategory: "Vegetables" },
+  { name: "Pumpkin", unit: "Each", buyingPrice: 5000, subCategory: "Vegetables" },
+  { name: "Parsley fresh", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
+  { name: "Basil", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
+  { name: "Fresh rosemary", unit: "Bunch", buyingPrice: 2000, subCategory: "Herbs" },
+  { name: "Coriander", unit: "Bunch", buyingPrice: 300, subCategory: "Herbs" },
+  { name: "Tarragon", unit: "Bunch", buyingPrice: 2500, subCategory: "Herbs" },
+  { name: "Mint", unit: "Bunch", buyingPrice: 2000, subCategory: "Herbs" },
+  { name: "Spring onion", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
+  { name: "Chives", unit: "Bunch", buyingPrice: 2000, subCategory: "Herbs" },
+  { name: "Oregano", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
+  { name: "Chicken", unit: "1 pc", buyingPrice: 9000, subCategory: "Frozen - Meat" },
+  { name: "Chicken breast", unit: "1 pkt", buyingPrice: 18000, subCategory: "Frozen - Meat" },
+  { name: "Chicken wings", unit: "1 pkt", buyingPrice: 13000, subCategory: "Frozen - Meat" },
+  { name: "Chicken drumstick", unit: "1 pkt", buyingPrice: 13000, subCategory: "Frozen - Meat" },
+  { name: "Chicken thigh", unit: "1 pkt", buyingPrice: 15000, subCategory: "Frozen - Meat" },
+  { name: "Eggs", unit: "Tray", buyingPrice: 11000, subCategory: "Frozen - Meat" },
+  { name: "Lamb leg", unit: "1 kg", buyingPrice: 16000, subCategory: "Frozen - Meat" },
+  { name: "Lamb chop", unit: "1 kg", buyingPrice: 20000, subCategory: "Frozen - Meat" },
+  { name: "Staff beef", unit: "1 kg", buyingPrice: 13000, subCategory: "Frozen - Meat" },
+  { name: "Mince meat", unit: "1 kg", buyingPrice: 15000, subCategory: "Frozen - Meat" },
+  { name: "Beef fillet", unit: "1 kg", buyingPrice: 24000, subCategory: "Frozen - Meat" },
+  { name: "Beef steak", unit: "1 kg", buyingPrice: 16500, subCategory: "Frozen - Meat" },
+  { name: "Beef bacon", unit: "1 kg", buyingPrice: 40000, subCategory: "Frozen - Meat" },
+  { name: "Strike bacon", unit: "1 kg", buyingPrice: 30000, subCategory: "Frozen - Meat" },
+  { name: "Chicken sausage", unit: "Kg", buyingPrice: 25000, subCategory: "Frozen - Meat" },
+  { name: "Chicken sausage Vienna", unit: "500g", buyingPrice: 12000, subCategory: "Frozen - Meat" },
+  { name: "Beef sausage", unit: "Pkt", buyingPrice: 7500, subCategory: "Frozen - Meat" },
+  { name: "Jumbo prawns", unit: "2 kg", buyingPrice: 150000, subCategory: "Frozen - Fish" },
+  { name: "Fish fillet", unit: "1 kg", buyingPrice: 24000, subCategory: "Frozen - Fish" },
+  { name: "Tiger prawns", unit: "1 kg", buyingPrice: 85000, subCategory: "Frozen - Fish" },
+  { name: "Red snapper", unit: "1 kg", buyingPrice: 20000, subCategory: "Frozen - Fish" },
+  { name: "King fish", unit: "1 kg", buyingPrice: 25000, subCategory: "Frozen - Fish" },
+  { name: "Peeled prawns", unit: "1 kg", buyingPrice: 38000, subCategory: "Frozen - Fish" },
+  { name: "Tuna fish", unit: "1 kg", buyingPrice: 22000, subCategory: "Frozen - Fish" },
+  { name: "Calamari", unit: "1 kg", buyingPrice: 45000, subCategory: "Frozen - Fish" },
+  { name: "Tilapia fish", unit: "1 kg", buyingPrice: 16000, subCategory: "Frozen - Fish" },
+  { name: "Nile perch whole", unit: "1 kg", buyingPrice: 16000, subCategory: "Frozen - Fish" },
+  { name: "Mozzarella cheese", unit: "1 kg", buyingPrice: 30000, subCategory: "Butter & Cheese" },
+  { name: "Cheddar cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
+  { name: "Parmesan cheese", unit: "1 kg", buyingPrice: 130000, subCategory: "Butter & Cheese" },
+  { name: "Gauda cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
+  { name: "Feta cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
+  { name: "Feta cheese", unit: "Pkt", buyingPrice: 17000, subCategory: "Butter & Cheese" },
+  { name: "Feta cheese", unit: "Tin", buyingPrice: 9000, subCategory: "Butter & Cheese" },
+  { name: "Calumi cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
+  { name: "Cream cheese", unit: "Tin", buyingPrice: 8500, subCategory: "Butter & Cheese" },
+  { name: "Butter", unit: "500 g", buyingPrice: 20000, subCategory: "Butter & Cheese" },
+  { name: "Panere cheese", unit: "Kg", buyingPrice: 38000, subCategory: "Butter & Cheese" },
+  { name: "Cling film", unit: "Pkt", buyingPrice: 20000, subCategory: "Dry Goods" },
+  { name: "Aluminium wrap (foil)", unit: "Pkt", buyingPrice: 25000, subCategory: "Dry Goods" },
+  { name: "Blue band", unit: "Kg", buyingPrice: 12000, subCategory: "Dry Goods" },
+  { name: "Chilli powder", unit: "Pkt", buyingPrice: 4000, subCategory: "Dry Goods" },
+  { name: "Oregano", unit: "Tin", buyingPrice: 3500, subCategory: "Dry Goods" },
+  { name: "Lentin flour", unit: "Kg", buyingPrice: 6500, subCategory: "Dry Goods" },
+  { name: "Muster flour", unit: "Kg", buyingPrice: 5000, subCategory: "Dry Goods" },
+  { name: "Chick peas", unit: "Tin", buyingPrice: 4000, subCategory: "Dry Goods" },
+  { name: "Black olives", unit: "Btl", buyingPrice: 6000, subCategory: "Dry Goods" },
+  { name: "Green olives", unit: "Btl", buyingPrice: 6000, subCategory: "Dry Goods" },
+  { name: "Milton", unit: "Btl", buyingPrice: 8000, subCategory: "Dry Goods" },
+  { name: "Cocoa prime", unit: "Pkt", buyingPrice: 18000, subCategory: "Dry Goods" },
+  { name: "Tomato ketchup", unit: "Btl", buyingPrice: 5000, subCategory: "Dry Goods" },
+  { name: "Chilli ketchup", unit: "Btl", buyingPrice: 5000, subCategory: "Dry Goods" },
+  { name: "Mayonnaise", unit: "Btl", buyingPrice: 24000, subCategory: "Dry Goods" },
+  { name: "White vinegar", unit: "Btl", buyingPrice: 1500, subCategory: "Dry Goods" },
+  { name: "Olive oil", unit: "Btl", buyingPrice: 30000, subCategory: "Dry Goods" },
+  { name: "Maple syrup", unit: "Btl", buyingPrice: 15000, subCategory: "Dry Goods" },
+  { name: "Red wine vinegar", unit: "Btl", buyingPrice: 10000, subCategory: "Dry Goods" },
+  { name: "Tang juice", unit: "Ltr", buyingPrice: 13000, subCategory: "Juices & Drinks" },
+  { name: "Lemon juice", unit: "Tin", buyingPrice: 12000, subCategory: "Juices & Drinks" },
+  { name: "Juice series apple", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
+  { name: "Series orange", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
+  { name: "Passion series", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
+  { name: "Pineapple series", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
+  { name: "Tropical", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
+  { name: "Motopoa", unit: "Ltr", buyingPrice: 9000, subCategory: "Juices & Drinks" },
+  { name: "Motopoa", unit: "5 Ltr", buyingPrice: 30000, subCategory: "Juices & Drinks" },
+  { name: "Milk powder (Nido)", unit: "Tin", buyingPrice: 25000, subCategory: "Cleaning / Household" },
+  { name: "Lato milk powder", unit: "Tin", buyingPrice: 14000, subCategory: "Cleaning / Household" },
+  { name: "Ajinomoto", unit: "Pkt", buyingPrice: 5000, subCategory: "Cleaning / Household" },
+  { name: "Super Brite", unit: "Outer", buyingPrice: 4000, subCategory: "Cleaning / Household" },
+  { name: "Air freshner", unit: "Pc", buyingPrice: 3500, subCategory: "Cleaning / Household" },
+  { name: "Toilet paper", unit: "Roll", buyingPrice: 1000, subCategory: "Cleaning / Household" },
+  { name: "Toilet paper", unit: "Roll (10,000)", buyingPrice: 10000, subCategory: "Cleaning / Household" },
+  { name: "Toilet paper", unit: "Roll (12,000)", buyingPrice: 12000, subCategory: "Cleaning / Household" },
+  { name: "Vim", unit: "1kg", buyingPrice: 4000, subCategory: "Cleaning / Household" },
+  { name: "Vim", unit: "1kg (7,000)", buyingPrice: 7000, subCategory: "Cleaning / Household" },
+  { name: "Jik", unit: "1 Ltr", buyingPrice: 7500, subCategory: "Cleaning / Household" },
+  { name: "Hand wash", unit: "500ml", buyingPrice: 4000, subCategory: "Cleaning / Household" },
+  { name: "Dettol", unit: "500ml", buyingPrice: 13000, subCategory: "Cleaning / Household" },
+  { name: "Guest soap", unit: "Pc", buyingPrice: 300, subCategory: "Cleaning / Household" },
+  { name: "Liquid soap", unit: "5 Ltr", buyingPrice: 11000, subCategory: "Cleaning / Household" },
+  { name: "Toilet roll big", unit: "Pc", buyingPrice: 10000, subCategory: "Cleaning / Household" },
+  { name: "Sanitizer", unit: "Bottle", buyingPrice: 7500, subCategory: "Cleaning / Household" },
+  { name: "Steel wire", unit: "Roll", buyingPrice: 8000, subCategory: "Cleaning / Household" },
+];
+
+function buildKitchenCatalogSeed(existingStoreItems: MainStoreItem[], existingInventoryItems: InventoryItem[]) {
+  const existingStoreKeys = new Set(
+    existingStoreItems
+      .filter((item) => item.lane === "kitchen")
+      .map((item) => `${normalizeStockName(item.name)}|${normalizeStockName(item.unit)}|${normalizeStockName(item.subCategory ?? "")}`),
+  );
+  const existingInventoryKeys = new Set(
+    existingInventoryItems
+      .filter((item) => item.category === "Kitchen")
+      .map((item) => `${normalizeStockName(item.name)}|${normalizeStockName(item.unit)}|${normalizeStockName(item.subCategory ?? "")}`),
+  );
+
+  const storeSeeds: MainStoreItem[] = [];
+  const inventorySeeds: InventoryItem[] = [];
+
+  KITCHEN_CATALOG_ITEMS.forEach((entry, index) => {
+    const key = `${normalizeStockName(entry.name)}|${normalizeStockName(entry.unit)}|${normalizeStockName(entry.subCategory)}`;
+    if (!existingStoreKeys.has(key)) {
+      storeSeeds.push({
+        id: `kitchen-catalog-store-${index + 1}`,
+        name: entry.name,
+        stock: 0,
+        unit: entry.unit,
+        minStock: 0,
+        lane: "kitchen",
+        subCategory: entry.subCategory,
+        buyingPrice: entry.buyingPrice,
+        sellingPrice: 0,
+      });
+    }
+    if (!existingInventoryKeys.has(key)) {
+      inventorySeeds.push({
+        id: `kitchen-catalog-inv-${index + 1}`,
+        barcode: "",
+        name: entry.name,
+        category: "Kitchen",
+        subCategory: entry.subCategory,
+        size: "",
+        stock: 0,
+        totSold: 0,
+        buyingPrice: entry.buyingPrice,
+        sellingPrice: 0,
+        price: 0,
+        status: "ACTIVE",
+        minStock: 0,
+        unit: entry.unit,
+      });
+    }
+  });
+
+  return { storeSeeds, inventorySeeds };
+}
+
 function getStockLabel(stock: number, minStock: number) {
   if (stock <= 0) return "Out";
   if (stock < minStock) return "Low";
@@ -119,14 +363,27 @@ export function InventoryControlView({
 
   useEffect(() => {
     const applyInventorySnapshot = () => {
-      const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS);
-      const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS);
+      const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
+      const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
       const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
       const rules = readJson<StockLogicRule[]>(STORAGE_STOCK_LOGIC);
-      if (Array.isArray(inv)) setItems(inv);
-      if (Array.isArray(store)) {
-        setStoreItems(store.map((item) => ({ ...item, lane: item.lane === "barista" ? "barista" : "kitchen" })));
+      const normalizedStore: MainStoreItem[] = store.map((item) => ({
+        ...item,
+        lane: item.lane === "barista" ? "barista" : "kitchen",
+      }));
+      const { storeSeeds, inventorySeeds } = buildKitchenCatalogSeed(normalizedStore, inv);
+      const nextStore = storeSeeds.length > 0 ? [...normalizedStore, ...storeSeeds] : normalizedStore;
+      const nextInventory = inventorySeeds.length > 0 ? [...inv, ...inventorySeeds] : inv;
+
+      if (storeSeeds.length > 0) {
+        writeJson(STORAGE_MAIN_STORE_ITEMS, nextStore);
       }
+      if (inventorySeeds.length > 0) {
+        writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
+      }
+
+      setItems(nextInventory);
+      setStoreItems(nextStore);
       if (Array.isArray(moves)) setMovementLogs(moves);
       if (Array.isArray(rules)) setLogicRules(rules);
     };
@@ -556,6 +813,7 @@ export function InventoryControlView({
           <TableHeader>
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Category</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Size</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
               {canViewBuyingPrice && <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>}
@@ -568,6 +826,7 @@ export function InventoryControlView({
             {list.map((item: any) => (
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold">{item.subCategory ?? "-"}</TableCell>
                 <TableCell className="font-bold">{item.size ?? "-"}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                 {canViewBuyingPrice && (
@@ -584,7 +843,7 @@ export function InventoryControlView({
             ))}
             {list.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canViewBuyingPrice ? 7 : 6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={canViewBuyingPrice ? 8 : 7} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock recorded yet
                 </TableCell>
               </TableRow>
@@ -605,6 +864,7 @@ export function InventoryControlView({
           <TableHeader>
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest">Category</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
               {canViewBuyingPrice && <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>}
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
@@ -616,6 +876,7 @@ export function InventoryControlView({
             {inventoryItems.map((item) => (
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold">{item.subCategory ?? "-"}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                 {canViewBuyingPrice && (
                   <TableCell className="font-bold">
@@ -631,7 +892,7 @@ export function InventoryControlView({
             ))}
             {inventoryItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canViewBuyingPrice ? 6 : 5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={canViewBuyingPrice ? 7 : 6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock entries found
                 </TableCell>
               </TableRow>
