@@ -7,18 +7,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   BedDouble,
   CheckCircle2,
   Clock,
+  DoorOpen,
   Search,
   Wrench,
 } from "lucide-react";
@@ -48,6 +42,7 @@ export default function RoomsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   useEffect(() => {
     const savedRole = readStoredRole();
@@ -135,8 +130,9 @@ export default function RoomsPage() {
       description: `Are you sure you want to mark room ${roomNumber} as ${labels[status]}?`,
       actionLabel: "Update Room",
     });
-    if (!approved) return;
+    if (!approved) return false;
     setRoomStatus(roomId, roomNumber, status);
+    return true;
   };
 
   const getStatusIcon = (status: Room["status"]) => {
@@ -152,6 +148,42 @@ export default function RoomsPage() {
       default:
         return null;
     }
+  };
+
+  const getStatusCardStyles = (status: Room["status"]) => {
+    switch (status) {
+      case "available":
+        return "border-green-200 bg-gradient-to-br from-green-50 to-white";
+      case "occupied":
+        return "border-blue-200 bg-gradient-to-br from-blue-50 to-white";
+      case "cleaning":
+        return "border-orange-200 bg-gradient-to-br from-orange-50 to-white";
+      case "maintenance":
+        return "border-gray-300 bg-gradient-to-br from-gray-100 to-white";
+      default:
+        return "border-border bg-white";
+    }
+  };
+
+  const getStatusTextStyles = (status: Room["status"]) => {
+    switch (status) {
+      case "available":
+        return "bg-green-600 text-white border-green-600 hover:bg-green-600";
+      case "occupied":
+        return "bg-blue-600 text-white border-blue-600 hover:bg-blue-600";
+      case "cleaning":
+        return "bg-orange-500 text-white border-orange-500 hover:bg-orange-500";
+      case "maintenance":
+        return "bg-gray-700 text-white border-gray-700 hover:bg-gray-700";
+      default:
+        return "";
+    }
+  };
+
+  const handleRoomStatusUpdate = async (room: Room, status: Room["status"]) => {
+    const updated = await confirmAndSetRoomStatus(room.id, room.number, status);
+    if (!updated) return;
+    setSelectedRoom((current) => (current && current.id === room.id ? { ...current, status } : current));
   };
 
   return (
@@ -256,89 +288,134 @@ export default function RoomsPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/10">
-              <TableRow className="hover:bg-transparent border-none">
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14">Room #</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14">Type</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14">Status</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right">Rate</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right">{isDirector ? "View" : "Actions"}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <CardContent className="p-6">
+          {filteredRooms.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredRooms.map((room) => (
-                <TableRow key={room.id} className="hover:bg-muted/5 transition-colors border-muted/20">
-                  <TableCell className="font-black text-xl">{room.number}</TableCell>
-                  <TableCell>
-                    <Badge className="font-black uppercase text-[10px] tracking-tighter bg-black text-white border-black hover:bg-black">
+                <button
+                  key={room.id}
+                  type="button"
+                  onClick={() => setSelectedRoom(room)}
+                  className={cn(
+                    "group rounded-3xl border p-5 text-left shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg",
+                    getStatusCardStyles(room.status),
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Room</p>
+                      <h2 className="mt-2 text-4xl font-black tracking-tight">{room.number}</h2>
+                    </div>
+                    <div className="rounded-2xl bg-white/80 p-3 shadow-sm">
+                      {getStatusIcon(room.status)}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex items-center justify-between gap-3">
+                    <Badge className="font-black uppercase text-[10px] tracking-widest bg-black text-white border-black hover:bg-black">
                       {room.type}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(room.status)}
-                      <span
-                        className={cn(
-                          "text-[10px] font-black uppercase tracking-widest",
-                          room.status === "available" && "text-green-600",
-                          room.status === "occupied" && "text-blue-600",
-                          room.status === "cleaning" && "text-orange-600",
-                          room.status === "maintenance" && "text-gray-600",
-                        )}
-                      >
-                        {room.status}
-                      </span>
+                    <Badge className={cn("font-black uppercase text-[10px] tracking-widest", getStatusTextStyles(room.status))}>
+                      {room.status === "available" ? "Free" : room.status === "occupied" ? "Occupied" : room.status === "cleaning" ? "Cleaning" : "Fix"}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-6 flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">Rate</p>
+                      <p className="mt-1 text-lg font-black">TSh {room.price.toLocaleString()}</p>
                     </div>
-                  </TableCell>
-                  <TableCell className="text-right font-black text-lg">TSh {room.price.toLocaleString()}/night</TableCell>
-                  <TableCell className="text-right">
-                    {isDirector ? (
-                      <Badge variant="outline" className="font-black uppercase text-[10px] tracking-widest">Read Only</Badge>
-                    ) : (
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant={room.status === "occupied" ? "default" : "outline"}
-                          size="sm"
-                          className="font-bold text-[10px]"
-                          onClick={() => confirmAndSetRoomStatus(room.id, room.number, "occupied")}
-                        >
-                          Occ
-                        </Button>
-                        <Button
-                          variant={room.status === "cleaning" ? "default" : "outline"}
-                          size="sm"
-                          className="font-bold text-[10px]"
-                          onClick={() => confirmAndSetRoomStatus(room.id, room.number, "cleaning")}
-                        >
-                          Clean
-                        </Button>
-                        <Button
-                          variant={room.status === "available" ? "default" : "outline"}
-                          size="sm"
-                          className="font-bold text-[10px]"
-                          onClick={() => confirmAndSetRoomStatus(room.id, room.number, "available")}
-                        >
-                          Free
-                        </Button>
-                        <Button
-                          variant={room.status === "maintenance" ? "default" : "outline"}
-                          size="sm"
-                          className="font-bold text-[10px]"
-                          onClick={() => confirmAndSetRoomStatus(room.id, room.number, "maintenance")}
-                        >
-                          Fix
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <DoorOpen className="w-4 h-4" />
+                      {isDirector ? "View" : "Open"}
+                    </div>
+                  </div>
+                </button>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <div className="py-16 text-center opacity-50">
+              <DoorOpen className="mx-auto h-10 w-10" />
+              <p className="mt-3 text-xs font-black uppercase tracking-widest">No rooms match the current filters</p>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(selectedRoom)} onOpenChange={(open) => !open && setSelectedRoom(null)}>
+        <DialogContent className="sm:max-w-lg">
+          {selectedRoom && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-black uppercase tracking-tight">Room {selectedRoom.number}</DialogTitle>
+                <DialogDescription>
+                  {isDirector ? "Room details only. Actions are disabled for managing director access." : "Select a room action. Existing room status behavior remains unchanged."}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className={cn("rounded-3xl border p-5", getStatusCardStyles(selectedRoom.status))}>
+                <div className="flex items-center justify-between gap-3">
+                  <Badge className="font-black uppercase text-[10px] tracking-widest bg-black text-white border-black hover:bg-black">
+                    {selectedRoom.type}
+                  </Badge>
+                  <Badge className={cn("font-black uppercase text-[10px] tracking-widest", getStatusTextStyles(selectedRoom.status))}>
+                    {selectedRoom.status}
+                  </Badge>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">Room Number</p>
+                    <p className="mt-1 text-3xl font-black">{selectedRoom.number}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">Night Rate</p>
+                    <p className="mt-1 text-2xl font-black">TSh {selectedRoom.price.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="flex-col gap-2 sm:flex-col">
+                {isDirector ? (
+                  <Button variant="outline" onClick={() => setSelectedRoom(null)} className="w-full font-black uppercase text-[10px] tracking-widest">
+                    Close
+                  </Button>
+                ) : (
+                  <div className="grid w-full grid-cols-2 gap-2">
+                    <Button
+                      variant={selectedRoom.status === "occupied" ? "default" : "outline"}
+                      className="font-black uppercase text-[10px] tracking-widest"
+                      onClick={() => void handleRoomStatusUpdate(selectedRoom, "occupied")}
+                    >
+                      Occ
+                    </Button>
+                    <Button
+                      variant={selectedRoom.status === "cleaning" ? "default" : "outline"}
+                      className="font-black uppercase text-[10px] tracking-widest"
+                      onClick={() => void handleRoomStatusUpdate(selectedRoom, "cleaning")}
+                    >
+                      Clean
+                    </Button>
+                    <Button
+                      variant={selectedRoom.status === "available" ? "default" : "outline"}
+                      className="font-black uppercase text-[10px] tracking-widest"
+                      onClick={() => void handleRoomStatusUpdate(selectedRoom, "available")}
+                    >
+                      Free
+                    </Button>
+                    <Button
+                      variant={selectedRoom.status === "maintenance" ? "default" : "outline"}
+                      className="font-black uppercase text-[10px] tracking-widest"
+                      onClick={() => void handleRoomStatusUpdate(selectedRoom, "maintenance")}
+                    >
+                      Fix
+                    </Button>
+                  </div>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

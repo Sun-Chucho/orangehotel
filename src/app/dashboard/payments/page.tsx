@@ -9,6 +9,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Receipt } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -97,6 +99,8 @@ export default function PaymentsPage() {
 
   const [selectedCredit, setSelectedCredit] = useState<{ source: "booking" | "kitchen" | "barista"; id: string } | null>(null);
   const [showMethodPopup, setShowMethodPopup] = useState(false);
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [payerNameDraft, setPayerNameDraft] = useState("");
 
   useEffect(() => {
     const savedRole = readStoredRole();
@@ -208,6 +212,31 @@ export default function PaymentsPage() {
     if (isDirector) return;
     setSelectedCredit({ source: row.source, id: row.id });
     setShowMethodPopup(true);
+  };
+
+  const openEditPayerDialog = (row: PaymentRow) => {
+    if (isDirector || row.source !== "booking") return;
+    setEditingBookingId(row.id);
+    setPayerNameDraft(row.payer);
+  };
+
+  const closeEditPayerDialog = () => {
+    setEditingBookingId(null);
+    setPayerNameDraft("");
+  };
+
+  const saveEditedPayer = () => {
+    if (!editingBookingId) return;
+    const nextName = payerNameDraft.trim();
+    if (!nextName) return;
+
+    const snapshot = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920);
+    const nextTransactions = snapshot.transactions.map((tx) =>
+      tx.id === editingBookingId ? { ...tx, guestName: nextName } : tx,
+    );
+    setBookingTransactions(nextTransactions);
+    writeCashierState(nextTransactions, snapshot.receiptSeq);
+    closeEditPayerDialog();
   };
 
   const applyPaidMethod = (method: "cash" | "card" | "mobile") => {
@@ -353,6 +382,13 @@ export default function PaymentsPage() {
                   <TableCell className="text-right">
                     {!isDirector && tx.source === "booking" ? (
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => openEditPayerDialog(tx)}
+                          className="h-9 font-black uppercase text-[10px] tracking-widest"
+                        >
+                          Edit
+                        </Button>
                         {tx.status === "credit" && (
                           <Button
                             onClick={() => openPaidFlow(tx)}
@@ -415,6 +451,32 @@ export default function PaymentsPage() {
           </Card>
         </div>
       )}
+
+      <Dialog open={Boolean(editingBookingId)} onOpenChange={(open) => !open && closeEditPayerDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase tracking-tight">Edit Payer Name</DialogTitle>
+            <DialogDescription>Update the payer name for this reception booking payment.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Payer Name</p>
+            <Input
+              value={payerNameDraft}
+              onChange={(event) => setPayerNameDraft(event.target.value)}
+              placeholder="Enter payer name"
+              className="h-11"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditPayerDialog} className="font-black uppercase text-[10px] tracking-widest">
+              Cancel
+            </Button>
+            <Button onClick={saveEditedPayer} disabled={!payerNameDraft.trim()} className="font-black uppercase text-[10px] tracking-widest">
+              Update
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

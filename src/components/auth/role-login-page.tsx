@@ -195,8 +195,8 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                         : "border-transparent bg-muted/30 hover:bg-muted/50"
                     )}
                   >
-                    <div className="w-12 h-12 rounded-full overflow-hidden mb-2 border-2 border-white shadow-sm">
-                      <Image src={user.avatar} alt={user.name} width={48} height={48} />
+                    <div className="w-12 h-12 rounded-full mb-2 border-2 border-white shadow-sm bg-orange-100 text-orange-700 flex items-center justify-center">
+                      <User className="w-5 h-5" />
                     </div>
                     <span className="text-[10px] font-black uppercase tracking-tight">{user.name}</span>
                   </button>
