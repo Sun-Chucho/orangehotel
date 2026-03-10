@@ -89,3 +89,19 @@ export const DEFAULT_KITCHEN_MENU: KitchenMenuItem[] = [
   { id: "km-drink-2", name: "Fresh Juice", price: 3, category: "drinks", prepMinutes: 4 },
   { id: "km-drink-3", name: "Milkshake", price: 3, category: "drinks", prepMinutes: 6 },
 ];
+
+export function mergeKitchenMenuItems(menuItems: KitchenMenuItem[]): KitchenMenuItem[] {
+  if (menuItems.length === 0) return DEFAULT_KITCHEN_MENU;
+
+  const merged = new Map<string, KitchenMenuItem>();
+
+  for (const item of DEFAULT_KITCHEN_MENU) {
+    merged.set(item.id, item);
+  }
+
+  for (const item of menuItems) {
+    merged.set(item.id, item);
+  }
+
+  return Array.from(merged.values());
+}

@@ -8,6 +8,7 @@ import {
   KITCHEN_CATEGORY_OPTIONS,
   KitchenMenuCategory,
   KitchenMenuItem,
+  mergeKitchenMenuItems,
 } from "@/app/lib/kitchen-menu";
 import { InventoryItem, ROOMS, Role } from "@/app/lib/mock-data";
 import {
@@ -137,11 +138,10 @@ export default function KitchenPage() {
       setTickets(snapshot.tickets);
       setTicketSeq(snapshot.ticketSeq);
       setKitchenPayments(snapshot.payments);
-      if (snapshot.menuItems.length > 0) {
-        setMenuItems(snapshot.menuItems);
-      } else {
-        setMenuItems(KITCHEN_MENU);
-        writePosState(STORAGE_KITCHEN_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, KITCHEN_MENU);
+      const nextMenuItems = mergeKitchenMenuItems(snapshot.menuItems);
+      setMenuItems(nextMenuItems);
+      if (JSON.stringify(nextMenuItems) !== JSON.stringify(snapshot.menuItems)) {
+        writePosState(STORAGE_KITCHEN_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, nextMenuItems);
       }
     };
 

@@ -8,6 +8,7 @@ import {
   KITCHEN_CATEGORY_OPTIONS,
   KitchenMenuCategory,
   KitchenMenuItem,
+  mergeKitchenMenuItems,
 } from "@/app/lib/kitchen-menu";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -86,16 +87,15 @@ export function MenuCreateView() {
     setKitchenTickets(kitchenSnapshot.tickets);
     setKitchenPayments(kitchenSnapshot.payments);
     setKitchenSeq(kitchenSnapshot.ticketSeq);
-    if (kitchenSnapshot.menuItems.length > 0) {
-      setKitchenMenuItems(kitchenSnapshot.menuItems);
-    } else {
-      setKitchenMenuItems(DEFAULT_KITCHEN_MENU);
+    const nextKitchenMenuItems = mergeKitchenMenuItems(kitchenSnapshot.menuItems);
+    setKitchenMenuItems(nextKitchenMenuItems);
+    if (JSON.stringify(nextKitchenMenuItems) !== JSON.stringify(kitchenSnapshot.menuItems)) {
       writePosState(
         STORAGE_KITCHEN_STATE,
         kitchenSnapshot.tickets,
         kitchenSnapshot.ticketSeq,
         kitchenSnapshot.payments,
-        DEFAULT_KITCHEN_MENU,
+        nextKitchenMenuItems,
       );
     }
 
@@ -185,8 +185,8 @@ export function MenuCreateView() {
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as "kitchen" | "barista")}>
         <TabsList className="h-11">
-          <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen</TabsTrigger>
-          <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista</TabsTrigger>
+          <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen POS</TabsTrigger>
+          <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista POS</TabsTrigger>
         </TabsList>
 
         <TabsContent value="kitchen" className="space-y-6">
