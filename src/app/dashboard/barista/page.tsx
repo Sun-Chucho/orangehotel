@@ -185,8 +185,12 @@ export default function BaristaPage() {
 
     applyBaristaSnapshot();
     const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyBaristaSnapshot);
+    const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyBaristaSnapshot);
 
-    return () => unsubscribeBarista();
+    return () => {
+      unsubscribeBarista();
+      unsubscribeInventory();
+    };
   }, []);
 
   const loadFromStoreData = () => {
@@ -371,6 +375,18 @@ export default function BaristaPage() {
   );
 
   const subtotal = useMemo(() => cart.reduce((sum, line) => sum + line.item.price * line.qty, 0), [cart]);
+  const completedSalesTotal = useMemo(
+    () => baristaPayments.filter((payment) => payment.status !== "credit").reduce((sum, payment) => sum + payment.total, 0),
+    [baristaPayments],
+  );
+  const creditSalesTotal = useMemo(
+    () => baristaPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + payment.total, 0),
+    [baristaPayments],
+  );
+  const recentSales = useMemo(
+    () => [...baristaPayments].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
+    [baristaPayments],
+  );
 
   const addToCart = (item: BaristaMenuItem) => {
     if (isDirector) return;
@@ -761,6 +777,65 @@ export default function BaristaPage() {
           </CardContent>
         </Card>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Completed Sales</p>
+            <p className="mt-2 text-2xl font-black">TSh {completedSalesTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Credit Sales</p>
+            <p className="mt-2 text-2xl font-black">TSh {creditSalesTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Records</p>
+            <p className="mt-2 text-2xl font-black">{baristaPayments.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Barista Sales</CardTitle>
+          <CardDescription>Live completed and credit sales captured from the barista POS</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/10">
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recentSales.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell className="font-black">{payment.code}</TableCell>
+                  <TableCell className="font-bold">{payment.destination}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
+                  <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+              {recentSales.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No barista sales yet
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <div className="xl:col-span-2 space-y-6">

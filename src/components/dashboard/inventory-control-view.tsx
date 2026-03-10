@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { readStoredRole } from "@/app/lib/auth";
 import { INVENTORY, InventoryItem } from "@/app/lib/mock-data";
 import {
   getStoreItemLabel,
@@ -56,6 +57,7 @@ export function InventoryControlView({
   visibleTabs?: InventoryTab[];
 }) {
   const isDirector = useIsDirector();
+  const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
   const [stockControlTab, setStockControlTab] = useState<StockControlTab>("kitchen");
   const [stockMovementTab, setStockMovementTab] = useState<StockControlTab>("kitchen");
@@ -92,6 +94,11 @@ export function InventoryControlView({
   const [kitchenMoveQty, setKitchenMoveQty] = useState("1");
   const [baristaMoveQty, setBaristaMoveQty] = useState("1");
   const { confirm, dialog } = useConfirmDialog();
+  const canViewBuyingPrice = role === "inventory";
+
+  useEffect(() => {
+    setRole(readStoredRole());
+  }, []);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -183,6 +190,7 @@ export function InventoryControlView({
     if (!name.trim() || Number.isNaN(qty) || qty < 0 || !unit.trim() || Number.isNaN(threshold) || threshold < 0) {
       return;
     }
+    if (sellingPrice <= 0) return;
 
     const approved = await confirm({
       title: "Update Stock",
@@ -206,12 +214,12 @@ export function InventoryControlView({
                 stock: item.stock + qty,
                 unit,
                 minStock: threshold,
-                buyingPrice: buyingPrice > 0 ? buyingPrice : item.buyingPrice,
-                sellingPrice: sellingPrice > 0 ? sellingPrice : (item as any).sellingPrice,
+                buyingPrice: canViewBuyingPrice && buyingPrice > 0 ? buyingPrice : item.buyingPrice,
+                sellingPrice: sellingPrice > 0 ? sellingPrice : item.sellingPrice,
               }
             : item,
         )
-      : [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane, buyingPrice, sellingPrice: sellingPrice }, ...storeItems];
+      : [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane, buyingPrice: canViewBuyingPrice ? buyingPrice : 0, sellingPrice }, ...storeItems];
 
     setStoreItems(nextStoreItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
@@ -223,7 +231,7 @@ export function InventoryControlView({
     
     if (existingInv) {
         existingInv.stock += qty;
-        if (buyingPrice > 0) existingInv.buyingPrice = buyingPrice;
+        if (canViewBuyingPrice && buyingPrice > 0) existingInv.buyingPrice = buyingPrice;
         if (sellingPrice > 0) existingInv.sellingPrice = sellingPrice;
         if (sellingPrice > 0) existingInv.price = sellingPrice;
     } else {
@@ -235,7 +243,7 @@ export function InventoryControlView({
             size: '',
             stock: qty,
             totSold: 0,
-            buyingPrice,
+            buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
             sellingPrice,
             price: sellingPrice,
             status: 'ACTIVE',
@@ -349,7 +357,18 @@ export function InventoryControlView({
                 ...item,
                 stock: item.stock + convertedQty,
                 minStock: selectedItem.minStock,
-                price: selectedItem.buyingPrice ?? item.price ?? 0,
+                buyingPrice:
+                  typeof selectedItem.buyingPrice === "number" && selectedItem.buyingPrice > 0
+                    ? selectedItem.buyingPrice
+                    : item.buyingPrice,
+                sellingPrice:
+                  typeof selectedItem.sellingPrice === "number" && selectedItem.sellingPrice > 0
+                    ? selectedItem.sellingPrice
+                    : item.sellingPrice,
+                price:
+                  typeof selectedItem.sellingPrice === "number" && selectedItem.sellingPrice > 0
+                    ? selectedItem.sellingPrice
+                    : item.sellingPrice ?? item.price ?? 0,
                 name: itemLabel,
               }
             : item,
@@ -364,11 +383,11 @@ export function InventoryControlView({
             stock: convertedQty,
             totSold: 0,
             buyingPrice: selectedItem.buyingPrice ?? 0,
-            sellingPrice: (selectedItem.buyingPrice ?? 0) * 1.5,
+            sellingPrice: selectedItem.sellingPrice ?? 0,
             status: "ACTIVE" as const,
             minStock: selectedItem.minStock,
             unit: rule.departmentUnit,
-            price: selectedItem.buyingPrice ?? 0,
+            price: selectedItem.sellingPrice ?? selectedItem.buyingPrice ?? 0,
           },
           ...items,
         ];
@@ -504,19 +523,21 @@ export function InventoryControlView({
             onChange={(event) => (lane === "kitchen" ? setKitchenThreshold(event.target.value) : setBaristaThreshold(event.target.value))}
             placeholder="Low threshold"
           />
-          <Input
-            type="number"
-            min="0"
-            value={lane === "kitchen" ? kitchenBuyingPrice : baristaBuyingPrice}
-            onChange={(event) => (lane === "kitchen" ? setKitchenBuyingPrice(event.target.value) : setBaristaBuyingPrice(event.target.value))}
-            placeholder="BP (Optional)"
-          />
+          {canViewBuyingPrice && (
+            <Input
+              type="number"
+              min="0"
+              value={lane === "kitchen" ? kitchenBuyingPrice : baristaBuyingPrice}
+              onChange={(event) => (lane === "kitchen" ? setKitchenBuyingPrice(event.target.value) : setBaristaBuyingPrice(event.target.value))}
+              placeholder="BP (Optional)"
+            />
+          )}
           <Input
             type="number"
             min="0"
             value={lane === "kitchen" ? kitchenSellingPrice : baristaSellingPrice}
             onChange={(event) => (lane === "kitchen" ? setKitchenSellingPrice(event.target.value) : setBaristaSellingPrice(event.target.value))}
-            placeholder="SP (Required)"
+            placeholder="Selling Price"
           />
           <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
             <Plus className="w-4 h-4 mr-2" /> Add
@@ -537,7 +558,7 @@ export function InventoryControlView({
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Size</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
+              {canViewBuyingPrice && <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>}
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Low Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
@@ -549,9 +570,11 @@ export function InventoryControlView({
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.size ?? "-"}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
-                <TableCell className="font-bold">
-                  {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
-                </TableCell>
+                {canViewBuyingPrice && (
+                  <TableCell className="font-bold">
+                    {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
+                  </TableCell>
+                )}
                 <TableCell className="font-bold">
                   {typeof item.sellingPrice === "number" && item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
                 </TableCell>
@@ -561,7 +584,7 @@ export function InventoryControlView({
             ))}
             {list.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={canViewBuyingPrice ? 7 : 6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock recorded yet
                 </TableCell>
               </TableRow>
@@ -583,7 +606,7 @@ export function InventoryControlView({
             <TableRow>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Quantity</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
+              {canViewBuyingPrice && <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>}
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock</TableHead>
@@ -594,9 +617,11 @@ export function InventoryControlView({
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
-                <TableCell className="font-bold">
-                  {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
-                </TableCell>
+                {canViewBuyingPrice && (
+                  <TableCell className="font-bold">
+                    {typeof item.buyingPrice === "number" && item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
+                  </TableCell>
+                )}
                 <TableCell className="font-bold">
                   {typeof item.sellingPrice === "number" && item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : (typeof item.price === "number" && item.price > 0 ? `TSh ${item.price.toLocaleString()}` : "-")}
                 </TableCell>
@@ -606,7 +631,7 @@ export function InventoryControlView({
             ))}
             {inventoryItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={canViewBuyingPrice ? 6 : 5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock entries found
                 </TableCell>
               </TableRow>

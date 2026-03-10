@@ -67,6 +67,8 @@ export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseR
         : room,
   );
 
-  writeRoomsState(nextRooms);
+  if (JSON.stringify(currentRooms) !== JSON.stringify(nextRooms)) {
+    writeRoomsState(nextRooms);
+  }
   return nextRooms;
 }

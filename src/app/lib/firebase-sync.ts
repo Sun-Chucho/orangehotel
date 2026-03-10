@@ -3,6 +3,7 @@ import { firebaseDatabase } from "@/app/lib/firebase";
 import { getStoreItemLabel, type MainStoreItem } from "@/app/lib/inventory-transfer";
 import { ROOMS, type InventoryItem } from "@/app/lib/mock-data";
 import { DEFAULT_HARDWARE_SETTINGS } from "@/app/lib/hardware-settings";
+import { sanitizeForStorage } from "@/app/lib/storage-sanitize";
 
 // ── Connectivity monitoring ─────────────────────────────────────────────────
 let _isConnected = false;
@@ -126,7 +127,12 @@ function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
       existing.stock += item.stock;
       existing.minStock = Math.max(existing.minStock, item.minStock);
       if ((!existing.price || existing.price <= 0) && typeof item.buyingPrice === "number" && item.buyingPrice > 0) {
-        existing.price = item.buyingPrice;
+        existing.price = typeof item.sellingPrice === "number" && item.sellingPrice > 0
+          ? item.sellingPrice
+          : item.buyingPrice;
+      }
+      if ((!existing.sellingPrice || existing.sellingPrice <= 0) && typeof item.sellingPrice === "number" && item.sellingPrice > 0) {
+        existing.sellingPrice = item.sellingPrice;
       }
       continue;
     }
@@ -140,11 +146,16 @@ function buildInventoryItemsFromStoreItems(storeItems: MainStoreItem[]) {
       stock: item.stock,
       totSold: 0,
       buyingPrice: typeof item.buyingPrice === "number" ? item.buyingPrice : 0,
-      sellingPrice: (typeof item.buyingPrice === "number" ? item.buyingPrice : 0) * 1.5, // Heuristic or default
+      sellingPrice: typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
       status: "ACTIVE" as const,
       minStock: item.minStock,
       unit: item.unit,
-      price: typeof item.buyingPrice === "number" ? item.buyingPrice : 0,
+      price:
+        typeof item.sellingPrice === "number" && item.sellingPrice > 0
+          ? item.sellingPrice
+          : typeof item.buyingPrice === "number"
+            ? item.buyingPrice
+            : 0,
     });
   }
 
@@ -301,7 +312,8 @@ function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value:
 
 export function syncStorageValueToFirebase<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
-  void set(ref(firebaseDatabase, toStoragePath(key)), value)
+  const sanitizedValue = sanitizeForStorage(value);
+  void set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue)
     .then(() => {
       _lastSyncedAt[key] = Date.now();
     })
@@ -315,11 +327,11 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
   try {
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
-    const remoteValue = snapshot.exists() ? snapshot.val() : null;
+    const remoteValue = snapshot.exists() ? sanitizeForStorage(snapshot.val()) : null;
     const fallbackValue = getLocalFallbackForSync(key);
-    const localValue = fallbackValue ?? readParsedLocalValue(key) ?? null;
+    const localValue = sanitizeForStorage(fallbackValue ?? readParsedLocalValue(key) ?? null);
 
-    const canonicalValue = getCanonicalDefaultValue(key);
+    const canonicalValue = sanitizeForStorage(getCanonicalDefaultValue(key));
     if (remoteValue === null && localValue === null && canonicalValue === null) return;
 
     const remoteScore = getSnapshotScore(key, remoteValue);
@@ -335,11 +347,12 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
     if (preferredValue === null) return;
 
-    localStorage.setItem(key, JSON.stringify(preferredValue));
-    mirrorCanonicalStateToLegacyLocal(key, preferredValue);
+    const sanitizedPreferredValue = sanitizeForStorage(preferredValue);
+    localStorage.setItem(key, JSON.stringify(sanitizedPreferredValue));
+    mirrorCanonicalStateToLegacyLocal(key, sanitizedPreferredValue);
 
-    if (!areSnapshotsEqual(remoteValue, preferredValue)) {
-      await set(ref(firebaseDatabase, toStoragePath(key)), preferredValue);
+    if (!areSnapshotsEqual(remoteValue, sanitizedPreferredValue)) {
+      await set(ref(firebaseDatabase, toStoragePath(key)), sanitizedPreferredValue);
     }
 
     _lastSyncedAt[key] = Date.now();
@@ -387,7 +400,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
     ref(firebaseDatabase, toStoragePath(key)),
     (snapshot) => {
       if (!snapshot.exists()) {
-        const fallbackValue = (getLocalFallbackForSync(key) ?? getCanonicalDefaultValue(key)) as T | null;
+        const fallbackValue = sanitizeForStorage((getLocalFallbackForSync(key) ?? getCanonicalDefaultValue(key)) as T | null);
         if (fallbackValue !== null) {
           localStorage.setItem(key, JSON.stringify(fallbackValue));
           mirrorCanonicalStateToLegacyLocal(key, fallbackValue);
@@ -398,7 +411,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
         readSnapshotValue<T>(key, null, onChange);
         return;
       }
-      const nextValue = snapshot.val() as T;
+      const nextValue = sanitizeForStorage(snapshot.val() as T);
       mirrorCanonicalStateToLegacyLocal(key, nextValue);
       readSnapshotValue<T>(key, nextValue, onChange);
     },
@@ -506,7 +519,7 @@ export async function getRemoteRecordCounts(): Promise<Record<string, number>> {
 export async function wipeStorageCategory(key: string) {
   if (typeof window === "undefined") return;
 
-  const defaultValue = getCanonicalDefaultValue(key);
+  const defaultValue = sanitizeForStorage(getCanonicalDefaultValue(key));
   
   // Wipe locally
   localStorage.setItem(key, JSON.stringify(defaultValue));
@@ -518,5 +531,5 @@ export async function wipeStorageCategory(key: string) {
   _lastSyncedAt[key] = Date.now();
   
   // Trigger local state updates
-  window.dispatchEvent(new CustomEvent("orange-hotel-storage-update", { detail: { key } }));
+  window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
 }

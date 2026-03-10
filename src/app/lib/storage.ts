@@ -1,4 +1,5 @@
 import { removeStorageValueFromFirebase, syncStorageValueToFirebase } from "@/app/lib/firebase-sync";
+import { sanitizeForStorage } from "@/app/lib/storage-sanitize";
 
 export const STORAGE_CASHIER_STATE = "orange-hotel-cashier-state";
 export const STORAGE_KITCHEN_STATE = "orange-hotel-kitchen-state";
@@ -29,9 +30,10 @@ export function readJson<T>(key: string): T | null {
 
 export function writeJson<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(value));
+  const sanitizedValue = sanitizeForStorage(value);
+  localStorage.setItem(key, JSON.stringify(sanitizedValue));
   window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
-  syncStorageValueToFirebase(key, value);
+  syncStorageValueToFirebase(key, sanitizedValue);
 }
 
 export function removeJson(key: string) {

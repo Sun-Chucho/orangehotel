@@ -10,6 +10,7 @@ export interface MainStoreItem {
   lane: StoreLane;
   size?: string;
   buyingPrice?: number;
+  sellingPrice?: number;
   totLimit?: number;
   totSold?: number;
 }

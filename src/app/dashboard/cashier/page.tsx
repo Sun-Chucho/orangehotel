@@ -388,6 +388,9 @@ export default function BookingPage() {
       status,
       checkedBy: localStorage.getItem("orange-hotel-username") || "Reception",
     };
+    if (selectedPackage !== "none") {
+      tx.specialPackage = selectedPackage;
+    }
 
     const nextTransactions = [tx, ...transactions];
     setTransactions(nextTransactions);
