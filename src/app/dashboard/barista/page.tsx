@@ -111,7 +111,68 @@ function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): Bar
 }
 
 function normalizeBaristaTarget(name: string) {
-  return name.replace(/\s+TOTS$/, "").trim().toLowerCase();
+  return name.replace(/\s+TOTS?$/i, "").trim().toLowerCase();
+}
+
+function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
+  const nextInventory = [...existingInventory];
+  let changed = false;
+
+  for (const seededItem of BARISTA_INVENTORY_SEED) {
+    const seedName = seededItem.name ?? "";
+    const seedSize = seededItem.size ?? "";
+    const seedBarcode = seededItem.barcode ?? "";
+
+    const existingIndex = nextInventory.findIndex((item) =>
+      (seedBarcode && item.barcode === seedBarcode) ||
+      (normalizeBaristaTarget(item.name) === normalizeBaristaTarget(seedName) && (item.size ?? "") === seedSize),
+    );
+
+    if (existingIndex >= 0) {
+      const currentItem = nextInventory[existingIndex];
+      const updatedItem: InventoryItem = {
+        ...currentItem,
+        barcode: seedBarcode || currentItem.barcode,
+        name: seedName || currentItem.name,
+        category: seededItem.category ?? currentItem.category,
+        size: seedSize || currentItem.size,
+        buyingPrice: typeof seededItem.buyingPrice === "number" ? seededItem.buyingPrice : currentItem.buyingPrice,
+        sellingPrice: typeof seededItem.sellingPrice === "number" ? seededItem.sellingPrice : currentItem.sellingPrice,
+        price: typeof seededItem.sellingPrice === "number" ? seededItem.sellingPrice : currentItem.price,
+        unit: seededItem.unit ?? currentItem.unit,
+        minStock: typeof seededItem.minStock === "number" ? seededItem.minStock : currentItem.minStock,
+        status: seededItem.status ?? currentItem.status,
+        totPerBottle: seededItem.totPerBottle ?? currentItem.totPerBottle,
+        stock: typeof currentItem.stock === "number" ? currentItem.stock : (seededItem.stock ?? 0),
+        totSold: typeof currentItem.totSold === "number" ? currentItem.totSold : (seededItem.totSold ?? 0),
+      };
+      if (JSON.stringify(updatedItem) !== JSON.stringify(currentItem)) {
+        nextInventory[existingIndex] = updatedItem;
+        changed = true;
+      }
+      continue;
+    }
+
+    nextInventory.push({
+      id: `inv-${seedBarcode || `${seedName}-${seedSize}`.replace(/\s+/g, "-").toLowerCase()}`,
+      barcode: seedBarcode,
+      name: seedName,
+      category: seededItem.category ?? "coffee",
+      size: seedSize,
+      stock: seededItem.stock ?? 0,
+      totPerBottle: seededItem.totPerBottle,
+      totSold: seededItem.totSold ?? 0,
+      buyingPrice: seededItem.buyingPrice ?? 0,
+      sellingPrice: seededItem.sellingPrice ?? 0,
+      price: seededItem.sellingPrice ?? 0,
+      status: seededItem.status ?? "ACTIVE",
+      minStock: seededItem.minStock ?? 0,
+      unit: seededItem.unit ?? "Unit",
+    });
+    changed = true;
+  }
+
+  return { nextInventory, changed };
 }
 
 export default function BaristaPage() {
@@ -179,7 +240,11 @@ export default function BaristaPage() {
         writeJson(STORAGE_INVENTORY_ITEMS, seed);
         setMenuItems(normalizeBaristaMenuItemsFromInventory(seed));
       } else {
-        setMenuItems(normalizeBaristaMenuItemsFromInventory(inventory));
+        const merged = mergeBaristaInventorySeed(inventory);
+        if (merged.changed) {
+          writeJson(STORAGE_INVENTORY_ITEMS, merged.nextInventory);
+        }
+        setMenuItems(normalizeBaristaMenuItemsFromInventory(merged.nextInventory));
       }
     };
 
@@ -259,7 +324,25 @@ export default function BaristaPage() {
 
     for (const line of lines) {
       const matchedItem = findStoreItemForMenuName(nextBaristaItems, line.name);
-      if (!matchedItem) continue;
+      if (!matchedItem) {
+        const inventoryMatch = nextInventoryItems.find((item) => {
+          const itemName = item.size ? `${item.name} ${item.size}` : item.name;
+          return normalizeBaristaTarget(itemName) === normalizeBaristaTarget(line.name) || normalizeBaristaTarget(item.name) === normalizeBaristaTarget(line.name);
+        });
+
+        if (!inventoryMatch) continue;
+        const availableUnits = typeof inventoryMatch.stock === "number" ? inventoryMatch.stock : 0;
+        const availableTots = typeof inventoryMatch.totPerBottle === "number" && inventoryMatch.totPerBottle > 0
+          ? availableUnits * inventoryMatch.totPerBottle - (typeof inventoryMatch.totSold === "number" ? inventoryMatch.totSold : 0)
+          : availableUnits;
+
+        if (direction === "consume" && line.qty > availableTots) {
+          return { ok: false as const, error: `Not enough stock for ${line.name}.` };
+        }
+
+        nextInventoryItems = adjustInventoryQuantity(nextInventoryItems, inventoryMatch.category, line.name, direction === "consume" ? -line.qty : line.qty);
+        continue;
+      }
 
       const itemIndex = nextBaristaItems.findIndex((entry) => entry.id === matchedItem.id);
       if (itemIndex < 0) continue;
@@ -463,14 +546,11 @@ export default function BaristaPage() {
     if (isDirector) return;
     if (!pendingOrder) return;
 
-    const inventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
-    const itemInInv = inventory.find(i => i.name === pendingOrder.lines[0].name || normalizeBaristaTarget(i.name) === normalizeBaristaTarget(pendingOrder.lines[0].name));
-
-    const nextInventory = pendingOrder.lines.reduce((acc, line) => {
-      return adjustInventoryQuantity(acc, itemInInv?.category || "Bar", line.name, -line.qty);
-    }, inventory);
-
-    writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
+    const stockResult = updateBaristaStoreStock(pendingOrder.lines, "consume");
+    if (!stockResult.ok) {
+      window.alert(stockResult.error);
+      return;
+    }
 
     const nextSeq = ticketSeq + 1;
     const createdAt = Date.now();

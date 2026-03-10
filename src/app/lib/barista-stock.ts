@@ -23,7 +23,7 @@ export function getBaristaStoreLabel(item: Pick<MainStoreItem, "name" | "size">)
 }
 
 export function getMenuBaseLabel(menuName: string): string {
-  return menuName.endsWith(" TOTS") ? menuName.slice(0, -5) : menuName;
+  return menuName.replace(/\s+TOTS?$/i, "").trim();
 }
 
 export function getTotLimit(item: Pick<MainStoreItem, "name" | "size" | "totLimit">): number {
@@ -32,7 +32,7 @@ export function getTotLimit(item: Pick<MainStoreItem, "name" | "size" | "totLimi
 }
 
 export function isTotTrackedMenuItem(menuName: string): boolean {
-  return menuName.endsWith(" TOTS");
+  return /\s+TOTS?$/i.test(menuName);
 }
 
 export function getRemainingTots(item: Pick<MainStoreItem, "name" | "size" | "stock" | "totLimit" | "totSold">): number {
@@ -54,7 +54,7 @@ export function findStoreItemForMenuName(items: MainStoreItem[], menuName: strin
 }
 
 function normalizeBaristaTarget(name: string) {
-  return name.replace(/\s+TOTS$/, "").trim().toLowerCase();
+  return name.replace(/\s+TOTS?$/i, "").trim().toLowerCase();
 }
 
 export function normalizeBaristaMenuItems<
@@ -69,7 +69,7 @@ export function normalizeBaristaMenuItems<
   return menuItems.map((item) => {
     const matchedStoreItem = findStoreItemForMenuName(storeItems, item.name);
     if (!matchedStoreItem) {
-      if (!item.name.endsWith(" Tot")) return item;
+      if (!isTotTrackedMenuItem(item.name)) return item;
       return {
         ...item,
         name: getMenuBaseLabel(item.name),
@@ -77,7 +77,7 @@ export function normalizeBaristaMenuItems<
     }
 
     const expectedName = getTotLimit(matchedStoreItem) > 0
-      ? `${getBaristaStoreLabel(matchedStoreItem)} Tot`
+      ? `${getBaristaStoreLabel(matchedStoreItem)} TOTS`
       : getBaristaStoreLabel(matchedStoreItem);
 
     if (item.name === expectedName) return item;
