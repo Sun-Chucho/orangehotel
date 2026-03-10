@@ -71,6 +71,8 @@ interface PaymentRow {
   ref: string;
   payer: string;
   context: string;
+  dateLabel: string;
+  dateDetail?: string;
   method: string;
   amount: number;
   createdAt: number;
@@ -87,6 +89,16 @@ function formatAgo(timestamp: number): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   return `${hours}h ${mins % 60}m ago`;
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function PaymentsPage() {
@@ -161,6 +173,8 @@ export default function PaymentsPage() {
         ref: tx.receiptNo,
         payer: tx.guestName,
         context: `Room ${tx.roomNumber}`,
+        dateLabel: `${formatDate(tx.checkInDate)} - ${formatDate(tx.checkOutDate)}`,
+        dateDetail: `${tx.nights} night${tx.nights === 1 ? "" : "s"}`,
         method: tx.payment,
         amount: tx.total,
         createdAt: tx.createdAt,
@@ -177,6 +191,7 @@ export default function PaymentsPage() {
         ref: tx.code,
         payer: "Kitchen Order",
         context: tx.destination,
+        dateLabel: formatDate(new Date(tx.createdAt).toISOString()),
         method: tx.method,
         amount: tx.total,
         createdAt: tx.createdAt,
@@ -193,6 +208,7 @@ export default function PaymentsPage() {
         ref: tx.code,
         payer: "Barista Order",
         context: tx.destination,
+        dateLabel: formatDate(new Date(tx.createdAt).toISOString()),
         method: tx.method,
         amount: tx.total,
         createdAt: tx.createdAt,
@@ -355,6 +371,9 @@ export default function PaymentsPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Reference</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Payer</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Context</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">
+                  {paymentsTab === "reception" ? "Dates" : "Created"}
+                </TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
@@ -372,6 +391,14 @@ export default function PaymentsPage() {
                     </p>
                   </TableCell>
                   <TableCell className="font-bold">{tx.context}</TableCell>
+                  <TableCell className="font-bold">
+                    <p>{tx.dateLabel}</p>
+                    {tx.dateDetail && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                        {tx.dateDetail}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{tx.method}</TableCell>
                   <TableCell className="font-black">TSh {tx.amount.toLocaleString()}</TableCell>
                   <TableCell>
@@ -414,7 +441,7 @@ export default function PaymentsPage() {
 
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center">
+                  <TableCell colSpan={8} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">No payments found</p>
