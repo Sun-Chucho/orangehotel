@@ -104,7 +104,7 @@ function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): Bar
     .filter((item) => (!item.status || item.status === "ACTIVE") && item.category !== "Kitchen")
     .forEach((item) => {
       const name = getBaristaInventoryLabel(item);
-      const key = `${normalizeBaristaTarget(name)}|${(item.category ?? "").toLowerCase()}`;
+      const key = `${normalizeBaristaTarget(name)}|${(item.category ?? "").toLowerCase()}|${isTotInventoryItem(item) ? "tot" : "full"}`;
       const nextMenuItem: BaristaMenuItem = {
         id: item.id,
         name,
@@ -127,9 +127,18 @@ function normalizeBaristaTarget(name: string) {
 }
 
 function getBaristaInventoryLabel(item: Pick<InventoryItem, "name" | "size">) {
-  if (!item.size) return item.name.trim();
-  if (item.name.toLowerCase().includes(item.size.toLowerCase())) return item.name.trim();
-  return `${item.name} ${item.size}`.trim();
+  const rawName = item.name.trim();
+  const isTotItem = /\s+TOTS?$/i.test(rawName);
+  const baseName = rawName.replace(/\s+TOTS?$/i, "").trim();
+  const size = item.size?.trim() ?? "";
+
+  if (!size) return isTotItem ? `${baseName} TOTS` : baseName;
+  if (rawName.toLowerCase().includes(size.toLowerCase())) return rawName;
+  return isTotItem ? `${baseName} ${size} TOTS`.trim() : `${baseName} ${size}`.trim();
+}
+
+function isTotInventoryItem(item: Pick<InventoryItem, "name" | "totPerBottle">) {
+  return (typeof item.totPerBottle === "number" && item.totPerBottle > 0) || /\s+TOTS?$/i.test(item.name);
 }
 
 function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
@@ -140,14 +149,20 @@ function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
     const seedName = seededItem.name ?? "";
     const seedSize = seededItem.size ?? "";
     const seedBarcode = seededItem.barcode ?? "";
+    const seededIsTot = (typeof seededItem.totPerBottle === "number" && seededItem.totPerBottle > 0) || /\s+TOTS?$/i.test(seedName);
 
     const existingIndex = nextInventory.findIndex((item) => {
       const currentLabel = getBaristaInventoryLabel(item);
       const seedLabel = `${seedName} ${seedSize}`.trim();
       return (
         (seedBarcode && item.barcode === seedBarcode) ||
-        normalizeBaristaTarget(currentLabel) === normalizeBaristaTarget(seedLabel) ||
-        (normalizeBaristaTarget(item.name) === normalizeBaristaTarget(seedName) && (!(item.size ?? "") || (item.size ?? "") === seedSize))
+        (
+          isTotInventoryItem(item) === seededIsTot &&
+          (
+            normalizeBaristaTarget(currentLabel) === normalizeBaristaTarget(seedLabel) ||
+            (normalizeBaristaTarget(item.name) === normalizeBaristaTarget(seedName) && (!(item.size ?? "") || (item.size ?? "") === seedSize))
+          )
+        )
       );
     });
 
@@ -199,7 +214,7 @@ function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
   const seen = new Map<string, number>();
 
   for (const item of nextInventory) {
-    const dedupeKey = item.barcode || `${normalizeBaristaTarget(getBaristaInventoryLabel(item))}|${(item.category ?? "").toLowerCase()}`;
+    const dedupeKey = item.barcode || `${normalizeBaristaTarget(getBaristaInventoryLabel(item))}|${(item.category ?? "").toLowerCase()}|${isTotInventoryItem(item) ? "tot" : "full"}`;
     const existingAt = seen.get(dedupeKey);
     if (existingAt === undefined) {
       seen.set(dedupeKey, dedupedInventory.length);
