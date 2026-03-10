@@ -95,49 +95,9 @@ export function seedDemoDataIfNeeded() {
   ]);
   setValueIfMissing(STORAGE_CASHIER_SEQ, "84922");
 
-  setArrayIfEmpty(STORAGE_KITCHEN_MENU, [
-    { id: "km-1", name: "Grilled Chicken", price: 28000, category: "lunch", prepMinutes: 20 },
-    { id: "km-2", name: "Beef Pilau", price: 24000, category: "lunch", prepMinutes: 18 },
-    { id: "km-3", name: "Club Sandwich", price: 18000, category: "breakfast", prepMinutes: 12 },
-    { id: "km-4", name: "Vegetable Pasta", price: 21000, category: "dinner", prepMinutes: 16 },
-    { id: "km-5", name: "Fruit Plate", price: 12000, category: "breakfast", prepMinutes: 8 },
-    { id: "km-6", name: "Fish Curry", price: 30000, category: "dinner", prepMinutes: 25 },
-  ]);
-  setArrayIfEmpty(STORAGE_KITCHEN_TICKETS, [
-    {
-      id: "kt-demo-1",
-      code: "K-301",
-      createdAt: hoursAgo(1),
-      mode: "room-service",
-      destination: "Room 2003",
-      lines: [{ name: "Grilled Chicken", qty: 1 }, { name: "Fruit Plate", qty: 1 }],
-      total: 40000,
-    },
-  ]);
-  setArrayIfEmpty(STORAGE_KITCHEN_PAYMENTS, [
-    {
-      id: "kp-demo-1",
-      ticketId: "kt-demo-paid-1",
-      code: "K-299",
-      createdAt: hoursAgo(9),
-      mode: "restaurant",
-      destination: "Table 5",
-      total: 52000,
-      status: "completed",
-      method: "cash",
-    },
-    {
-      id: "kp-demo-2",
-      ticketId: "kt-demo-paid-2",
-      code: "K-300",
-      createdAt: hoursAgo(3),
-      mode: "room-service",
-      destination: "Room 1008",
-      total: 28000,
-      status: "credit",
-      method: "credit",
-    },
-  ]);
+  setArrayIfEmpty(STORAGE_KITCHEN_MENU, []);
+  setArrayIfEmpty(STORAGE_KITCHEN_TICKETS, []);
+  setArrayIfEmpty(STORAGE_KITCHEN_PAYMENTS, []);
   setValueIfMissing(STORAGE_KITCHEN_SEQ, "301");
 
   setArrayIfEmpty(STORAGE_BARISTA_MENU, [
