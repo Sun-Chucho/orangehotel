@@ -11,7 +11,7 @@ import {
   STORAGE_STORE_USAGE,
 } from "@/app/lib/inventory-transfer";
 import { DEFAULT_KITCHEN_MENU } from "@/app/lib/kitchen-menu";
-import { STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
+import { STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writePosState } from "@/app/lib/storage";
 
 const STORAGE_CASHIER_TX = "orange-hotel-cashier-transactions";
 const STORAGE_CASHIER_SEQ = "orange-hotel-cashier-seq";
@@ -116,10 +116,7 @@ export function seedDemoDataIfNeeded() {
 
     localStorage.setItem(STORAGE_KITCHEN_TICKETS, JSON.stringify([]));
     localStorage.setItem(STORAGE_KITCHEN_PAYMENTS, JSON.stringify([]));
-    localStorage.setItem(
-      STORAGE_KITCHEN_STATE,
-      JSON.stringify({ tickets: [], ticketSeq, payments: [], menuItems }),
-    );
+    writePosState(STORAGE_KITCHEN_STATE, [], ticketSeq, [], menuItems as typeof DEFAULT_KITCHEN_MENU);
     localStorage.setItem(STORAGE_KITCHEN_SALES_CLEANUP, "1");
   }
 
@@ -141,10 +138,7 @@ export function seedDemoDataIfNeeded() {
 
     localStorage.setItem(STORAGE_BARISTA_TICKETS, JSON.stringify([]));
     localStorage.setItem(STORAGE_BARISTA_PAYMENTS, JSON.stringify([]));
-    localStorage.setItem(
-      STORAGE_BARISTA_STATE,
-      JSON.stringify({ tickets: [], ticketSeq, payments: [], menuItems }),
-    );
+    writePosState(STORAGE_BARISTA_STATE, [], ticketSeq, [], menuItems);
     localStorage.setItem(STORAGE_BARISTA_SALES_CLEANUP, "1");
   }
 
