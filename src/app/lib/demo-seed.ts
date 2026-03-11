@@ -191,32 +191,7 @@ export function seedDemoDataIfNeeded() {
     { id: "su-seed-2", movementId: "mv-seed-2", destination: "kitchen", quantityUsed: 9, usedAt: hoursAgo(4) },
   ]);
 
-  setArrayIfEmpty(STORAGE_COMPANY_STOCK, [
-    {
-      id: "cs-seed-1",
-      name: "POS Terminal",
-      description: "Front desk payment terminal",
-      quantity: 2,
-      category: "technology",
-      createdAt: hoursAgo(72),
-    },
-    {
-      id: "cs-seed-2",
-      name: "Kitchen Freezer",
-      description: "Large cold storage unit",
-      quantity: 1,
-      category: "kitchen-equipment",
-      createdAt: hoursAgo(120),
-    },
-    {
-      id: "cs-seed-3",
-      name: "Lobby Sofa Set",
-      description: "Reception waiting lounge set",
-      quantity: 1,
-      category: "furniture",
-      createdAt: hoursAgo(240),
-    },
-  ]);
+  setArrayIfEmpty(STORAGE_COMPANY_STOCK, []);
 
   setArrayIfEmpty(STORAGE_BEVERAGE_COST, [
     {

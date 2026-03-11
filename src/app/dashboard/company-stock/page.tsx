@@ -34,6 +34,11 @@ export default function CompanyStockPage() {
     const applyCompanyStockSnapshot = () => {
       const saved = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
       if (Array.isArray(saved)) {
+        if (saved.length > 0 && saved.every((item) => item.id.startsWith("cs-seed-"))) {
+          setItems([]);
+          writeJson(STORAGE_COMPANY_STOCK, []);
+          return;
+        }
         setItems(saved);
         return;
       }

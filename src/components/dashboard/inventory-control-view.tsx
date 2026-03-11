@@ -24,24 +24,47 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRightLeft, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 export type InventoryTab =
   | "kitchen-stock"
-  | "barista-stock"
-  | "stock-control"
-  | "stock-movement";
+  | "barista-stock";
 
 type ItemCategory = "Kitchen" | "Bar";
-type StockControlTab = "kitchen" | "barista";
-type StockSectionTab = "dashboard" | "records";
 
 interface PosPaymentRecord {
   total: number;
 }
+
+const KITCHEN_CATEGORY_OPTIONS = [
+  "Fruits",
+  "Vegetables",
+  "Herbs",
+  "Frozen - Meat",
+  "Frozen - Fish",
+  "Butter & Cheese",
+  "Dry Goods",
+  "Juices & Drinks",
+  "Cleaning / Household",
+] as const;
+
+const BARISTA_CATEGORY_OPTIONS = [
+  "Coffee",
+  "Tea",
+  "Soft Drink",
+  "Beer",
+  "Wine",
+  "Whisky",
+  "Gin",
+  "Spirit",
+  "Cider",
+  "Water",
+  "Energy Drink",
+  "Snacks",
+] as const;
 
 function getStockLabel(stock: number, minStock: number) {
   if (stock <= 0) return "Out";
@@ -56,7 +79,7 @@ function getLogicLabel(rule: StockLogicRule | undefined) {
 
 export function InventoryControlView({
   initialTab,
-  visibleTabs = ["kitchen-stock", "barista-stock", "stock-control", "stock-movement"],
+  visibleTabs = ["kitchen-stock", "barista-stock"],
 }: {
   initialTab: InventoryTab;
   visibleTabs?: InventoryTab[];
@@ -64,14 +87,8 @@ export function InventoryControlView({
   const isDirector = useIsDirector();
   const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
-  const [stockControlTab, setStockControlTab] = useState<StockControlTab>("kitchen");
-  const [stockMovementTab, setStockMovementTab] = useState<StockControlTab>("kitchen");
-  const [baristaStockTab, setBaristaStockTab] = useState<StockSectionTab>("dashboard");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
-  const [movementLogs, setMovementLogs] = useState<StoreMovementLog[]>([]);
-  const [logicRules, setLogicRules] = useState<StockLogicRule[]>([]);
-  const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
 
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenSubCategory, setKitchenSubCategory] = useState("");
@@ -91,21 +108,18 @@ export function InventoryControlView({
   const [baristaThreshold, setBaristaThreshold] = useState("1");
   const [baristaBuyingPrice, setBaristaBuyingPrice] = useState("");
   const [baristaSellingPrice, setBaristaSellingPrice] = useState("");
-  const [editingBaristaItemId, setEditingBaristaItemId] = useState("");
-
-  const [selectedKitchenRuleItemId, setSelectedKitchenRuleItemId] = useState("");
-  const [selectedBaristaRuleItemId, setSelectedBaristaRuleItemId] = useState("");
-  const [kitchenDepartmentUnit, setKitchenDepartmentUnit] = useState("portion");
-  const [baristaDepartmentUnit, setBaristaDepartmentUnit] = useState("cup");
-  const [kitchenUnitToMenu, setKitchenUnitToMenu] = useState("1");
-  const [baristaUnitToMenu, setBaristaUnitToMenu] = useState("1");
-  const [kitchenLogicNote, setKitchenLogicNote] = useState("");
-  const [baristaLogicNote, setBaristaLogicNote] = useState("");
-
-  const [selectedKitchenMoveItemId, setSelectedKitchenMoveItemId] = useState("");
-  const [selectedBaristaMoveItemId, setSelectedBaristaMoveItemId] = useState("");
-  const [kitchenMoveQty, setKitchenMoveQty] = useState("1");
-  const [baristaMoveQty, setBaristaMoveQty] = useState("1");
+  const [editModal, setEditModal] = useState<{
+    lane: StoreLane;
+    itemId: string;
+    name: string;
+    category: string;
+    size: string;
+    qty: string;
+    buyingPrice: string;
+    sellingPrice: string;
+    lowThreshold: string;
+    status: "ACTIVE" | "INACTIVE";
+  } | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const canViewBuyingPrice = role === "inventory";
 
@@ -115,13 +129,6 @@ export function InventoryControlView({
 
   useEffect(() => {
     setActiveTab(initialTab);
-    if (initialTab === "barista-stock") {
-      setStockControlTab("barista");
-      setStockMovementTab("barista");
-    } else if (initialTab === "kitchen-stock") {
-      setStockControlTab("kitchen");
-      setStockMovementTab("kitchen");
-    }
   }, [initialTab]);
 
   useEffect(() => {
@@ -134,33 +141,21 @@ export function InventoryControlView({
     const applyInventorySnapshot = () => {
       const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
       const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
-      const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
-      const rules = readJson<StockLogicRule[]>(STORAGE_STOCK_LOGIC);
-      const baristaState = readJson<{ payments?: PosPaymentRecord[] }>(STORAGE_BARISTA_STATE);
       const normalizedStore: MainStoreItem[] = store.map((item) => ({
         ...item,
         lane: item.lane === "barista" ? "barista" : "kitchen",
       }));
       setItems(inv);
       setStoreItems(normalizedStore);
-      if (Array.isArray(moves)) setMovementLogs(moves);
-      if (Array.isArray(rules)) setLogicRules(rules);
-      setBaristaPayments(Array.isArray(baristaState?.payments) ? baristaState.payments : []);
     };
 
     applyInventorySnapshot();
     const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyInventorySnapshot);
     const unsubscribeStore = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applyInventorySnapshot);
-    const unsubscribeMoves = subscribeToSyncedStorageKey(STORAGE_STORE_MOVEMENTS, applyInventorySnapshot);
-    const unsubscribeLogic = subscribeToSyncedStorageKey(STORAGE_STOCK_LOGIC, applyInventorySnapshot);
-    const unsubscribeBaristaState = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyInventorySnapshot);
 
     return () => {
       unsubscribeInventory();
       unsubscribeStore();
-      unsubscribeMoves();
-      unsubscribeLogic();
-      unsubscribeBaristaState();
     };
   }, []);
 
@@ -168,40 +163,6 @@ export function InventoryControlView({
   const baristaStore = useMemo(() => storeItems.filter((item) => item.lane === "barista"), [storeItems]);
   const kitchenInventoryItems = useMemo(() => items.filter((item) => item.category === "Kitchen"), [items]);
   const baristaInventoryItems = useMemo(() => items.filter((item) => item.category === "Bar"), [items]);
-  const kitchenLogicRules = useMemo(() => logicRules.filter((rule) => rule.destination === "kitchen"), [logicRules]);
-  const baristaLogicRules = useMemo(() => logicRules.filter((rule) => rule.destination === "barista"), [logicRules]);
-  const baristaInvestment = useMemo(
-    () =>
-      baristaInventoryItems.reduce(
-        (sum, item) => sum + (typeof item.stock === "number" ? item.stock : 0) * (typeof item.buyingPrice === "number" ? item.buyingPrice : 0),
-        0,
-      ),
-    [baristaInventoryItems],
-  );
-  const baristaRevenue = useMemo(
-    () => baristaPayments.reduce((sum, payment) => sum + (typeof payment.total === "number" ? payment.total : 0), 0),
-    [baristaPayments],
-  );
-
-  const selectedKitchenRuleItem = useMemo(
-    () => kitchenStore.find((item) => item.id === selectedKitchenRuleItemId),
-    [kitchenStore, selectedKitchenRuleItemId],
-  );
-  const selectedBaristaRuleItem = useMemo(
-    () => baristaStore.find((item) => item.id === selectedBaristaRuleItemId),
-    [baristaStore, selectedBaristaRuleItemId],
-  );
-  const selectedKitchenMoveItem = useMemo(
-    () => kitchenStore.find((item) => item.id === selectedKitchenMoveItemId),
-    [kitchenStore, selectedKitchenMoveItemId],
-  );
-  const selectedBaristaMoveItem = useMemo(
-    () => baristaStore.find((item) => item.id === selectedBaristaMoveItemId),
-    [baristaStore, selectedBaristaMoveItemId],
-  );
-
-  const getRuleForItem = (destination: TransferDestination, itemId: string) =>
-    logicRules.find((rule) => rule.destination === destination && rule.itemId === itemId);
 
   const resetStoreForm = (lane: StoreLane) => {
     if (lane === "kitchen") {
@@ -217,7 +178,6 @@ export function InventoryControlView({
       return;
     }
 
-    setEditingBaristaItemId("");
     setBaristaName("");
     setBaristaSubCategory("");
     setBaristaSize("");
@@ -228,29 +188,27 @@ export function InventoryControlView({
     setBaristaSellingPrice("");
   };
 
-  const populateStoreForm = (lane: StoreLane, item: MainStoreItem) => {
-    if (lane === "kitchen") {
-      setEditingKitchenItemId(item.id);
-      setKitchenName(item.name);
-      setKitchenSubCategory(item.subCategory ?? "");
-      setKitchenSize(item.size ?? "");
-      setKitchenQty(String(item.stock));
-      setKitchenUnit(item.unit);
-      setKitchenThreshold(String(item.minStock));
-      setKitchenBuyingPrice(String(item.buyingPrice ?? 0));
-      setKitchenSellingPrice(String(item.sellingPrice ?? 0));
-      return;
-    }
+  const openEditModal = (lane: StoreLane, item: MainStoreItem) => {
+    const category = lane === "kitchen" ? "Kitchen" : "Bar";
+    const inventoryItem = items.find(
+      (entry) =>
+        entry.category === category &&
+        normalizeStockName(entry.name) === normalizeStockName(item.name) &&
+        normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
+    );
 
-    setEditingBaristaItemId(item.id);
-    setBaristaName(item.name);
-    setBaristaSubCategory(item.subCategory ?? "");
-    setBaristaSize(item.size ?? "");
-    setBaristaQty(String(item.stock));
-    setBaristaUnit(item.unit);
-    setBaristaThreshold(String(item.minStock));
-    setBaristaBuyingPrice(String(item.buyingPrice ?? 0));
-    setBaristaSellingPrice(String(item.sellingPrice ?? 0));
+    setEditModal({
+      lane,
+      itemId: item.id,
+      name: item.name,
+      category: item.subCategory ?? "",
+      size: item.size ?? "",
+      qty: String(item.stock),
+      buyingPrice: String(item.buyingPrice ?? 0),
+      sellingPrice: String(item.sellingPrice ?? 0),
+      lowThreshold: String(item.minStock),
+      status: inventoryItem?.status ?? "ACTIVE",
+    });
   };
 
   const addStoreItem = async (lane: StoreLane) => {
@@ -264,7 +222,6 @@ export function InventoryControlView({
     const thresholdRaw = lane === "kitchen" ? kitchenThreshold : baristaThreshold;
     const buyingRaw = lane === "kitchen" ? kitchenBuyingPrice : baristaBuyingPrice;
     const sellingRaw = lane === "kitchen" ? kitchenSellingPrice : baristaSellingPrice;
-    const editingItemId = lane === "kitchen" ? editingKitchenItemId : editingBaristaItemId;
     
     const qty = Number(qtyRaw);
     const threshold = Number(thresholdRaw);
@@ -277,252 +234,125 @@ export function InventoryControlView({
     if (sellingPrice <= 0) return;
 
     const approved = await confirm({
-      title: editingItemId ? "Update Stock Item" : "Add Stock Item",
-      description: editingItemId
-        ? `Are you sure you want to update ${name.trim()} in ${lane} stock?`
-        : `Are you sure you want to add ${name.trim()} to ${lane} stock?`,
-      actionLabel: editingItemId ? "Update Item" : "Add Item",
+      title: "Add Stock Item",
+      description: `Are you sure you want to add ${name.trim()} to ${lane} stock?`,
+      actionLabel: "Add Item",
     });
     if (!approved) return;
 
-    const existingItem = editingItemId
-      ? storeItems.find((item) => item.id === editingItemId)
-      : storeItems.find(
-          (item) =>
-            item.lane === lane &&
-            normalizeStockName(item.name) === normalizeStockName(name) &&
-            normalizeStockName(item.unit) === normalizeStockName(unit) &&
-            normalizeStockName(item.size ?? "") === normalizeStockName(size),
-        );
+    const nextStoreRecord: MainStoreItem = {
+      id: `s-${Date.now()}`,
+      name: name.trim(),
+      subCategory,
+      size,
+      stock: qty,
+      unit: unit.trim(),
+      minStock: threshold,
+      lane,
+      buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
+      sellingPrice,
+    };
 
-    const nextStoreRecord: MainStoreItem = existingItem
-      ? {
-          ...existingItem,
-          name: name.trim(),
-          subCategory,
-          size,
-          stock: qty,
-          unit: unit.trim(),
-          minStock: threshold,
-          buyingPrice: canViewBuyingPrice ? buyingPrice : existingItem.buyingPrice ?? 0,
-          sellingPrice,
-        }
-      : {
-          id: `s-${Date.now()}`,
-          name: name.trim(),
-          subCategory,
-          size,
-          stock: qty,
-          unit: unit.trim(),
-          minStock: threshold,
-          lane,
-          buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
-          sellingPrice,
-        };
-
-    const nextStoreItems = existingItem
-      ? storeItems.map((item) => (item.id === existingItem.id ? nextStoreRecord : item))
-      : [nextStoreRecord, ...storeItems];
+    const nextStoreItems = [nextStoreRecord, ...storeItems];
 
     setStoreItems(nextStoreItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
 
     const nextInventoryItems = [...items];
     const category = lane === "kitchen" ? "Kitchen" : "Bar";
-    const inventoryIndex = nextInventoryItems.findIndex(
-      (item) =>
-        item.category === category &&
-        normalizeStockName(item.name) === normalizeStockName(existingItem?.name ?? name) &&
-        normalizeStockName(item.size ?? "") === normalizeStockName(existingItem?.size ?? size),
-    );
-    
-    if (inventoryIndex >= 0) {
-      const currentItem = nextInventoryItems[inventoryIndex];
-      nextInventoryItems[inventoryIndex] = {
-        ...currentItem,
-        name: name.trim(),
-        subCategory,
-        size,
-        stock: qty,
-        buyingPrice: canViewBuyingPrice ? buyingPrice : currentItem.buyingPrice,
-        sellingPrice,
-        price: sellingPrice,
-        minStock: threshold,
-        unit: unit.trim(),
-      };
-    } else {
-      nextInventoryItems.unshift({
-        id: `inv-${Date.now()}`,
-        barcode: "",
-        name: name.trim(),
-        category,
-        subCategory,
-        size,
-        stock: qty,
-        totSold: 0,
-        buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
-        sellingPrice,
-        price: sellingPrice,
-        status: "ACTIVE",
-        minStock: threshold,
-        unit: unit.trim(),
-      });
-    }
+    nextInventoryItems.unshift({
+      id: `inv-${Date.now()}`,
+      barcode: "",
+      name: name.trim(),
+      category,
+      subCategory,
+      size,
+      stock: qty,
+      totSold: 0,
+      buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
+      sellingPrice,
+      price: sellingPrice,
+      status: "ACTIVE",
+      minStock: threshold,
+      unit: unit.trim(),
+    });
     setItems(nextInventoryItems);
     writeJson(STORAGE_INVENTORY_ITEMS, nextInventoryItems);
     resetStoreForm(lane);
   };
 
-  const saveLogicRule = async (lane: StoreLane) => {
+  const saveEditedItem = async () => {
     if (isDirector) return;
+    if (!editModal) return;
 
-    const selectedItem = lane === "kitchen" ? selectedKitchenRuleItem : selectedBaristaRuleItem;
-    const departmentUnit = (lane === "kitchen" ? kitchenDepartmentUnit : baristaDepartmentUnit).trim();
-    const unitToMenu = Number(lane === "kitchen" ? kitchenUnitToMenu : baristaUnitToMenu);
-    const logicNote = (lane === "kitchen" ? kitchenLogicNote : baristaLogicNote).trim();
+    const qty = Number(editModal.qty);
+    const buyingPrice = Number(editModal.buyingPrice);
+    const sellingPrice = Number(editModal.sellingPrice);
+    const minStock = Number(editModal.lowThreshold);
 
-    if (!selectedItem || !departmentUnit || Number.isNaN(unitToMenu) || unitToMenu <= 0 || !logicNote) return;
+    if (
+      !editModal.name.trim() ||
+      Number.isNaN(qty) ||
+      qty < 0 ||
+      Number.isNaN(buyingPrice) ||
+      buyingPrice < 0 ||
+      Number.isNaN(sellingPrice) ||
+      sellingPrice < 0 ||
+      Number.isNaN(minStock) ||
+      minStock < 0
+    ) return;
 
     const approved = await confirm({
-      title: "Save Stock Logic",
-      description: `Are you sure you want to save the conversion rule for ${selectedItem.name}?`,
-      actionLabel: "Save Logic",
+      title: "Update Stock Item",
+      description: `Are you sure you want to update ${editModal.name.trim()}?`,
+      actionLabel: "Update Item",
     });
     if (!approved) return;
-
-    const nextRule: StockLogicRule = {
-      id: `logic-${lane}-${selectedItem.id}`,
-      itemId: selectedItem.id,
-      itemName: selectedItem.name,
-      destination: lane,
-      storeUnit: selectedItem.unit,
-      departmentUnit,
-      unitToMenu,
-      logicNote,
-      updatedAt: Date.now(),
-    };
-
-    const nextRules = [
-      nextRule,
-      ...logicRules.filter((rule) => !(rule.destination === lane && rule.itemId === selectedItem.id)),
-    ];
-
-    setLogicRules(nextRules);
-    writeJson(STORAGE_STOCK_LOGIC, nextRules);
-
-    if (lane === "kitchen") {
-      setKitchenDepartmentUnit("portion");
-      setKitchenUnitToMenu("1");
-      setKitchenLogicNote("");
-      return;
-    }
-
-    setBaristaDepartmentUnit("cup");
-    setBaristaUnitToMenu("1");
-    setBaristaLogicNote("");
-  };
-
-  const recordMovement = async (lane: StoreLane) => {
-    if (isDirector) return;
-
-    const selectedItem = lane === "kitchen" ? selectedKitchenMoveItem : selectedBaristaMoveItem;
-    const moveQty = Number(lane === "kitchen" ? kitchenMoveQty : baristaMoveQty);
-    const rule = getRuleForItem(lane, selectedItem?.id ?? "");
-
-    if (!selectedItem || !rule || Number.isNaN(moveQty) || moveQty <= 0 || moveQty > selectedItem.stock) return;
-
-    const approved = await confirm({
-      title: "Record Stock Movement",
-      description: `Are you sure you want to move ${moveQty} ${selectedItem.unit} of ${selectedItem.name} to ${lane}?`,
-      actionLabel: "Record Movement",
-    });
-    if (!approved) return;
-
-    const convertedQty = moveQty * rule.unitToMenu;
-    const destinationCategory: ItemCategory = lane === "kitchen" ? "Kitchen" : "Bar";
-    const itemLabel = getStoreItemLabel(selectedItem);
-    const normalizedName = normalizeStockName(itemLabel);
 
     const nextStoreItems = storeItems.map((item) =>
-      item.id === selectedItem.id ? { ...item, stock: item.stock - moveQty } : item,
+      item.id === editModal.itemId
+        ? {
+            ...item,
+            name: editModal.name.trim(),
+            subCategory: editModal.category.trim(),
+            size: editModal.size.trim(),
+            stock: qty,
+            minStock: minStock,
+            buyingPrice,
+            sellingPrice,
+          }
+        : item,
     );
-
-    const existingInventoryItem = items.find(
-      (item) => item.category === destinationCategory && normalizeStockName(item.name) === normalizedName,
-    );
-
-    const nextItems = existingInventoryItem
-      ? items.map((item) =>
-          item.id === existingInventoryItem.id
-            ? {
-                ...item,
-                stock: item.stock + convertedQty,
-                minStock: selectedItem.minStock,
-                buyingPrice:
-                  typeof selectedItem.buyingPrice === "number" && selectedItem.buyingPrice > 0
-                    ? selectedItem.buyingPrice
-                    : item.buyingPrice,
-                sellingPrice:
-                  typeof selectedItem.sellingPrice === "number" && selectedItem.sellingPrice > 0
-                    ? selectedItem.sellingPrice
-                    : item.sellingPrice,
-                price:
-                  typeof selectedItem.sellingPrice === "number" && selectedItem.sellingPrice > 0
-                    ? selectedItem.sellingPrice
-                    : item.sellingPrice ?? item.price ?? 0,
-                name: itemLabel,
-              }
-            : item,
-        )
-      : [
-          {
-            id: `i-${Date.now()}`,
-            barcode: "",
-            name: itemLabel,
-            category: destinationCategory,
-            size: selectedItem.size || "",
-            stock: convertedQty,
-            totSold: 0,
-            buyingPrice: selectedItem.buyingPrice ?? 0,
-            sellingPrice: selectedItem.sellingPrice ?? 0,
-            status: "ACTIVE" as const,
-            minStock: selectedItem.minStock,
-            unit: rule.departmentUnit,
-            price: selectedItem.sellingPrice ?? selectedItem.buyingPrice ?? 0,
-          },
-          ...items,
-        ];
-
-    const nextMovementLogs: StoreMovementLog[] = [
-      {
-        id: `mv-${Date.now()}`,
-        itemId: selectedItem.id,
-        itemName: itemLabel,
-        source: "store",
-        destination: lane,
-        storeQtyMoved: moveQty,
-        storeUnit: selectedItem.unit,
-        conversionValue: rule.unitToMenu,
-        conversionNote: `${rule.logicNote} | 1 ${rule.storeUnit} = ${rule.unitToMenu} ${rule.departmentUnit}`,
-        convertedQty,
-        movedAt: Date.now(),
-      },
-      ...movementLogs,
-    ];
+    const nextInventoryItems = items.map((item) => {
+      const sameLaneCategory = editModal.lane === "kitchen" ? "Kitchen" : "Bar";
+      const matchingStore = storeItems.find((entry) => entry.id === editModal.itemId);
+      if (
+        item.category === sameLaneCategory &&
+        matchingStore &&
+        normalizeStockName(item.name) === normalizeStockName(matchingStore.name) &&
+        normalizeStockName(item.size ?? "") === normalizeStockName(matchingStore.size ?? "")
+      ) {
+        return {
+          ...item,
+          name: editModal.name.trim(),
+          subCategory: editModal.category.trim(),
+          size: editModal.size.trim(),
+          stock: qty,
+          buyingPrice,
+          sellingPrice,
+          price: sellingPrice,
+          minStock,
+          status: editModal.status,
+        };
+      }
+      return item;
+    });
 
     setStoreItems(nextStoreItems);
-    setItems(nextItems);
-    setMovementLogs(nextMovementLogs);
+    setItems(nextInventoryItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
-    writeJson(STORAGE_INVENTORY_ITEMS, nextItems);
-    writeJson(STORAGE_STORE_MOVEMENTS, nextMovementLogs);
-
-    if (lane === "kitchen") {
-      setKitchenMoveQty("1");
-      return;
-    }
-
-    setBaristaMoveQty("1");
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventoryItems);
+    setEditModal(null);
   };
 
   const clearDepartmentInventory = async (lane: StoreLane) => {
@@ -530,55 +360,29 @@ export function InventoryControlView({
 
     const label = lane === "kitchen" ? "Kitchen" : "Bar";
     const destinationCategory: ItemCategory = lane === "kitchen" ? "Kitchen" : "Bar";
-    const laneMovementIds = movementLogs
-      .filter((movement) => movement.destination === lane)
-      .map((movement) => movement.id);
 
     const approved = await confirm({
       title: `Clear ${label} Inventory`,
-      description: `Are you sure you want to clear all ${label.toLowerCase()} stock, movement logs, logic rules, and usage records?`,
+      description: `Are you sure you want to clear all ${label.toLowerCase()} stock?`,
       actionLabel: `Clear ${label}`,
     });
     if (!approved) return;
 
     const nextItems = items.filter((item) => item.category !== destinationCategory);
     const nextStoreItems = storeItems.filter((item) => item.lane !== lane);
-    const nextMovementLogs = movementLogs.filter((movement) => movement.destination !== lane);
-    const nextLogicRules = logicRules.filter((rule) => rule.destination !== lane);
-    const usageLogs = readJson<StoreUsageLog[]>(STORAGE_STORE_USAGE) ?? [];
-    const nextUsageLogs = usageLogs.filter(
-      (entry) => entry.destination !== lane && !laneMovementIds.includes(entry.movementId),
-    );
 
     setItems(nextItems);
     setStoreItems(nextStoreItems);
-    setMovementLogs(nextMovementLogs);
-    setLogicRules(nextLogicRules);
 
     writeJson(STORAGE_INVENTORY_ITEMS, nextItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
-    writeJson(STORAGE_STORE_MOVEMENTS, nextMovementLogs);
-    writeJson(STORAGE_STOCK_LOGIC, nextLogicRules);
-    writeJson(STORAGE_STORE_USAGE, nextUsageLogs);
 
     if (lane === "kitchen") {
       resetStoreForm("kitchen");
-      setSelectedKitchenRuleItemId("");
-      setKitchenDepartmentUnit("portion");
-      setKitchenUnitToMenu("1");
-      setKitchenLogicNote("");
-      setSelectedKitchenMoveItemId("");
-      setKitchenMoveQty("1");
       return;
     }
 
     resetStoreForm("barista");
-    setSelectedBaristaRuleItemId("");
-    setBaristaDepartmentUnit("cup");
-    setBaristaUnitToMenu("1");
-    setBaristaLogicNote("");
-    setSelectedBaristaMoveItemId("");
-    setBaristaMoveQty("1");
   };
 
   const renderStoreCard = (lane: StoreLane, title: string, list: MainStoreItem[]) => (
@@ -594,11 +398,16 @@ export function InventoryControlView({
             onChange={(event) => (lane === "kitchen" ? setKitchenName(event.target.value) : setBaristaName(event.target.value))}
             placeholder="Item name"
           />
-          <Input
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={lane === "kitchen" ? kitchenSubCategory : baristaSubCategory}
             onChange={(event) => (lane === "kitchen" ? setKitchenSubCategory(event.target.value) : setBaristaSubCategory(event.target.value))}
-            placeholder="Category"
-          />
+          >
+            <option value="">Select category</option>
+            {(lane === "kitchen" ? KITCHEN_CATEGORY_OPTIONS : BARISTA_CATEGORY_OPTIONS).map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
           <Input
             value={lane === "kitchen" ? kitchenSize : baristaSize}
             onChange={(event) => (lane === "kitchen" ? setKitchenSize(event.target.value) : setBaristaSize(event.target.value))}
@@ -640,15 +449,7 @@ export function InventoryControlView({
             placeholder="Selling Price"
           />
           <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
-            <Plus className="w-4 h-4 mr-2" /> {lane === "kitchen" ? (editingKitchenItemId ? "Update" : "Add") : (editingBaristaItemId ? "Update" : "Add")}
-          </Button>
-          <Button
-            variant="outline"
-            className="h-10 font-black uppercase text-[10px] tracking-widest"
-            onClick={() => resetStoreForm(lane)}
-            disabled={isDirector}
-          >
-            Cancel
+            <Plus className="w-4 h-4 mr-2" /> Add
           </Button>
           <Button
             variant="outline"
@@ -692,7 +493,7 @@ export function InventoryControlView({
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => populateStoreForm(lane, item)} disabled={isDirector}>
+                  <Button variant="outline" size="sm" onClick={() => openEditModal(lane, item)} disabled={isDirector}>
                     <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                   </Button>
                 </TableCell>
@@ -760,257 +561,20 @@ export function InventoryControlView({
     </Card>
   );
 
-  const renderBaristaDashboard = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="shadow-sm">
-          <CardContent className="p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Items</p>
-            <p className="mt-2 text-2xl font-black">{baristaInventoryItems.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Inventory Investment</p>
-            <p className="mt-2 text-2xl font-black">TSh {baristaInvestment.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">POS Revenue</p>
-            <p className="mt-2 text-2xl font-black">TSh {baristaRevenue.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-      </div>
-      {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
-    </div>
-  );
-
-  const renderStockControl = (
-    lane: StoreLane,
-    list: MainStoreItem[],
-    selectedItemId: string,
-    setSelectedItemId: (value: string) => void,
-    selectedItem: MainStoreItem | undefined,
-    departmentUnit: string,
-    setDepartmentUnit: (value: string) => void,
-    unitToMenu: string,
-    setUnitToMenu: (value: string) => void,
-    logicNote: string,
-    setLogicNote: (value: string) => void,
-    rules: StockLogicRule[],
-  ) => (
-    <div className="space-y-6">
-      <Card className="shadow-sm">
-        <CardHeader className="border-b">
-          <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Stock Control</CardTitle>
-          <CardDescription>Preset the unit logic once here, then use it later inside stock movement.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 pt-4">
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={selectedItemId}
-            onChange={(event) => setSelectedItemId(event.target.value)}
-          >
-            <option value="">Select item</option>
-            {list.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} ({item.stock} {item.unit})
-              </option>
-            ))}
-          </select>
-          <Input
-            value={departmentUnit}
-            onChange={(event) => setDepartmentUnit(event.target.value)}
-            placeholder={lane === "kitchen" ? "Kitchen unit" : "Barista unit"}
-          />
-          <Input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={unitToMenu}
-            onChange={(event) => setUnitToMenu(event.target.value)}
-            placeholder="Unit to menu"
-          />
-          <Input
-            value={logicNote}
-            onChange={(event) => setLogicNote(event.target.value)}
-            placeholder="Record logic"
-          />
-          <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={() => saveLogicRule(lane)} disabled={isDirector}>
-            <Save className="w-4 h-4 mr-2" /> Save Logic
-          </Button>
-        </CardContent>
-        {selectedItem && (
-          <CardContent className="pt-0">
-            <div className="rounded-md border p-3">
-              <p className="font-black">{selectedItem.name}</p>
-              <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                Base unit: {selectedItem.unit} | Current logic: {getLogicLabel(getRuleForItem(lane, selectedItem.id))}
-              </p>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardHeader className="border-b">
-          <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Logic Table</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Department Unit</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Unit To Menu</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Logic</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rules.map((rule) => (
-                <TableRow key={rule.id}>
-                  <TableCell className="font-bold">{rule.itemName}</TableCell>
-                  <TableCell className="font-bold">{rule.departmentUnit}</TableCell>
-                  <TableCell className="font-bold">1 {rule.storeUnit} = {rule.unitToMenu} {rule.departmentUnit}</TableCell>
-                  <TableCell className="font-bold">{rule.logicNote}</TableCell>
-                </TableRow>
-              ))}
-              {rules.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                    No logic presets yet
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  const renderStockMovement = (
-    lane: StoreLane,
-    list: MainStoreItem[],
-    selectedItemId: string,
-    setSelectedItemId: (value: string) => void,
-    selectedItem: MainStoreItem | undefined,
-    moveQty: string,
-    setMoveQty: (value: string) => void,
-  ) => {
-    const laneRules = logicRules.filter((rule) => rule.destination === lane);
-    const laneMovements = movementLogs.filter((movement) => movement.destination === lane);
-    const selectedRule = getRuleForItem(lane, selectedItemId);
-
-    return (
-      <div className="space-y-6">
-        <Card className="shadow-sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Stock Movement</CardTitle>
-            <CardDescription>Select an item and use the saved stock-control logic to move stock.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 pt-4">
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={selectedItemId}
-              onChange={(event) => setSelectedItemId(event.target.value)}
-            >
-              <option value="">Select item</option>
-              {list.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} ({item.stock} {item.unit})
-                </option>
-              ))}
-            </select>
-            <Input
-              type="number"
-              min="1"
-              value={moveQty}
-              onChange={(event) => setMoveQty(event.target.value)}
-              placeholder="Quantity moved"
-            />
-            <div className="rounded-md border px-3 py-2 text-sm font-bold">
-              {selectedRule ? `1 ${selectedRule.storeUnit} = ${selectedRule.unitToMenu} ${selectedRule.departmentUnit}` : "No preset logic"}
-            </div>
-            <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={() => recordMovement(lane)} disabled={isDirector || !selectedRule}>
-              <ArrowRightLeft className="w-4 h-4 mr-2" /> Record Movement
-            </Button>
-          </CardContent>
-          {selectedItem && (
-            <CardContent className="pt-0">
-              <div className="rounded-md border p-3">
-                <p className="font-black">{selectedItem.name}</p>
-                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  Available: {selectedItem.stock} {selectedItem.unit} | Logic: {selectedRule ? selectedRule.logicNote : "Set logic in Stock Control first"}
-                </p>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-lg uppercase font-black">{lane === "kitchen" ? "Kitchen" : "Barista"} Movement Log</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Movement</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Logic</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {laneMovements.map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell className="font-bold">{movement.itemName}</TableCell>
-                    <TableCell className="font-bold">
-                      {movement.storeQtyMoved} {movement.storeUnit} {"->"} {movement.convertedQty}
-                    </TableCell>
-                    <TableCell className="font-bold">{movement.conversionNote}</TableCell>
-                    <TableCell className="font-bold text-sm">{new Date(movement.movedAt).toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-                {laneMovements.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                      No movement records yet
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {laneRules.length === 0 && (
-          <Card className="border-orange-200 bg-orange-50/60 shadow-none">
-            <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-orange-700">
-              Set stock control logic first before recording movement here.
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       {dialog}
       <header>
         <h1 className="text-3xl font-black tracking-tight uppercase">Inventory Control</h1>
         <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Stock entry, logic presets, and movement records for kitchen and barista
+          Stock inventory for kitchen and barista
         </p>
       </header>
 
       {isDirector && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
           <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
-            Managing Director View: Stock and movement analytics only
+            Managing Director View: Stock visibility only
           </CardContent>
         </Card>
       )}
@@ -1024,12 +588,6 @@ export function InventoryControlView({
             {visibleTabs.includes("barista-stock") && (
               <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">Barista Stock</TabsTrigger>
             )}
-            {visibleTabs.includes("stock-control") && (
-              <TabsTrigger value="stock-control" className="font-black uppercase text-[10px] tracking-widest">Stock Control</TabsTrigger>
-            )}
-            {visibleTabs.includes("stock-movement") && (
-              <TabsTrigger value="stock-movement" className="font-black uppercase text-[10px] tracking-widest">Stock Movement</TabsTrigger>
-            )}
           </TabsList>
         </Tabs>
       )}
@@ -1042,91 +600,56 @@ export function InventoryControlView({
       )}
 
       {activeTab === "barista-stock" && (
-        <Tabs value={baristaStockTab} onValueChange={(value) => setBaristaStockTab(value as StockSectionTab)}>
-          <TabsList className="h-11">
-            <TabsTrigger value="dashboard" className="font-black uppercase text-[10px] tracking-widest">Dashboard</TabsTrigger>
-            <TabsTrigger value="records" className="font-black uppercase text-[10px] tracking-widest">Records</TabsTrigger>
-          </TabsList>
-          <TabsContent value="dashboard">
-            {renderBaristaDashboard()}
-          </TabsContent>
-          <TabsContent value="records" className="space-y-6">
-            {renderStoreCard("barista", "Barista Stock", baristaStore)}
-            {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
-          </TabsContent>
-        </Tabs>
+        <div className="space-y-6">
+          {renderStoreCard("barista", "Barista Stock", baristaStore)}
+          {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
+        </div>
       )}
 
-      {activeTab === "stock-control" && (
-        <Tabs value={stockControlTab} onValueChange={(value) => setStockControlTab(value as StockControlTab)}>
-          <TabsList className="h-11">
-            <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen</TabsTrigger>
-            <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista</TabsTrigger>
-          </TabsList>
-          <TabsContent value="kitchen">
-            {renderStockControl(
-              "kitchen",
-              kitchenStore,
-              selectedKitchenRuleItemId,
-              setSelectedKitchenRuleItemId,
-              selectedKitchenRuleItem,
-              kitchenDepartmentUnit,
-              setKitchenDepartmentUnit,
-              kitchenUnitToMenu,
-              setKitchenUnitToMenu,
-              kitchenLogicNote,
-              setKitchenLogicNote,
-              kitchenLogicRules,
-            )}
-          </TabsContent>
-          <TabsContent value="barista">
-            {renderStockControl(
-              "barista",
-              baristaStore,
-              selectedBaristaRuleItemId,
-              setSelectedBaristaRuleItemId,
-              selectedBaristaRuleItem,
-              baristaDepartmentUnit,
-              setBaristaDepartmentUnit,
-              baristaUnitToMenu,
-              setBaristaUnitToMenu,
-              baristaLogicNote,
-              setBaristaLogicNote,
-              baristaLogicRules,
-            )}
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {activeTab === "stock-movement" && (
-        <Tabs value={stockMovementTab} onValueChange={(value) => setStockMovementTab(value as StockControlTab)}>
-          <TabsList className="h-11">
-            <TabsTrigger value="kitchen" className="font-black uppercase text-[10px] tracking-widest">Kitchen</TabsTrigger>
-            <TabsTrigger value="barista" className="font-black uppercase text-[10px] tracking-widest">Barista</TabsTrigger>
-          </TabsList>
-          <TabsContent value="kitchen">
-            {renderStockMovement(
-              "kitchen",
-              kitchenStore,
-              selectedKitchenMoveItemId,
-              setSelectedKitchenMoveItemId,
-              selectedKitchenMoveItem,
-              kitchenMoveQty,
-              setKitchenMoveQty,
-            )}
-          </TabsContent>
-          <TabsContent value="barista">
-            {renderStockMovement(
-              "barista",
-              baristaStore,
-              selectedBaristaMoveItemId,
-              setSelectedBaristaMoveItemId,
-              selectedBaristaMoveItem,
-              baristaMoveQty,
-              setBaristaMoveQty,
-            )}
-          </TabsContent>
-        </Tabs>
+      {editModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Card className="w-full max-w-2xl">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0">
+              <div>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Edit Stock Item</CardTitle>
+                <CardDescription>Update the stock record details below.</CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setEditModal(null)}>
+                <XCircle className="h-5 w-5" />
+              </Button>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input value={editModal.name} onChange={(event) => setEditModal({ ...editModal, name: event.target.value })} placeholder="Item name" />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editModal.category}
+                onChange={(event) => setEditModal({ ...editModal, category: event.target.value })}
+              >
+                <option value="">Select category</option>
+                {(editModal.lane === "kitchen" ? KITCHEN_CATEGORY_OPTIONS : BARISTA_CATEGORY_OPTIONS).map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <Input value={editModal.size} onChange={(event) => setEditModal({ ...editModal, size: event.target.value })} placeholder="Size" />
+              <Input type="number" min="0" value={editModal.qty} onChange={(event) => setEditModal({ ...editModal, qty: event.target.value })} placeholder="Qty" />
+              <Input type="number" min="0" value={editModal.buyingPrice} onChange={(event) => setEditModal({ ...editModal, buyingPrice: event.target.value })} placeholder="Buying Price" />
+              <Input type="number" min="0" value={editModal.sellingPrice} onChange={(event) => setEditModal({ ...editModal, sellingPrice: event.target.value })} placeholder="Selling Price" />
+              <Input type="number" min="0" value={editModal.lowThreshold} onChange={(event) => setEditModal({ ...editModal, lowThreshold: event.target.value })} placeholder="Low Threshold" />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editModal.status}
+                onChange={(event) => setEditModal({ ...editModal, status: event.target.value as "ACTIVE" | "INACTIVE" })}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
+              </select>
+              <div className="md:col-span-2 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditModal(null)}>Cancel</Button>
+                <Button onClick={saveEditedItem}>Save</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
