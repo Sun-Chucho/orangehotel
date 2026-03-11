@@ -196,6 +196,14 @@ export function InventoryControlView({
         normalizeStockName(entry.name) === normalizeStockName(item.name) &&
         normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
     );
+    const resolvedSellingPrice =
+      typeof item.sellingPrice === "number" && item.sellingPrice > 0
+        ? item.sellingPrice
+        : typeof inventoryItem?.sellingPrice === "number" && inventoryItem.sellingPrice > 0
+          ? inventoryItem.sellingPrice
+          : typeof inventoryItem?.price === "number" && inventoryItem.price > 0
+            ? inventoryItem.price
+            : 0;
 
     setEditModal({
       lane,
@@ -205,7 +213,7 @@ export function InventoryControlView({
       size: item.size ?? "",
       qty: String(item.stock),
       buyingPrice: String(item.buyingPrice ?? 0),
-      sellingPrice: String(item.sellingPrice ?? 0),
+      sellingPrice: String(resolvedSellingPrice),
       lowThreshold: String(item.minStock),
       status: inventoryItem?.status ?? "ACTIVE",
     });
@@ -476,7 +484,23 @@ export function InventoryControlView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {list.map((item: any) => (
+            {list.map((item: any) => {
+              const inventoryMatch = items.find(
+                (entry) =>
+                  entry.category === (lane === "kitchen" ? "Kitchen" : "Bar") &&
+                  normalizeStockName(entry.name) === normalizeStockName(item.name) &&
+                  normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
+              );
+              const displaySellingPrice =
+                typeof item.sellingPrice === "number" && item.sellingPrice > 0
+                  ? item.sellingPrice
+                  : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
+                    ? inventoryMatch.sellingPrice
+                    : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
+                      ? inventoryMatch.price
+                      : null;
+
+              return (
               <TableRow key={item.id}>
                 <TableCell className="font-bold">{item.name}</TableCell>
                 <TableCell className="font-bold">{item.subCategory ?? "-"}</TableCell>
@@ -488,7 +512,7 @@ export function InventoryControlView({
                   </TableCell>
                 )}
                 <TableCell className="font-bold">
-                  {typeof item.sellingPrice === "number" && item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
+                  {typeof displaySellingPrice === "number" && displaySellingPrice > 0 ? `TSh ${displaySellingPrice.toLocaleString()}` : "-"}
                 </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
@@ -498,7 +522,8 @@ export function InventoryControlView({
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {list.length === 0 && (
               <TableRow>
                 <TableCell colSpan={canViewBuyingPrice ? 9 : 8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
@@ -619,30 +644,54 @@ export function InventoryControlView({
               </Button>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input value={editModal.name} onChange={(event) => setEditModal({ ...editModal, name: event.target.value })} placeholder="Item name" />
-              <select
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={editModal.category}
-                onChange={(event) => setEditModal({ ...editModal, category: event.target.value })}
-              >
-                <option value="">Select category</option>
-                {(editModal.lane === "kitchen" ? KITCHEN_CATEGORY_OPTIONS : BARISTA_CATEGORY_OPTIONS).map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <Input value={editModal.size} onChange={(event) => setEditModal({ ...editModal, size: event.target.value })} placeholder="Size" />
-              <Input type="number" min="0" value={editModal.qty} onChange={(event) => setEditModal({ ...editModal, qty: event.target.value })} placeholder="Qty" />
-              <Input type="number" min="0" value={editModal.buyingPrice} onChange={(event) => setEditModal({ ...editModal, buyingPrice: event.target.value })} placeholder="Buying Price" />
-              <Input type="number" min="0" value={editModal.sellingPrice} onChange={(event) => setEditModal({ ...editModal, sellingPrice: event.target.value })} placeholder="Selling Price" />
-              <Input type="number" min="0" value={editModal.lowThreshold} onChange={(event) => setEditModal({ ...editModal, lowThreshold: event.target.value })} placeholder="Low Threshold" />
-              <select
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={editModal.status}
-                onChange={(event) => setEditModal({ ...editModal, status: event.target.value as "ACTIVE" | "INACTIVE" })}
-              >
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="INACTIVE">INACTIVE</option>
-              </select>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Item Name</p>
+                <Input value={editModal.name} onChange={(event) => setEditModal({ ...editModal, name: event.target.value })} placeholder="Item name" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</p>
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={editModal.category}
+                  onChange={(event) => setEditModal({ ...editModal, category: event.target.value })}
+                >
+                  <option value="">Select category</option>
+                  {(editModal.lane === "kitchen" ? KITCHEN_CATEGORY_OPTIONS : BARISTA_CATEGORY_OPTIONS).map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Size</p>
+                <Input value={editModal.size} onChange={(event) => setEditModal({ ...editModal, size: event.target.value })} placeholder="Size" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Qty</p>
+                <Input type="number" min="0" value={editModal.qty} onChange={(event) => setEditModal({ ...editModal, qty: event.target.value })} placeholder="Qty" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Buying Price</p>
+                <Input type="number" min="0" value={editModal.buyingPrice} onChange={(event) => setEditModal({ ...editModal, buyingPrice: event.target.value })} placeholder="Buying price" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Selling Price</p>
+                <Input type="number" min="0" value={editModal.sellingPrice} onChange={(event) => setEditModal({ ...editModal, sellingPrice: event.target.value })} placeholder="Selling price" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Low Threshold</p>
+                <Input type="number" min="0" value={editModal.lowThreshold} onChange={(event) => setEditModal({ ...editModal, lowThreshold: event.target.value })} placeholder="Low threshold" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</p>
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={editModal.status}
+                  onChange={(event) => setEditModal({ ...editModal, status: event.target.value as "ACTIVE" | "INACTIVE" })}
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                </select>
+              </div>
               <div className="md:col-span-2 flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditModal(null)}>Cancel</Button>
                 <Button onClick={saveEditedItem}>Save</Button>
