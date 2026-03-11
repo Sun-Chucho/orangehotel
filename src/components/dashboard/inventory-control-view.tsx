@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { readStoredRole } from "@/app/lib/auth";
-import { INVENTORY, InventoryItem } from "@/app/lib/mock-data";
+import { InventoryItem } from "@/app/lib/mock-data";
 import {
   getStoreItemLabel,
   MainStoreItem,
@@ -18,13 +18,13 @@ import {
   StoreUsageLog,
   TransferDestination,
 } from "@/app/lib/inventory-transfer";
-import { readJson, writeJson } from "@/app/lib/storage";
+import { readJson, STORAGE_BARISTA_STATE, writeJson } from "@/app/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRightLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowRightLeft, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -37,249 +37,10 @@ export type InventoryTab =
 
 type ItemCategory = "Kitchen" | "Bar";
 type StockControlTab = "kitchen" | "barista";
+type StockSectionTab = "dashboard" | "records";
 
-type KitchenCatalogEntry = {
-  name: string;
-  unit: string;
-  buyingPrice: number;
-  subCategory:
-    | "Fruits"
-    | "Vegetables"
-    | "Herbs"
-    | "Frozen - Meat"
-    | "Frozen - Fish"
-    | "Butter & Cheese"
-    | "Dry Goods"
-    | "Juices & Drinks"
-    | "Cleaning / Household";
-};
-
-const KITCHEN_CATALOG_ITEMS: KitchenCatalogEntry[] = [
-  { name: "Avocado", unit: "Each", buyingPrice: 1000, subCategory: "Fruits" },
-  { name: "Apple (red/green/pink)", unit: "Each", buyingPrice: 1000, subCategory: "Fruits" },
-  { name: "Banana ripe", unit: "Bunch", buyingPrice: 4000, subCategory: "Fruits" },
-  { name: "Blueberry 250g", unit: "Each", buyingPrice: 12500, subCategory: "Fruits" },
-  { name: "Asparagus", unit: "Kg", buyingPrice: 40000, subCategory: "Fruits" },
-  { name: "Cucumber", unit: "Kg", buyingPrice: 2500, subCategory: "Fruits" },
-  { name: "Carrots", unit: "Kg", buyingPrice: 3000, subCategory: "Fruits" },
-  { name: "Cassava", unit: "Kg", buyingPrice: 2500, subCategory: "Fruits" },
-  { name: "Mango", unit: "Each", buyingPrice: 1000, subCategory: "Fruits" },
-  { name: "Pineapple", unit: "Each", buyingPrice: 3300, subCategory: "Fruits" },
-  { name: "Watermelon", unit: "Kg", buyingPrice: 900, subCategory: "Fruits" },
-  { name: "Watermelon", unit: "Pc", buyingPrice: 5000, subCategory: "Fruits" },
-  { name: "Sweet banana", unit: "Bunch", buyingPrice: 4000, subCategory: "Fruits" },
-  { name: "Green banana / cooking banana", unit: "Bunch", buyingPrice: 7000, subCategory: "Fruits" },
-  { name: "Pawpaw", unit: "Each", buyingPrice: 3000, subCategory: "Fruits" },
-  { name: "Orange local", unit: "Each", buyingPrice: 500, subCategory: "Fruits" },
-  { name: "Lemon local", unit: "Each", buyingPrice: 300, subCategory: "Fruits" },
-  { name: "Lemon export yellow", unit: "Kg", buyingPrice: 13000, subCategory: "Fruits" },
-  { name: "Lime local", unit: "Each", buyingPrice: 300, subCategory: "Fruits" },
-  { name: "Passion fruits (yellow/black)", unit: "Kg", buyingPrice: 5000, subCategory: "Fruits" },
-  { name: "Beetroot", unit: "Kg", buyingPrice: 4000, subCategory: "Fruits" },
-  { name: "Green grapes export", unit: "Packet", buyingPrice: 12000, subCategory: "Fruits" },
-  { name: "Red grapes export", unit: "Packet", buyingPrice: 12000, subCategory: "Fruits" },
-  { name: "Cherry tomato 250g", unit: "Packet", buyingPrice: 4000, subCategory: "Fruits" },
-  { name: "Red plums export", unit: "Kg", buyingPrice: 18000, subCategory: "Fruits" },
-  { name: "Orange yellow export", unit: "Kg", buyingPrice: 12000, subCategory: "Fruits" },
-  { name: "Raspberries 250g", unit: "Packet", buyingPrice: 8000, subCategory: "Fruits" },
-  { name: "Strawberries 250g", unit: "Packet", buyingPrice: 8000, subCategory: "Fruits" },
-  { name: "Tangerine local", unit: "Each", buyingPrice: 700, subCategory: "Fruits" },
-  { name: "Tangerine export yellow", unit: "Kg", buyingPrice: 15000, subCategory: "Fruits" },
-  { name: "Green garden peas", unit: "Kg", buyingPrice: 8000, subCategory: "Fruits" },
-  { name: "Coconut dry", unit: "Pcs", buyingPrice: 2000, subCategory: "Fruits" },
-  { name: "Banana mzuzu / plantain banana", unit: "Bunch", buyingPrice: 8000, subCategory: "Fruits" },
-  { name: "Sweet melon", unit: "Kg", buyingPrice: 5000, subCategory: "Fruits" },
-  { name: "Pomegranate fruits", unit: "Each", buyingPrice: 4000, subCategory: "Fruits" },
-  { name: "Kiwi fruits", unit: "Each", buyingPrice: 3000, subCategory: "Fruits" },
-  { name: "Pears", unit: "Kg", buyingPrice: 15000, subCategory: "Fruits" },
-  { name: "Green grapefruit export", unit: "Pkt", buyingPrice: 12000, subCategory: "Fruits" },
-  { name: "Red grapes", unit: "Pkt", buyingPrice: 12000, subCategory: "Fruits" },
-  { name: "Irish potatoes", unit: "Kg", buyingPrice: 2200, subCategory: "Vegetables" },
-  { name: "Irish potato (debe)", unit: "Debe", buyingPrice: 25000, subCategory: "Vegetables" },
-  { name: "Green pepper", unit: "Kg", buyingPrice: 3000, subCategory: "Vegetables" },
-  { name: "Yellow pepper", unit: "Kg", buyingPrice: 10000, subCategory: "Vegetables" },
-  { name: "Red pepper", unit: "Kg", buyingPrice: 10000, subCategory: "Vegetables" },
-  { name: "Green beans", unit: "Kg", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "Broccoli", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
-  { name: "Cauliflower", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
-  { name: "Leeks", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
-  { name: "Zucchini", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
-  { name: "Butternut", unit: "Kg", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "Red onion", unit: "Kg", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "Red onion (sack)", unit: "Sado", buyingPrice: 10000, subCategory: "Vegetables" },
-  { name: "White onion", unit: "Kg", buyingPrice: 7000, subCategory: "Vegetables" },
-  { name: "Tomato", unit: "Kg", buyingPrice: 2500, subCategory: "Vegetables" },
-  { name: "Tomato (sack)", unit: "Sado", buyingPrice: 8000, subCategory: "Vegetables" },
-  { name: "Radish", unit: "Bunch", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "White cabbage", unit: "Each", buyingPrice: 2000, subCategory: "Vegetables" },
-  { name: "Red cabbage", unit: "Each", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "Lettuce fancy/green", unit: "Each", buyingPrice: 800, subCategory: "Vegetables" },
-  { name: "Rocket lettuce", unit: "Bunch", buyingPrice: 1000, subCategory: "Vegetables" },
-  { name: "Garlic exported", unit: "Kg", buyingPrice: 15000, subCategory: "Vegetables" },
-  { name: "Fresh chili", unit: "Kg", buyingPrice: 8000, subCategory: "Vegetables" },
-  { name: "Spinach", unit: "Bunch", buyingPrice: 500, subCategory: "Vegetables" },
-  { name: "Sweet potato", unit: "Kg", buyingPrice: 2000, subCategory: "Vegetables" },
-  { name: "Ginger", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
-  { name: "Celery", unit: "Kg", buyingPrice: 9000, subCategory: "Vegetables" },
-  { name: "Aubergine / Eggplant", unit: "Kg", buyingPrice: 2500, subCategory: "Vegetables" },
-  { name: "Sugar snaps 250g", unit: "Packet", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "Snow peas 250g", unit: "Packet", buyingPrice: 4000, subCategory: "Vegetables" },
-  { name: "Mushrooms button", unit: "Packet", buyingPrice: 12000, subCategory: "Vegetables" },
-  { name: "Mushrooms oyster", unit: "Packet", buyingPrice: 12000, subCategory: "Vegetables" },
-  { name: "Mchicha local", unit: "Bunch", buyingPrice: 700, subCategory: "Vegetables" },
-  { name: "Sukuma wiki", unit: "Bunch", buyingPrice: 700, subCategory: "Vegetables" },
-  { name: "Yam potato (magimbi)", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
-  { name: "Tamarind", unit: "Kg", buyingPrice: 6000, subCategory: "Vegetables" },
-  { name: "Baby potato", unit: "Kg", buyingPrice: 3500, subCategory: "Vegetables" },
-  { name: "Okra / bamia", unit: "Kg", buyingPrice: 5000, subCategory: "Vegetables" },
-  { name: "Bitter tomato / ngogwe", unit: "Kg", buyingPrice: 3000, subCategory: "Vegetables" },
-  { name: "Pumpkin", unit: "Each", buyingPrice: 5000, subCategory: "Vegetables" },
-  { name: "Parsley fresh", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
-  { name: "Basil", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
-  { name: "Fresh rosemary", unit: "Bunch", buyingPrice: 2000, subCategory: "Herbs" },
-  { name: "Coriander", unit: "Bunch", buyingPrice: 300, subCategory: "Herbs" },
-  { name: "Tarragon", unit: "Bunch", buyingPrice: 2500, subCategory: "Herbs" },
-  { name: "Mint", unit: "Bunch", buyingPrice: 2000, subCategory: "Herbs" },
-  { name: "Spring onion", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
-  { name: "Chives", unit: "Bunch", buyingPrice: 2000, subCategory: "Herbs" },
-  { name: "Oregano", unit: "Bunch", buyingPrice: 1500, subCategory: "Herbs" },
-  { name: "Chicken", unit: "1 pc", buyingPrice: 9000, subCategory: "Frozen - Meat" },
-  { name: "Chicken breast", unit: "1 pkt", buyingPrice: 18000, subCategory: "Frozen - Meat" },
-  { name: "Chicken wings", unit: "1 pkt", buyingPrice: 13000, subCategory: "Frozen - Meat" },
-  { name: "Chicken drumstick", unit: "1 pkt", buyingPrice: 13000, subCategory: "Frozen - Meat" },
-  { name: "Chicken thigh", unit: "1 pkt", buyingPrice: 15000, subCategory: "Frozen - Meat" },
-  { name: "Eggs", unit: "Tray", buyingPrice: 11000, subCategory: "Frozen - Meat" },
-  { name: "Lamb leg", unit: "1 kg", buyingPrice: 16000, subCategory: "Frozen - Meat" },
-  { name: "Lamb chop", unit: "1 kg", buyingPrice: 20000, subCategory: "Frozen - Meat" },
-  { name: "Staff beef", unit: "1 kg", buyingPrice: 13000, subCategory: "Frozen - Meat" },
-  { name: "Mince meat", unit: "1 kg", buyingPrice: 15000, subCategory: "Frozen - Meat" },
-  { name: "Beef fillet", unit: "1 kg", buyingPrice: 24000, subCategory: "Frozen - Meat" },
-  { name: "Beef steak", unit: "1 kg", buyingPrice: 16500, subCategory: "Frozen - Meat" },
-  { name: "Beef bacon", unit: "1 kg", buyingPrice: 40000, subCategory: "Frozen - Meat" },
-  { name: "Strike bacon", unit: "1 kg", buyingPrice: 30000, subCategory: "Frozen - Meat" },
-  { name: "Chicken sausage", unit: "Kg", buyingPrice: 25000, subCategory: "Frozen - Meat" },
-  { name: "Chicken sausage Vienna", unit: "500g", buyingPrice: 12000, subCategory: "Frozen - Meat" },
-  { name: "Beef sausage", unit: "Pkt", buyingPrice: 7500, subCategory: "Frozen - Meat" },
-  { name: "Jumbo prawns", unit: "2 kg", buyingPrice: 150000, subCategory: "Frozen - Fish" },
-  { name: "Fish fillet", unit: "1 kg", buyingPrice: 24000, subCategory: "Frozen - Fish" },
-  { name: "Tiger prawns", unit: "1 kg", buyingPrice: 85000, subCategory: "Frozen - Fish" },
-  { name: "Red snapper", unit: "1 kg", buyingPrice: 20000, subCategory: "Frozen - Fish" },
-  { name: "King fish", unit: "1 kg", buyingPrice: 25000, subCategory: "Frozen - Fish" },
-  { name: "Peeled prawns", unit: "1 kg", buyingPrice: 38000, subCategory: "Frozen - Fish" },
-  { name: "Tuna fish", unit: "1 kg", buyingPrice: 22000, subCategory: "Frozen - Fish" },
-  { name: "Calamari", unit: "1 kg", buyingPrice: 45000, subCategory: "Frozen - Fish" },
-  { name: "Tilapia fish", unit: "1 kg", buyingPrice: 16000, subCategory: "Frozen - Fish" },
-  { name: "Nile perch whole", unit: "1 kg", buyingPrice: 16000, subCategory: "Frozen - Fish" },
-  { name: "Mozzarella cheese", unit: "1 kg", buyingPrice: 30000, subCategory: "Butter & Cheese" },
-  { name: "Cheddar cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
-  { name: "Parmesan cheese", unit: "1 kg", buyingPrice: 130000, subCategory: "Butter & Cheese" },
-  { name: "Gauda cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
-  { name: "Feta cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
-  { name: "Feta cheese", unit: "Pkt", buyingPrice: 17000, subCategory: "Butter & Cheese" },
-  { name: "Feta cheese", unit: "Tin", buyingPrice: 9000, subCategory: "Butter & Cheese" },
-  { name: "Calumi cheese", unit: "1 kg", buyingPrice: 40000, subCategory: "Butter & Cheese" },
-  { name: "Cream cheese", unit: "Tin", buyingPrice: 8500, subCategory: "Butter & Cheese" },
-  { name: "Butter", unit: "500 g", buyingPrice: 20000, subCategory: "Butter & Cheese" },
-  { name: "Panere cheese", unit: "Kg", buyingPrice: 38000, subCategory: "Butter & Cheese" },
-  { name: "Cling film", unit: "Pkt", buyingPrice: 20000, subCategory: "Dry Goods" },
-  { name: "Aluminium wrap (foil)", unit: "Pkt", buyingPrice: 25000, subCategory: "Dry Goods" },
-  { name: "Blue band", unit: "Kg", buyingPrice: 12000, subCategory: "Dry Goods" },
-  { name: "Chilli powder", unit: "Pkt", buyingPrice: 4000, subCategory: "Dry Goods" },
-  { name: "Oregano", unit: "Tin", buyingPrice: 3500, subCategory: "Dry Goods" },
-  { name: "Lentin flour", unit: "Kg", buyingPrice: 6500, subCategory: "Dry Goods" },
-  { name: "Muster flour", unit: "Kg", buyingPrice: 5000, subCategory: "Dry Goods" },
-  { name: "Chick peas", unit: "Tin", buyingPrice: 4000, subCategory: "Dry Goods" },
-  { name: "Black olives", unit: "Btl", buyingPrice: 6000, subCategory: "Dry Goods" },
-  { name: "Green olives", unit: "Btl", buyingPrice: 6000, subCategory: "Dry Goods" },
-  { name: "Milton", unit: "Btl", buyingPrice: 8000, subCategory: "Dry Goods" },
-  { name: "Cocoa prime", unit: "Pkt", buyingPrice: 18000, subCategory: "Dry Goods" },
-  { name: "Tomato ketchup", unit: "Btl", buyingPrice: 5000, subCategory: "Dry Goods" },
-  { name: "Chilli ketchup", unit: "Btl", buyingPrice: 5000, subCategory: "Dry Goods" },
-  { name: "Mayonnaise", unit: "Btl", buyingPrice: 24000, subCategory: "Dry Goods" },
-  { name: "White vinegar", unit: "Btl", buyingPrice: 1500, subCategory: "Dry Goods" },
-  { name: "Olive oil", unit: "Btl", buyingPrice: 30000, subCategory: "Dry Goods" },
-  { name: "Maple syrup", unit: "Btl", buyingPrice: 15000, subCategory: "Dry Goods" },
-  { name: "Red wine vinegar", unit: "Btl", buyingPrice: 10000, subCategory: "Dry Goods" },
-  { name: "Tang juice", unit: "Ltr", buyingPrice: 13000, subCategory: "Juices & Drinks" },
-  { name: "Lemon juice", unit: "Tin", buyingPrice: 12000, subCategory: "Juices & Drinks" },
-  { name: "Juice series apple", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
-  { name: "Series orange", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
-  { name: "Passion series", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
-  { name: "Pineapple series", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
-  { name: "Tropical", unit: "Ltr", buyingPrice: 6000, subCategory: "Juices & Drinks" },
-  { name: "Motopoa", unit: "Ltr", buyingPrice: 9000, subCategory: "Juices & Drinks" },
-  { name: "Motopoa", unit: "5 Ltr", buyingPrice: 30000, subCategory: "Juices & Drinks" },
-  { name: "Milk powder (Nido)", unit: "Tin", buyingPrice: 25000, subCategory: "Cleaning / Household" },
-  { name: "Lato milk powder", unit: "Tin", buyingPrice: 14000, subCategory: "Cleaning / Household" },
-  { name: "Ajinomoto", unit: "Pkt", buyingPrice: 5000, subCategory: "Cleaning / Household" },
-  { name: "Super Brite", unit: "Outer", buyingPrice: 4000, subCategory: "Cleaning / Household" },
-  { name: "Air freshner", unit: "Pc", buyingPrice: 3500, subCategory: "Cleaning / Household" },
-  { name: "Toilet paper", unit: "Roll", buyingPrice: 1000, subCategory: "Cleaning / Household" },
-  { name: "Toilet paper", unit: "Roll (10,000)", buyingPrice: 10000, subCategory: "Cleaning / Household" },
-  { name: "Toilet paper", unit: "Roll (12,000)", buyingPrice: 12000, subCategory: "Cleaning / Household" },
-  { name: "Vim", unit: "1kg", buyingPrice: 4000, subCategory: "Cleaning / Household" },
-  { name: "Vim", unit: "1kg (7,000)", buyingPrice: 7000, subCategory: "Cleaning / Household" },
-  { name: "Jik", unit: "1 Ltr", buyingPrice: 7500, subCategory: "Cleaning / Household" },
-  { name: "Hand wash", unit: "500ml", buyingPrice: 4000, subCategory: "Cleaning / Household" },
-  { name: "Dettol", unit: "500ml", buyingPrice: 13000, subCategory: "Cleaning / Household" },
-  { name: "Guest soap", unit: "Pc", buyingPrice: 300, subCategory: "Cleaning / Household" },
-  { name: "Liquid soap", unit: "5 Ltr", buyingPrice: 11000, subCategory: "Cleaning / Household" },
-  { name: "Toilet roll big", unit: "Pc", buyingPrice: 10000, subCategory: "Cleaning / Household" },
-  { name: "Sanitizer", unit: "Bottle", buyingPrice: 7500, subCategory: "Cleaning / Household" },
-  { name: "Steel wire", unit: "Roll", buyingPrice: 8000, subCategory: "Cleaning / Household" },
-];
-
-function buildKitchenCatalogSeed(existingStoreItems: MainStoreItem[], existingInventoryItems: InventoryItem[]) {
-  const existingStoreKeys = new Set(
-    existingStoreItems
-      .filter((item) => item.lane === "kitchen")
-      .map((item) => `${normalizeStockName(item.name)}|${normalizeStockName(item.unit)}|${normalizeStockName(item.subCategory ?? "")}`),
-  );
-  const existingInventoryKeys = new Set(
-    existingInventoryItems
-      .filter((item) => item.category === "Kitchen")
-      .map((item) => `${normalizeStockName(item.name)}|${normalizeStockName(item.unit)}|${normalizeStockName(item.subCategory ?? "")}`),
-  );
-
-  const storeSeeds: MainStoreItem[] = [];
-  const inventorySeeds: InventoryItem[] = [];
-
-  KITCHEN_CATALOG_ITEMS.forEach((entry, index) => {
-    const key = `${normalizeStockName(entry.name)}|${normalizeStockName(entry.unit)}|${normalizeStockName(entry.subCategory)}`;
-    if (!existingStoreKeys.has(key)) {
-      storeSeeds.push({
-        id: `kitchen-catalog-store-${index + 1}`,
-        name: entry.name,
-        stock: 0,
-        unit: entry.unit,
-        minStock: 0,
-        lane: "kitchen",
-        subCategory: entry.subCategory,
-        buyingPrice: entry.buyingPrice,
-        sellingPrice: 0,
-      });
-    }
-    if (!existingInventoryKeys.has(key)) {
-      inventorySeeds.push({
-        id: `kitchen-catalog-inv-${index + 1}`,
-        barcode: "",
-        name: entry.name,
-        category: "Kitchen",
-        subCategory: entry.subCategory,
-        size: "",
-        stock: 0,
-        totSold: 0,
-        buyingPrice: entry.buyingPrice,
-        sellingPrice: 0,
-        price: 0,
-        status: "ACTIVE",
-        minStock: 0,
-        unit: entry.unit,
-      });
-    }
-  });
-
-  return { storeSeeds, inventorySeeds };
+interface PosPaymentRecord {
+  total: number;
 }
 
 function getStockLabel(stock: number, minStock: number) {
@@ -305,24 +66,32 @@ export function InventoryControlView({
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
   const [stockControlTab, setStockControlTab] = useState<StockControlTab>("kitchen");
   const [stockMovementTab, setStockMovementTab] = useState<StockControlTab>("kitchen");
-  const [items, setItems] = useState<InventoryItem[]>(INVENTORY);
+  const [baristaStockTab, setBaristaStockTab] = useState<StockSectionTab>("dashboard");
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [movementLogs, setMovementLogs] = useState<StoreMovementLog[]>([]);
   const [logicRules, setLogicRules] = useState<StockLogicRule[]>([]);
+  const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
 
   const [kitchenName, setKitchenName] = useState("");
+  const [kitchenSubCategory, setKitchenSubCategory] = useState("");
+  const [kitchenSize, setKitchenSize] = useState("");
   const [kitchenQty, setKitchenQty] = useState("0");
   const [kitchenUnit, setKitchenUnit] = useState("kg");
   const [kitchenThreshold, setKitchenThreshold] = useState("1");
   const [kitchenBuyingPrice, setKitchenBuyingPrice] = useState("");
   const [kitchenSellingPrice, setKitchenSellingPrice] = useState("");
+  const [editingKitchenItemId, setEditingKitchenItemId] = useState("");
 
   const [baristaName, setBaristaName] = useState("");
+  const [baristaSubCategory, setBaristaSubCategory] = useState("");
+  const [baristaSize, setBaristaSize] = useState("");
   const [baristaQty, setBaristaQty] = useState("0");
   const [baristaUnit, setBaristaUnit] = useState("kg");
   const [baristaThreshold, setBaristaThreshold] = useState("1");
   const [baristaBuyingPrice, setBaristaBuyingPrice] = useState("");
   const [baristaSellingPrice, setBaristaSellingPrice] = useState("");
+  const [editingBaristaItemId, setEditingBaristaItemId] = useState("");
 
   const [selectedKitchenRuleItemId, setSelectedKitchenRuleItemId] = useState("");
   const [selectedBaristaRuleItemId, setSelectedBaristaRuleItemId] = useState("");
@@ -367,25 +136,16 @@ export function InventoryControlView({
       const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
       const moves = readJson<StoreMovementLog[]>(STORAGE_STORE_MOVEMENTS);
       const rules = readJson<StockLogicRule[]>(STORAGE_STOCK_LOGIC);
+      const baristaState = readJson<{ payments?: PosPaymentRecord[] }>(STORAGE_BARISTA_STATE);
       const normalizedStore: MainStoreItem[] = store.map((item) => ({
         ...item,
         lane: item.lane === "barista" ? "barista" : "kitchen",
       }));
-      const { storeSeeds, inventorySeeds } = buildKitchenCatalogSeed(normalizedStore, inv);
-      const nextStore = storeSeeds.length > 0 ? [...normalizedStore, ...storeSeeds] : normalizedStore;
-      const nextInventory = inventorySeeds.length > 0 ? [...inv, ...inventorySeeds] : inv;
-
-      if (storeSeeds.length > 0) {
-        writeJson(STORAGE_MAIN_STORE_ITEMS, nextStore);
-      }
-      if (inventorySeeds.length > 0) {
-        writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
-      }
-
-      setItems(nextInventory);
-      setStoreItems(nextStore);
+      setItems(inv);
+      setStoreItems(normalizedStore);
       if (Array.isArray(moves)) setMovementLogs(moves);
       if (Array.isArray(rules)) setLogicRules(rules);
+      setBaristaPayments(Array.isArray(baristaState?.payments) ? baristaState.payments : []);
     };
 
     applyInventorySnapshot();
@@ -393,12 +153,14 @@ export function InventoryControlView({
     const unsubscribeStore = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applyInventorySnapshot);
     const unsubscribeMoves = subscribeToSyncedStorageKey(STORAGE_STORE_MOVEMENTS, applyInventorySnapshot);
     const unsubscribeLogic = subscribeToSyncedStorageKey(STORAGE_STOCK_LOGIC, applyInventorySnapshot);
+    const unsubscribeBaristaState = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyInventorySnapshot);
 
     return () => {
       unsubscribeInventory();
       unsubscribeStore();
       unsubscribeMoves();
       unsubscribeLogic();
+      unsubscribeBaristaState();
     };
   }, []);
 
@@ -408,6 +170,18 @@ export function InventoryControlView({
   const baristaInventoryItems = useMemo(() => items.filter((item) => item.category === "Bar"), [items]);
   const kitchenLogicRules = useMemo(() => logicRules.filter((rule) => rule.destination === "kitchen"), [logicRules]);
   const baristaLogicRules = useMemo(() => logicRules.filter((rule) => rule.destination === "barista"), [logicRules]);
+  const baristaInvestment = useMemo(
+    () =>
+      baristaInventoryItems.reduce(
+        (sum, item) => sum + (typeof item.stock === "number" ? item.stock : 0) * (typeof item.buyingPrice === "number" ? item.buyingPrice : 0),
+        0,
+      ),
+    [baristaInventoryItems],
+  );
+  const baristaRevenue = useMemo(
+    () => baristaPayments.reduce((sum, payment) => sum + (typeof payment.total === "number" ? payment.total : 0), 0),
+    [baristaPayments],
+  );
 
   const selectedKitchenRuleItem = useMemo(
     () => kitchenStore.find((item) => item.id === selectedKitchenRuleItemId),
@@ -429,15 +203,68 @@ export function InventoryControlView({
   const getRuleForItem = (destination: TransferDestination, itemId: string) =>
     logicRules.find((rule) => rule.destination === destination && rule.itemId === itemId);
 
+  const resetStoreForm = (lane: StoreLane) => {
+    if (lane === "kitchen") {
+      setEditingKitchenItemId("");
+      setKitchenName("");
+      setKitchenSubCategory("");
+      setKitchenSize("");
+      setKitchenQty("0");
+      setKitchenUnit("kg");
+      setKitchenThreshold("1");
+      setKitchenBuyingPrice("");
+      setKitchenSellingPrice("");
+      return;
+    }
+
+    setEditingBaristaItemId("");
+    setBaristaName("");
+    setBaristaSubCategory("");
+    setBaristaSize("");
+    setBaristaQty("0");
+    setBaristaUnit("kg");
+    setBaristaThreshold("1");
+    setBaristaBuyingPrice("");
+    setBaristaSellingPrice("");
+  };
+
+  const populateStoreForm = (lane: StoreLane, item: MainStoreItem) => {
+    if (lane === "kitchen") {
+      setEditingKitchenItemId(item.id);
+      setKitchenName(item.name);
+      setKitchenSubCategory(item.subCategory ?? "");
+      setKitchenSize(item.size ?? "");
+      setKitchenQty(String(item.stock));
+      setKitchenUnit(item.unit);
+      setKitchenThreshold(String(item.minStock));
+      setKitchenBuyingPrice(String(item.buyingPrice ?? 0));
+      setKitchenSellingPrice(String(item.sellingPrice ?? 0));
+      return;
+    }
+
+    setEditingBaristaItemId(item.id);
+    setBaristaName(item.name);
+    setBaristaSubCategory(item.subCategory ?? "");
+    setBaristaSize(item.size ?? "");
+    setBaristaQty(String(item.stock));
+    setBaristaUnit(item.unit);
+    setBaristaThreshold(String(item.minStock));
+    setBaristaBuyingPrice(String(item.buyingPrice ?? 0));
+    setBaristaSellingPrice(String(item.sellingPrice ?? 0));
+  };
+
   const addStoreItem = async (lane: StoreLane) => {
     if (isDirector) return;
 
     const name = lane === "kitchen" ? kitchenName : baristaName;
+    const subCategory = (lane === "kitchen" ? kitchenSubCategory : baristaSubCategory).trim();
+    const size = (lane === "kitchen" ? kitchenSize : baristaSize).trim();
     const qtyRaw = lane === "kitchen" ? kitchenQty : baristaQty;
     const unit = lane === "kitchen" ? kitchenUnit : baristaUnit;
     const thresholdRaw = lane === "kitchen" ? kitchenThreshold : baristaThreshold;
     const buyingRaw = lane === "kitchen" ? kitchenBuyingPrice : baristaBuyingPrice;
     const sellingRaw = lane === "kitchen" ? kitchenSellingPrice : baristaSellingPrice;
+    const editingItemId = lane === "kitchen" ? editingKitchenItemId : editingBaristaItemId;
     
     const qty = Number(qtyRaw);
     const threshold = Number(thresholdRaw);
@@ -450,83 +277,100 @@ export function InventoryControlView({
     if (sellingPrice <= 0) return;
 
     const approved = await confirm({
-      title: "Update Stock",
-      description: `Are you sure you want to add ${qty} ${unit} of ${name.trim()} with a low threshold of ${threshold}?`,
-      actionLabel: "Add Stock",
+      title: editingItemId ? "Update Stock Item" : "Add Stock Item",
+      description: editingItemId
+        ? `Are you sure you want to update ${name.trim()} in ${lane} stock?`
+        : `Are you sure you want to add ${name.trim()} to ${lane} stock?`,
+      actionLabel: editingItemId ? "Update Item" : "Add Item",
     });
     if (!approved) return;
 
-    const existingItem = storeItems.find(
-      (item) =>
-        item.lane === lane &&
-        normalizeStockName(item.name) === normalizeStockName(name) &&
-        normalizeStockName(item.unit) === normalizeStockName(unit),
-    );
+    const existingItem = editingItemId
+      ? storeItems.find((item) => item.id === editingItemId)
+      : storeItems.find(
+          (item) =>
+            item.lane === lane &&
+            normalizeStockName(item.name) === normalizeStockName(name) &&
+            normalizeStockName(item.unit) === normalizeStockName(unit) &&
+            normalizeStockName(item.size ?? "") === normalizeStockName(size),
+        );
+
+    const nextStoreRecord: MainStoreItem = existingItem
+      ? {
+          ...existingItem,
+          name: name.trim(),
+          subCategory,
+          size,
+          stock: qty,
+          unit: unit.trim(),
+          minStock: threshold,
+          buyingPrice: canViewBuyingPrice ? buyingPrice : existingItem.buyingPrice ?? 0,
+          sellingPrice,
+        }
+      : {
+          id: `s-${Date.now()}`,
+          name: name.trim(),
+          subCategory,
+          size,
+          stock: qty,
+          unit: unit.trim(),
+          minStock: threshold,
+          lane,
+          buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
+          sellingPrice,
+        };
 
     const nextStoreItems = existingItem
-      ? storeItems.map((item) =>
-          item.id === existingItem.id
-            ? {
-                ...item,
-                stock: item.stock + qty,
-                unit,
-                minStock: threshold,
-                buyingPrice: canViewBuyingPrice && buyingPrice > 0 ? buyingPrice : item.buyingPrice,
-                sellingPrice: sellingPrice > 0 ? sellingPrice : item.sellingPrice,
-              }
-            : item,
-        )
-      : [{ id: `s-${Date.now()}`, name: name.trim(), stock: qty, unit, minStock: threshold, lane, buyingPrice: canViewBuyingPrice ? buyingPrice : 0, sellingPrice }, ...storeItems];
+      ? storeItems.map((item) => (item.id === existingItem.id ? nextStoreRecord : item))
+      : [nextStoreRecord, ...storeItems];
 
     setStoreItems(nextStoreItems);
     writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
 
-    // Add directly to main Inventory too if applicable for Barista POS sync
     const nextInventoryItems = [...items];
     const category = lane === "kitchen" ? "Kitchen" : "Bar";
-    const existingInv = nextInventoryItems.find(i => i.category === category && normalizeStockName(i.name) === normalizeStockName(name));
+    const inventoryIndex = nextInventoryItems.findIndex(
+      (item) =>
+        item.category === category &&
+        normalizeStockName(item.name) === normalizeStockName(existingItem?.name ?? name) &&
+        normalizeStockName(item.size ?? "") === normalizeStockName(existingItem?.size ?? size),
+    );
     
-    if (existingInv) {
-        existingInv.stock += qty;
-        if (canViewBuyingPrice && buyingPrice > 0) existingInv.buyingPrice = buyingPrice;
-        if (sellingPrice > 0) existingInv.sellingPrice = sellingPrice;
-        if (sellingPrice > 0) existingInv.price = sellingPrice;
+    if (inventoryIndex >= 0) {
+      const currentItem = nextInventoryItems[inventoryIndex];
+      nextInventoryItems[inventoryIndex] = {
+        ...currentItem,
+        name: name.trim(),
+        subCategory,
+        size,
+        stock: qty,
+        buyingPrice: canViewBuyingPrice ? buyingPrice : currentItem.buyingPrice,
+        sellingPrice,
+        price: sellingPrice,
+        minStock: threshold,
+        unit: unit.trim(),
+      };
     } else {
-        nextInventoryItems.unshift({
-            id: `inv-${Date.now()}`,
-            barcode: Date.now().toString(),
-            name: name.trim(),
-            category,
-            size: '',
-            stock: qty,
-            totSold: 0,
-            buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
-            sellingPrice,
-            price: sellingPrice,
-            status: 'ACTIVE',
-            minStock: threshold,
-            unit
-        });
+      nextInventoryItems.unshift({
+        id: `inv-${Date.now()}`,
+        barcode: "",
+        name: name.trim(),
+        category,
+        subCategory,
+        size,
+        stock: qty,
+        totSold: 0,
+        buyingPrice: canViewBuyingPrice ? buyingPrice : 0,
+        sellingPrice,
+        price: sellingPrice,
+        status: "ACTIVE",
+        minStock: threshold,
+        unit: unit.trim(),
+      });
     }
     setItems(nextInventoryItems);
     writeJson(STORAGE_INVENTORY_ITEMS, nextInventoryItems);
-
-    if (lane === "kitchen") {
-      setKitchenName("");
-      setKitchenQty("0");
-      setKitchenUnit("kg");
-      setKitchenThreshold("1");
-      setKitchenBuyingPrice("");
-      setKitchenSellingPrice("");
-      return;
-    }
-
-    setBaristaName("");
-    setBaristaQty("0");
-    setBaristaUnit("kg");
-    setBaristaThreshold("1");
-    setBaristaBuyingPrice("");
-    setBaristaSellingPrice("");
+    resetStoreForm(lane);
   };
 
   const saveLogicRule = async (lane: StoreLane) => {
@@ -718,12 +562,7 @@ export function InventoryControlView({
     writeJson(STORAGE_STORE_USAGE, nextUsageLogs);
 
     if (lane === "kitchen") {
-      setKitchenName("");
-      setKitchenQty("0");
-      setKitchenUnit("kg");
-      setKitchenThreshold("1");
-      setKitchenBuyingPrice("");
-      setKitchenSellingPrice("");
+      resetStoreForm("kitchen");
       setSelectedKitchenRuleItemId("");
       setKitchenDepartmentUnit("portion");
       setKitchenUnitToMenu("1");
@@ -733,12 +572,7 @@ export function InventoryControlView({
       return;
     }
 
-    setBaristaName("");
-    setBaristaQty("0");
-    setBaristaUnit("kg");
-    setBaristaThreshold("1");
-    setBaristaBuyingPrice("");
-    setBaristaSellingPrice("");
+    resetStoreForm("barista");
     setSelectedBaristaRuleItemId("");
     setBaristaDepartmentUnit("cup");
     setBaristaUnitToMenu("1");
@@ -751,15 +585,24 @@ export function InventoryControlView({
     <Card className="shadow-sm">
       <CardHeader className="border-b">
         <CardTitle className="text-lg uppercase font-black">{title}</CardTitle>
-        <CardDescription>Enter stock quantity and low stock threshold together.</CardDescription>
+        <CardDescription>Add or edit stock with the same core fields shown in the table.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-2">
           <Input
             value={lane === "kitchen" ? kitchenName : baristaName}
             onChange={(event) => (lane === "kitchen" ? setKitchenName(event.target.value) : setBaristaName(event.target.value))}
             placeholder="Item name"
-            className="lg:col-span-2"
+          />
+          <Input
+            value={lane === "kitchen" ? kitchenSubCategory : baristaSubCategory}
+            onChange={(event) => (lane === "kitchen" ? setKitchenSubCategory(event.target.value) : setBaristaSubCategory(event.target.value))}
+            placeholder="Category"
+          />
+          <Input
+            value={lane === "kitchen" ? kitchenSize : baristaSize}
+            onChange={(event) => (lane === "kitchen" ? setKitchenSize(event.target.value) : setBaristaSize(event.target.value))}
+            placeholder="Size"
           />
           <Input
             type="number"
@@ -797,7 +640,15 @@ export function InventoryControlView({
             placeholder="Selling Price"
           />
           <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
-            <Plus className="w-4 h-4 mr-2" /> Add
+            <Plus className="w-4 h-4 mr-2" /> {lane === "kitchen" ? (editingKitchenItemId ? "Update" : "Add") : (editingBaristaItemId ? "Update" : "Add")}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-10 font-black uppercase text-[10px] tracking-widest"
+            onClick={() => resetStoreForm(lane)}
+            disabled={isDirector}
+          >
+            Cancel
           </Button>
           <Button
             variant="outline"
@@ -820,6 +671,7 @@ export function InventoryControlView({
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Low Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -839,11 +691,16 @@ export function InventoryControlView({
                 </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="outline" size="sm" onClick={() => populateStoreForm(lane, item)} disabled={isDirector}>
+                    <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {list.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canViewBuyingPrice ? 8 : 7} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={canViewBuyingPrice ? 9 : 8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock recorded yet
                 </TableCell>
               </TableRow>
@@ -901,6 +758,32 @@ export function InventoryControlView({
         </Table>
       </CardContent>
     </Card>
+  );
+
+  const renderBaristaDashboard = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Items</p>
+            <p className="mt-2 text-2xl font-black">{baristaInventoryItems.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Inventory Investment</p>
+            <p className="mt-2 text-2xl font-black">TSh {baristaInvestment.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">POS Revenue</p>
+            <p className="mt-2 text-2xl font-black">TSh {baristaRevenue.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+      </div>
+      {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
+    </div>
   );
 
   const renderStockControl = (
@@ -1159,10 +1042,19 @@ export function InventoryControlView({
       )}
 
       {activeTab === "barista-stock" && (
-        <div className="space-y-6">
-          {renderStoreCard("barista", "Barista Stock", baristaStore)}
-          {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
-        </div>
+        <Tabs value={baristaStockTab} onValueChange={(value) => setBaristaStockTab(value as StockSectionTab)}>
+          <TabsList className="h-11">
+            <TabsTrigger value="dashboard" className="font-black uppercase text-[10px] tracking-widest">Dashboard</TabsTrigger>
+            <TabsTrigger value="records" className="font-black uppercase text-[10px] tracking-widest">Records</TabsTrigger>
+          </TabsList>
+          <TabsContent value="dashboard">
+            {renderBaristaDashboard()}
+          </TabsContent>
+          <TabsContent value="records" className="space-y-6">
+            {renderStoreCard("barista", "Barista Stock", baristaStore)}
+            {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
+          </TabsContent>
+        </Tabs>
       )}
 
       {activeTab === "stock-control" && (

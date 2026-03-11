@@ -10,8 +10,9 @@ import {
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
 } from "@/app/lib/inventory-transfer";
+import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { DEFAULT_KITCHEN_MENU } from "@/app/lib/kitchen-menu";
-import { STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
+import { STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 
 const STORAGE_CASHIER_TX = "orange-hotel-cashier-transactions";
 const STORAGE_CASHIER_SEQ = "orange-hotel-cashier-seq";
@@ -26,6 +27,7 @@ const STORAGE_BARISTA_PAYMENTS = "orange-hotel-barista-payments";
 const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 const STORAGE_DEMO_VERSION = "orange-hotel-demo-seed-version";
 const STORAGE_KITCHEN_SALES_CLEANUP = "orange-hotel-kitchen-sales-cleanup-v1";
+const STORAGE_DEMO_DATA_CLEANUP = "orange-hotel-demo-data-cleanup-v2";
 const DEMO_VERSION = "1";
 
 function shouldSeedArray(raw: string | null): boolean {
@@ -59,6 +61,7 @@ export function seedDemoDataIfNeeded() {
 
   const now = Date.now();
   const hoursAgo = (h: number) => now - h * 60 * 60 * 1000;
+  const demoBarcodes = new Set(BARISTA_INVENTORY_SEED.map((item) => item.barcode).filter(Boolean));
 
   setArrayIfEmpty(STORAGE_CASHIER_TX, [
     {
@@ -123,114 +126,59 @@ export function seedDemoDataIfNeeded() {
     localStorage.setItem(STORAGE_KITCHEN_SALES_CLEANUP, "1");
   }
 
+  if (!localStorage.getItem(STORAGE_DEMO_DATA_CLEANUP)) {
+    const savedInventory = JSON.parse(localStorage.getItem(STORAGE_INVENTORY_ITEMS) ?? "[]") as Array<Record<string, unknown>>;
+    const cleanedInventory = savedInventory.filter((item) => {
+      const id = typeof item.id === "string" ? item.id : "";
+      const barcode = typeof item.barcode === "string" ? item.barcode : "";
+      return !id.startsWith("inv-seed-") && !demoBarcodes.has(barcode);
+    });
+
+    const savedStore = JSON.parse(localStorage.getItem(STORAGE_MAIN_STORE_ITEMS) ?? "[]") as Array<Record<string, unknown>>;
+    const cleanedStore = savedStore.filter((item) => {
+      const id = typeof item.id === "string" ? item.id : "";
+      return !["store-1", "store-2", "store-3", "store-4"].includes(id);
+    });
+
+    const savedMovements = JSON.parse(localStorage.getItem(STORAGE_STORE_MOVEMENTS) ?? "[]") as Array<Record<string, unknown>>;
+    const cleanedMovements = savedMovements.filter((item) => {
+      const id = typeof item.id === "string" ? item.id : "";
+      return !id.startsWith("mv-seed-");
+    });
+
+    const savedUsage = JSON.parse(localStorage.getItem(STORAGE_STORE_USAGE) ?? "[]") as Array<Record<string, unknown>>;
+    const cleanedUsage = savedUsage.filter((item) => {
+      const id = typeof item.id === "string" ? item.id : "";
+      return !id.startsWith("su-seed-");
+    });
+
+    localStorage.setItem(STORAGE_COMPANY_STOCK, JSON.stringify([]));
+    localStorage.setItem(STORAGE_BARISTA_TICKETS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_BARISTA_PAYMENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_BARISTA_MENU, JSON.stringify([]));
+    localStorage.setItem(STORAGE_BARISTA_STATE, JSON.stringify({ tickets: [], ticketSeq: 490, payments: [], menuItems: [] }));
+    localStorage.setItem(STORAGE_INVENTORY_ITEMS, JSON.stringify(cleanedInventory));
+    localStorage.setItem(STORAGE_MAIN_STORE_ITEMS, JSON.stringify(cleanedStore));
+    localStorage.setItem(STORAGE_STORE_MOVEMENTS, JSON.stringify(cleanedMovements));
+    localStorage.setItem(STORAGE_STORE_USAGE, JSON.stringify(cleanedUsage));
+    localStorage.setItem(STORAGE_DEMO_DATA_CLEANUP, "1");
+  }
+
   setArrayIfEmpty(STORAGE_KITCHEN_MENU, DEFAULT_KITCHEN_MENU);
   setArrayIfEmpty(STORAGE_KITCHEN_TICKETS, []);
   setArrayIfEmpty(STORAGE_KITCHEN_PAYMENTS, []);
   setValueIfMissing(STORAGE_KITCHEN_SEQ, "301");
 
-  setArrayIfEmpty(STORAGE_BARISTA_MENU, [
-    { id: "bm-1", name: "Espresso Single", price: 7000, category: "espresso", prepMinutes: 4 },
-    { id: "bm-2", name: "Cappuccino", price: 9000, category: "coffee", prepMinutes: 6 },
-    { id: "bm-3", name: "Iced Latte", price: 11000, category: "cold", prepMinutes: 7 },
-    { id: "bm-4", name: "Masala Tea", price: 5000, category: "tea", prepMinutes: 5 },
-    { id: "bm-5", name: "Blueberry Muffin", price: 8000, category: "snacks", prepMinutes: 2 },
-    { id: "bm-6", name: "Mocha", price: 10000, category: "coffee", prepMinutes: 7 },
-  ]);
-  setArrayIfEmpty(STORAGE_BARISTA_TICKETS, [
-    {
-      id: "bt-demo-1",
-      code: "B-491",
-      createdAt: hoursAgo(1),
-      mode: "restaurant",
-      destination: "Table 2",
-      lines: [{ name: "Cappuccino", qty: 2 }, { name: "Blueberry Muffin", qty: 1 }],
-      total: 26000,
-    },
-  ]);
-  setArrayIfEmpty(STORAGE_BARISTA_PAYMENTS, [
-    {
-      id: "bp-demo-1",
-      ticketId: "bt-demo-paid-1",
-      code: "B-489",
-      createdAt: hoursAgo(8),
-      mode: "room-service",
-      destination: "Room 3003",
-      total: 19000,
-      status: "completed",
-      method: "mobile",
-    },
-    {
-      id: "bp-demo-2",
-      ticketId: "bt-demo-paid-2",
-      code: "B-490",
-      createdAt: hoursAgo(2),
-      mode: "restaurant",
-      destination: "Table 8",
-      total: 15000,
-      status: "credit",
-      method: "credit",
-    },
-  ]);
+  setArrayIfEmpty(STORAGE_BARISTA_MENU, []);
+  setArrayIfEmpty(STORAGE_BARISTA_TICKETS, []);
+  setArrayIfEmpty(STORAGE_BARISTA_PAYMENTS, []);
   setValueIfMissing(STORAGE_BARISTA_SEQ, "491");
 
-  setArrayIfEmpty(STORAGE_INVENTORY_ITEMS, [
-    { id: "inv-seed-4", name: "Rice", category: "Kitchen", stock: 58, minStock: 25, unit: "kg", price: 3200 },
-    { id: "inv-seed-5", name: "Chicken", category: "Kitchen", stock: 30, minStock: 20, unit: "kg", price: 11500 },
-    { id: "inv-seed-6", name: "Cooking Oil", category: "Kitchen", stock: 14, minStock: 15, unit: "L", price: 8000 },
-  ]);
-
-  setArrayIfEmpty(STORAGE_MAIN_STORE_ITEMS, [
-    { id: "store-1", name: "Coffee Beans Sack", stock: 12, unit: "sack", minStock: 3, lane: "barista" },
-    { id: "store-2", name: "Milk Crates", stock: 20, unit: "crate", minStock: 5, lane: "barista" },
-    { id: "store-3", name: "Chicken Cartons", stock: 16, unit: "carton", minStock: 4, lane: "kitchen" },
-    { id: "store-4", name: "Rice Bags", stock: 24, unit: "bag", minStock: 6, lane: "kitchen" },
-  ]);
-
-  setArrayIfEmpty(STORAGE_STORE_MOVEMENTS, [
-    {
-      id: "mv-seed-2",
-      itemId: "store-3",
-      itemName: "Chicken Cartons",
-      source: "store",
-      destination: "kitchen",
-      storeQtyMoved: 3,
-      storeUnit: "carton",
-      conversionValue: 6,
-      convertedQty: 18,
-      movedAt: hoursAgo(10),
-    },
-  ]);
-
-  setArrayIfEmpty(STORAGE_STORE_USAGE, [
-    { id: "su-seed-2", movementId: "mv-seed-2", destination: "kitchen", quantityUsed: 9, usedAt: hoursAgo(4) },
-  ]);
-
-  setArrayIfEmpty(STORAGE_COMPANY_STOCK, [
-    {
-      id: "cs-seed-1",
-      name: "POS Terminal",
-      description: "Front desk payment terminal",
-      quantity: 2,
-      category: "technology",
-      createdAt: hoursAgo(72),
-    },
-    {
-      id: "cs-seed-2",
-      name: "Kitchen Freezer",
-      description: "Large cold storage unit",
-      quantity: 1,
-      category: "kitchen-equipment",
-      createdAt: hoursAgo(120),
-    },
-    {
-      id: "cs-seed-3",
-      name: "Lobby Sofa Set",
-      description: "Reception waiting lounge set",
-      quantity: 1,
-      category: "furniture",
-      createdAt: hoursAgo(240),
-    },
-  ]);
+  setArrayIfEmpty(STORAGE_INVENTORY_ITEMS, []);
+  setArrayIfEmpty(STORAGE_MAIN_STORE_ITEMS, []);
+  setArrayIfEmpty(STORAGE_STORE_MOVEMENTS, []);
+  setArrayIfEmpty(STORAGE_STORE_USAGE, []);
+  setArrayIfEmpty(STORAGE_COMPANY_STOCK, []);
 
   setArrayIfEmpty(STORAGE_BEVERAGE_COST, [
     {
@@ -328,5 +276,6 @@ export function clearDemoData() {
     STORAGE_STOCK_SALES,
     STORAGE_DEMO_VERSION,
     STORAGE_KITCHEN_SALES_CLEANUP,
+    STORAGE_DEMO_DATA_CLEANUP,
   ].forEach((key) => localStorage.removeItem(key));
 }
