@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CheckCircle2, Coffee, Lock, Minus, Plus, Receipt, Search, Trash2, User, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, readLocalLoginProfiles, saveLoginProfileToServer, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 type BaristaCategory = "all" | "espresso" | "coffee" | "tea" | "cold" | "snacks";
@@ -141,6 +142,104 @@ function isTotInventoryItem(item: Pick<InventoryItem, "name" | "totPerBottle">) 
   return (typeof item.totPerBottle === "number" && item.totPerBottle > 0) || /\s+TOTS?$/i.test(item.name);
 }
 
+function mergeBaristaInventorySeed(existingInventory: InventoryItem[]) {
+  const nextInventory = [...existingInventory];
+  let changed = false;
+
+  for (const seededItem of BARISTA_INVENTORY_SEED) {
+    const seedName = seededItem.name ?? "";
+    const seedSize = seededItem.size ?? "";
+    const seedBarcode = seededItem.barcode ?? "";
+    const seededIsTot = (typeof seededItem.totPerBottle === "number" && seededItem.totPerBottle > 0) || /\s+TOTS?$/i.test(seedName);
+
+    const existingIndex = nextInventory.findIndex((item) => {
+      const currentLabel = getBaristaInventoryLabel(item);
+      const seedLabel = `${seedName} ${seedSize}`.trim();
+      return (
+        (seedBarcode && item.barcode === seedBarcode) ||
+        (
+          isTotInventoryItem(item) === seededIsTot &&
+          (
+            normalizeBaristaTarget(currentLabel) === normalizeBaristaTarget(seedLabel) ||
+            (normalizeBaristaTarget(item.name) === normalizeBaristaTarget(seedName) && (!(item.size ?? "") || (item.size ?? "") === seedSize))
+          )
+        )
+      );
+    });
+
+    if (existingIndex >= 0) {
+      const currentItem = nextInventory[existingIndex];
+      const updatedItem: InventoryItem = {
+        ...currentItem,
+        barcode: seedBarcode || currentItem.barcode,
+        name: seedName || currentItem.name,
+        category: seededItem.category ?? currentItem.category,
+        size: seedSize || currentItem.size,
+        buyingPrice: typeof seededItem.buyingPrice === "number" ? seededItem.buyingPrice : currentItem.buyingPrice,
+        sellingPrice: typeof seededItem.sellingPrice === "number" ? seededItem.sellingPrice : currentItem.sellingPrice,
+        price: typeof seededItem.sellingPrice === "number" ? seededItem.sellingPrice : currentItem.price,
+        unit: seededItem.unit ?? currentItem.unit,
+        minStock: typeof seededItem.minStock === "number" ? seededItem.minStock : currentItem.minStock,
+        status: seededItem.status ?? currentItem.status,
+        totPerBottle: seededItem.totPerBottle ?? currentItem.totPerBottle,
+        stock: typeof currentItem.stock === "number" ? currentItem.stock : (seededItem.stock ?? 0),
+        totSold: typeof currentItem.totSold === "number" ? currentItem.totSold : (seededItem.totSold ?? 0),
+      };
+      if (JSON.stringify(updatedItem) !== JSON.stringify(currentItem)) {
+        nextInventory[existingIndex] = updatedItem;
+        changed = true;
+      }
+      continue;
+    }
+
+    nextInventory.push({
+      id: `inv-${seedBarcode || `${seedName}-${seedSize}`.replace(/\s+/g, "-").toLowerCase()}`,
+      barcode: seedBarcode,
+      name: seedName,
+      category: seededItem.category ?? "coffee",
+      size: seedSize,
+      stock: seededItem.stock ?? 0,
+      totPerBottle: seededItem.totPerBottle,
+      totSold: seededItem.totSold ?? 0,
+      buyingPrice: seededItem.buyingPrice ?? 0,
+      sellingPrice: seededItem.sellingPrice ?? 0,
+      price: seededItem.sellingPrice ?? 0,
+      status: seededItem.status ?? "ACTIVE",
+      minStock: seededItem.minStock ?? 0,
+      unit: seededItem.unit ?? "Unit",
+    });
+    changed = true;
+  }
+
+  const dedupedInventory: InventoryItem[] = [];
+  const seen = new Map<string, number>();
+
+  for (const item of nextInventory) {
+    const dedupeKey = item.barcode || `${normalizeBaristaTarget(getBaristaInventoryLabel(item))}|${(item.category ?? "").toLowerCase()}|${isTotInventoryItem(item) ? "tot" : "full"}`;
+    const existingAt = seen.get(dedupeKey);
+    if (existingAt === undefined) {
+      seen.set(dedupeKey, dedupedInventory.length);
+      dedupedInventory.push(item);
+      continue;
+    }
+
+    const existingItem = dedupedInventory[existingAt];
+    const preferredItem =
+      (item.size && !existingItem.size) ||
+      ((item.sellingPrice ?? 0) > (existingItem.sellingPrice ?? 0)) ||
+      ((item.stock ?? 0) > (existingItem.stock ?? 0))
+        ? item
+        : existingItem;
+
+    if (preferredItem !== existingItem) {
+      dedupedInventory[existingAt] = preferredItem;
+      changed = true;
+    }
+  }
+
+  return { nextInventory: dedupedInventory, changed };
+}
+
 export default function BaristaPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
@@ -204,7 +303,21 @@ export default function BaristaPage() {
       setBaristaPayments(snapshot.payments);
       
       const inventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
-      setMenuItems(normalizeBaristaMenuItemsFromInventory(inventory));
+      if (inventory.length === 0) {
+        const seed = BARISTA_INVENTORY_SEED.map((item) => ({
+          ...item,
+          id: item.id || `inv-${item.barcode}`,
+          totSold: item.totSold ?? 0,
+        })) as InventoryItem[];
+        writeJson(STORAGE_INVENTORY_ITEMS, seed);
+        setMenuItems(normalizeBaristaMenuItemsFromInventory(seed));
+      } else {
+        const merged = mergeBaristaInventorySeed(inventory);
+        if (merged.changed) {
+          writeJson(STORAGE_INVENTORY_ITEMS, merged.nextInventory);
+        }
+        setMenuItems(normalizeBaristaMenuItemsFromInventory(merged.nextInventory));
+      }
     };
 
     applyBaristaSnapshot();
