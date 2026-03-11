@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
+import { browserLocalPersistence, getAuth, onAuthStateChanged, setPersistence, signInAnonymously } from "firebase/auth";
 import { getDatabase, onValue, ref } from "firebase/database";
 
 const firebaseConfig = {
@@ -19,14 +20,68 @@ const measurementId =
   process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ?? "G-59LNQFWG4V";
 
 export const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const firebaseAuth = getAuth(firebaseApp);
 export const firebaseDatabase = getDatabase(firebaseApp);
+
+let authReadyPromise: Promise<void> | null = null;
+
+export function ensureFirebaseAuthReady() {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+
+  if (!authReadyPromise) {
+    authReadyPromise = (async () => {
+      try {
+        await setPersistence(firebaseAuth, browserLocalPersistence);
+      } catch {
+        // Fall back to the default auth persistence if the environment blocks local persistence.
+      }
+
+      if (firebaseAuth.currentUser) {
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const unsubscribe = onAuthStateChanged(
+          firebaseAuth,
+          (user) => {
+            if (!user) return;
+            unsubscribe();
+            resolve();
+          },
+          (error) => {
+            unsubscribe();
+            reject(error);
+          },
+        );
+
+        signInAnonymously(firebaseAuth).catch((error) => {
+          unsubscribe();
+          reject(error);
+        });
+      });
+    })().catch((error) => {
+      authReadyPromise = null;
+      throw error;
+    });
+  }
+
+  return authReadyPromise;
+}
 
 // Enable offline persistence: an active onValue listener on the storage root
 // ensures the SDK eagerly caches all data locally. Writes made while offline
 // are automatically queued by the Firebase SDK and replayed when the
 // connection is restored.
 if (typeof window !== "undefined") {
-  onValue(ref(firebaseDatabase, "orangeHotel/storage"), () => {}, { onlyOnce: false });
+  void ensureFirebaseAuthReady()
+    .then(() => {
+      onValue(ref(firebaseDatabase, "orangeHotel/storage"), () => {}, { onlyOnce: false });
+    })
+    .catch((error) => {
+      console.error("Firebase authentication bootstrap failed", error);
+    });
 }
 
 let analyticsPromise: Promise<Analytics | null> | null = null;

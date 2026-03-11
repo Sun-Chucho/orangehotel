@@ -1,5 +1,5 @@
 import { get, onValue, ref, remove, set } from "firebase/database";
-import { firebaseDatabase } from "@/app/lib/firebase";
+import { ensureFirebaseAuthReady, firebaseDatabase } from "@/app/lib/firebase";
 import { getStoreItemLabel, type MainStoreItem } from "@/app/lib/inventory-transfer";
 import { ROOMS, type InventoryItem } from "@/app/lib/mock-data";
 import { DEFAULT_HARDWARE_SETTINGS } from "@/app/lib/hardware-settings";
@@ -11,10 +11,16 @@ const _connectionListeners = new Set<(connected: boolean) => void>();
 const _lastSyncedAt: Record<string, number> = {};
 
 if (typeof window !== "undefined") {
-  onValue(ref(firebaseDatabase, ".info/connected"), (snapshot) => {
-    _isConnected = snapshot.val() === true;
-    _connectionListeners.forEach((fn) => fn(_isConnected));
-  });
+  void ensureFirebaseAuthReady()
+    .then(() => {
+      onValue(ref(firebaseDatabase, ".info/connected"), (snapshot) => {
+        _isConnected = snapshot.val() === true;
+        _connectionListeners.forEach((fn) => fn(_isConnected));
+      });
+    })
+    .catch((error) => {
+      console.error("Firebase connection monitoring failed", error);
+    });
 }
 
 export function isFirebaseConnected() {
@@ -315,7 +321,8 @@ function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value:
 export function syncStorageValueToFirebase<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   const sanitizedValue = sanitizeForStorage(value);
-  void set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue)
+  void ensureFirebaseAuthReady()
+    .then(() => set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue))
     .then(() => {
       _lastSyncedAt[key] = Date.now();
     })
@@ -328,6 +335,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
   if (typeof window === "undefined") return;
 
   try {
+    await ensureFirebaseAuthReady();
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
     const remoteValue = snapshot.exists() ? sanitizeForStorage(snapshot.val()) : null;
     const fallbackValue = getLocalFallbackForSync(key);
@@ -398,42 +406,56 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
   window.addEventListener("orange-hotel-storage-updated", handleCustomEvent as EventListener);
   window.addEventListener("storage", handleStorageEvent);
 
-  const unsubscribe = onValue(
-    ref(firebaseDatabase, toStoragePath(key)),
-    (snapshot) => {
-      if (!snapshot.exists()) {
-        const fallbackValue = sanitizeForStorage((getLocalFallbackForSync(key) ?? getCanonicalDefaultValue(key)) as T | null);
-        if (fallbackValue !== null) {
-          localStorage.setItem(key, JSON.stringify(fallbackValue));
-          mirrorCanonicalStateToLegacyLocal(key, fallbackValue);
-          void set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue).catch(() => undefined);
-          onChange(fallbackValue);
-          return;
-        }
-        readSnapshotValue<T>(key, null, onChange);
-        return;
-      }
-      const nextValue = sanitizeForStorage(snapshot.val() as T);
-      mirrorCanonicalStateToLegacyLocal(key, nextValue);
-      readSnapshotValue<T>(key, nextValue, onChange);
-    },
-    (error) => {
-      console.error(`Firebase subscription failed for ${key}`, error);
-    },
-  );
+  let firebaseUnsubscribe: () => void = () => {};
+  let isDisposed = false;
+
+  void ensureFirebaseAuthReady()
+    .then(() => {
+      if (isDisposed) return;
+
+      firebaseUnsubscribe = onValue(
+        ref(firebaseDatabase, toStoragePath(key)),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            const fallbackValue = sanitizeForStorage((getLocalFallbackForSync(key) ?? getCanonicalDefaultValue(key)) as T | null);
+            if (fallbackValue !== null) {
+              localStorage.setItem(key, JSON.stringify(fallbackValue));
+              mirrorCanonicalStateToLegacyLocal(key, fallbackValue);
+              void set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue).catch(() => undefined);
+              onChange(fallbackValue);
+              return;
+            }
+            readSnapshotValue<T>(key, null, onChange);
+            return;
+          }
+          const nextValue = sanitizeForStorage(snapshot.val() as T);
+          mirrorCanonicalStateToLegacyLocal(key, nextValue);
+          readSnapshotValue<T>(key, nextValue, onChange);
+        },
+        (error) => {
+          console.error(`Firebase subscription failed for ${key}`, error);
+        },
+      );
+    })
+    .catch((error) => {
+      console.error(`Firebase auth bootstrap failed for ${key}`, error);
+    });
 
   return () => {
+    isDisposed = true;
     window.removeEventListener("orange-hotel-storage-updated", handleCustomEvent as EventListener);
     window.removeEventListener("storage", handleStorageEvent);
-    unsubscribe();
+    firebaseUnsubscribe();
   };
 }
 
 export function removeStorageValueFromFirebase(key: string) {
   if (typeof window === "undefined") return;
-  void remove(ref(firebaseDatabase, toStoragePath(key))).catch((error) => {
-    console.error(`Firebase remove failed for ${key}`, error);
-  });
+  void ensureFirebaseAuthReady()
+    .then(() => remove(ref(firebaseDatabase, toStoragePath(key))))
+    .catch((error) => {
+      console.error(`Firebase remove failed for ${key}`, error);
+    });
 }
 
 export function clearLocalBusinessState() {
@@ -445,6 +467,7 @@ export function clearLocalBusinessState() {
 }
 
 export async function clearFirebaseBusinessState() {
+  await ensureFirebaseAuthReady();
   await Promise.all([...FIREBASE_SYNC_KEYS, ...LEGACY_DEMO_KEYS].map((key) => remove(ref(firebaseDatabase, toStoragePath(key))).catch(() => null)));
 }
 
@@ -505,6 +528,7 @@ export function getSyncDiagnostics(): SyncDiagnostics {
 
 export async function getRemoteRecordCounts(): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
+  await ensureFirebaseAuthReady();
   await Promise.all(
     FIREBASE_SYNC_KEYS.map(async (key) => {
       try {
@@ -520,6 +544,7 @@ export async function getRemoteRecordCounts(): Promise<Record<string, number>> {
 
 export async function wipeStorageCategory(key: string) {
   if (typeof window === "undefined") return;
+  await ensureFirebaseAuthReady();
 
   const defaultValue = sanitizeForStorage(getCanonicalDefaultValue(key));
   
