@@ -572,7 +572,7 @@ export default function KitchenPage() {
                       <TableCell className="font-bold">{payment.destination}</TableCell>
                       <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
                       <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
-                      <TableCell className="font-bold">${payment.total.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
                       <TableCell className="font-bold text-sm">{new Date(payment.createdAt).toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
@@ -624,13 +624,13 @@ export default function KitchenPage() {
         <Card className="border-none shadow-sm">
           <CardContent className="p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Completed Sales</p>
-            <p className="mt-2 text-2xl font-black">${completedSalesTotal.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black">TSh {completedSalesTotal.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">
           <CardContent className="p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Credit Sales</p>
-            <p className="mt-2 text-2xl font-black">${creditSalesTotal.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black">TSh {creditSalesTotal.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">
@@ -664,7 +664,7 @@ export default function KitchenPage() {
                   <TableCell className="font-bold">{payment.destination}</TableCell>
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
                   <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
-                  <TableCell className="font-bold">${payment.total.toLocaleString()}</TableCell>
+                  <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
                 </TableRow>
               ))}
               {recentSales.length === 0 && (
@@ -730,7 +730,7 @@ export default function KitchenPage() {
                     </div>
                     <h3 className="font-black text-lg leading-tight">{item.name}</h3>
                     <div className="mt-6 flex items-center justify-between">
-                      <span className="font-black">${(item.price || 0).toLocaleString()}</span>
+                      <span className="font-black">TSh {(item.price || 0).toLocaleString()}</span>
                       <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center">
                         <Plus className="w-4 h-4" />
                       </div>
@@ -781,7 +781,7 @@ export default function KitchenPage() {
                         <TableCell className="font-bold text-sm">
                           {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
                         </TableCell>
-                        <TableCell className="font-black">${ticket.total.toLocaleString()}</TableCell>
+                        <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                           <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
@@ -961,7 +961,7 @@ export default function KitchenPage() {
                       <div>
                         <p className="font-bold leading-tight">{line.item.name}</p>
                         <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">
-                          ${(line.item.price || 0).toLocaleString()} each
+                          TSh {(line.item.price || 0).toLocaleString()} each
                         </p>
                       </div>
                       <button
@@ -982,7 +982,7 @@ export default function KitchenPage() {
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                      <span className="font-black text-sm">${((line.item.price || 0) * line.qty).toLocaleString()}</span>
+                      <span className="font-black text-sm">TSh {((line.item.price || 0) * line.qty).toLocaleString()}</span>
                     </div>
                   </div>
                 ))}
@@ -992,7 +992,7 @@ export default function KitchenPage() {
             <div className="space-y-2 border-t pt-4">
               <div className="flex justify-between text-lg font-black pt-2">
                 <span>Total</span>
-                <span className="text-primary">${subtotal.toLocaleString()}</span>
+                <span className="text-primary">TSh {subtotal.toLocaleString()}</span>
               </div>
             </div>
 

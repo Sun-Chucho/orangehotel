@@ -120,7 +120,7 @@ export function MenuCreateView() {
     if (!kitchenName.trim() || Number.isNaN(price) || price <= 0 || Number.isNaN(prepMinutes) || prepMinutes <= 0) return;
     const approved = await confirm({
       title: "Create Kitchen Menu Item",
-      description: `Are you sure you want to add ${kitchenName.trim()} at $${price.toLocaleString()}?`,
+      description: `Are you sure you want to add ${kitchenName.trim()} at TSh ${price.toLocaleString()}?`,
       actionLabel: "Add Menu Item",
     });
     if (!approved) return;
@@ -238,7 +238,7 @@ export function MenuCreateView() {
                       <TableCell className="font-bold">{item.name}</TableCell>
                       <TableCell className="font-bold uppercase text-[10px] tracking-widest">{KITCHEN_CATEGORY_LABELS[item.category]}</TableCell>
                       <TableCell className="font-bold">{item.prepMinutes} min</TableCell>
-                      <TableCell className="font-bold">${item.price.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold">TSh {item.price.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                   {kitchenMenuItems.length === 0 && (

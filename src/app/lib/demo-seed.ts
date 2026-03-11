@@ -11,6 +11,7 @@ import {
   STORAGE_STORE_USAGE,
 } from "@/app/lib/inventory-transfer";
 import { DEFAULT_KITCHEN_MENU } from "@/app/lib/kitchen-menu";
+import { STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 
 const STORAGE_CASHIER_TX = "orange-hotel-cashier-transactions";
 const STORAGE_CASHIER_SEQ = "orange-hotel-cashier-seq";
@@ -24,6 +25,7 @@ const STORAGE_BARISTA_MENU = "orange-hotel-barista-menu";
 const STORAGE_BARISTA_PAYMENTS = "orange-hotel-barista-payments";
 const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 const STORAGE_DEMO_VERSION = "orange-hotel-demo-seed-version";
+const STORAGE_KITCHEN_SALES_CLEANUP = "orange-hotel-kitchen-sales-cleanup-v1";
 const DEMO_VERSION = "1";
 
 function shouldSeedArray(raw: string | null): boolean {
@@ -95,6 +97,31 @@ export function seedDemoDataIfNeeded() {
     },
   ]);
   setValueIfMissing(STORAGE_CASHIER_SEQ, "84922");
+
+  if (!localStorage.getItem(STORAGE_KITCHEN_SALES_CLEANUP)) {
+    const rawKitchenState = localStorage.getItem(STORAGE_KITCHEN_STATE);
+    let ticketSeq = 301;
+    let menuItems = DEFAULT_KITCHEN_MENU;
+
+    if (rawKitchenState) {
+      try {
+        const parsed = JSON.parse(rawKitchenState) as { ticketSeq?: number; menuItems?: unknown[] };
+        ticketSeq = Number.isFinite(parsed.ticketSeq) ? Number(parsed.ticketSeq) : 301;
+        menuItems = Array.isArray(parsed.menuItems) && parsed.menuItems.length > 0 ? parsed.menuItems as typeof DEFAULT_KITCHEN_MENU : DEFAULT_KITCHEN_MENU;
+      } catch {
+        ticketSeq = 301;
+        menuItems = DEFAULT_KITCHEN_MENU;
+      }
+    }
+
+    localStorage.setItem(STORAGE_KITCHEN_TICKETS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KITCHEN_PAYMENTS, JSON.stringify([]));
+    localStorage.setItem(
+      STORAGE_KITCHEN_STATE,
+      JSON.stringify({ tickets: [], ticketSeq, payments: [], menuItems }),
+    );
+    localStorage.setItem(STORAGE_KITCHEN_SALES_CLEANUP, "1");
+  }
 
   setArrayIfEmpty(STORAGE_KITCHEN_MENU, DEFAULT_KITCHEN_MENU);
   setArrayIfEmpty(STORAGE_KITCHEN_TICKETS, []);
@@ -300,5 +327,6 @@ export function clearDemoData() {
     STORAGE_RECIPE_COST,
     STORAGE_STOCK_SALES,
     STORAGE_DEMO_VERSION,
+    STORAGE_KITCHEN_SALES_CLEANUP,
   ].forEach((key) => localStorage.removeItem(key));
 }
