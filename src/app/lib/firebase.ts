@@ -42,7 +42,7 @@ export function ensureFirebaseAuthReady() {
         return;
       }
 
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve) => {
         const unsubscribe = onAuthStateChanged(
           firebaseAuth,
           (user) => {
@@ -50,15 +50,13 @@ export function ensureFirebaseAuthReady() {
             unsubscribe();
             resolve();
           },
-          (error) => {
-            unsubscribe();
-            reject(error);
-          },
+          () => undefined,
         );
 
         signInAnonymously(firebaseAuth).catch((error) => {
+          console.warn("Firebase anonymous auth unavailable, continuing without client auth.", error);
           unsubscribe();
-          reject(error);
+          resolve();
         });
       });
     })().catch((error) => {

@@ -59,12 +59,27 @@ async function getAnonymousSession() {
 }
 
 async function requestDatabase<T>(key: string, init?: RequestInit) {
-  const { idToken } = await getAnonymousSession();
-  const path = `${FIREBASE_DATABASE_URL}/${toStoragePath(key)}.json?auth=${encodeURIComponent(idToken)}`;
-  const response = await fetch(path, {
-    ...init,
-    cache: "no-store",
-  });
+  const basePath = `${FIREBASE_DATABASE_URL}/${toStoragePath(key)}.json`;
+
+  const runRequest = async (idToken?: string) => {
+    const path = idToken ? `${basePath}?auth=${encodeURIComponent(idToken)}` : basePath;
+    return fetch(path, {
+      ...init,
+      cache: "no-store",
+    });
+  };
+
+  let response: Response;
+  try {
+    const { idToken } = await getAnonymousSession();
+    response = await runRequest(idToken);
+  } catch {
+    response = await runRequest();
+  }
+
+  if ((response.status === 401 || response.status === 403) && !response.ok) {
+    response = await runRequest();
+  }
 
   if (!response.ok) {
     throw new Error(`Realtime Database request failed (${response.status})`);
