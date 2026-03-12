@@ -1008,6 +1008,11 @@ export default function Home() {
             </div>
 
             <div className="max-h-[320px] space-y-3 overflow-y-auto bg-[#f8f6f3] px-4 py-4">
+              {chatThread ? (
+                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-black/40">
+                  Conversation Date: {new Date(chatThread.createdAt).toLocaleDateString()}
+                </div>
+              ) : null}
               {chatThread?.messages.length ? (
                 chatThread.messages.map((message) => (
                   <div key={message.id} className={`flex ${message.sender === "guest" ? "justify-end" : "justify-start"}`}>

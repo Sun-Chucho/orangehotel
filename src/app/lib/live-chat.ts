@@ -17,12 +17,17 @@ export interface LiveChatThread {
   id: string;
   guestName: string;
   guestContact: string;
+  dayKey?: string;
   createdAt: string;
   updatedAt: string;
   status: LiveChatThreadStatus;
   unreadByGuest: number;
   unreadByReception: number;
   messages: LiveChatMessage[];
+}
+
+function getDayKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
 }
 
 export function readLiveChatThreads() {
@@ -36,7 +41,19 @@ export function writeLiveChatThreads(threads: LiveChatThread[]) {
 
 export function getLandingChatThreadId() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(LANDING_CHAT_THREAD_KEY);
+  const threadId = localStorage.getItem(LANDING_CHAT_THREAD_KEY);
+  if (!threadId) return null;
+
+  const todayKey = getDayKey();
+  const thread = readLiveChatThreads().find((entry) => entry.id === threadId);
+  const threadDayKey = thread?.dayKey ?? thread?.createdAt?.slice(0, 10);
+
+  if (!thread || threadDayKey !== todayKey) {
+    localStorage.removeItem(LANDING_CHAT_THREAD_KEY);
+    return null;
+  }
+
+  return threadId;
 }
 
 export function setLandingChatThreadId(threadId: string) {
@@ -46,10 +63,12 @@ export function setLandingChatThreadId(threadId: string) {
 
 export function createLiveChatThread(guestName: string, guestContact: string, openingMessage: string) {
   const now = new Date().toISOString();
+  const dayKey = getDayKey(new Date(now));
   const thread: LiveChatThread = {
     id: `chat-${Date.now()}`,
     guestName: guestName.trim() || "Website Guest",
     guestContact: guestContact.trim(),
+    dayKey,
     createdAt: now,
     updatedAt: now,
     status: "open",

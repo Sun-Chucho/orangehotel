@@ -86,6 +86,9 @@ export default function LiveChatPage() {
                     <div>
                       <p className="font-black">{thread.guestName}</p>
                       <p className="mt-1 text-xs font-bold text-muted-foreground">{thread.guestContact || "Website guest"}</p>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        {new Date(thread.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
                     {thread.unreadByReception > 0 ? (
                       <Badge className="bg-orange-500 text-white hover:bg-orange-500">{thread.unreadByReception}</Badge>
@@ -112,7 +115,7 @@ export default function LiveChatPage() {
                     <div>
                       <p className="text-lg font-black">{activeLiveChat.guestName}</p>
                       <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                        {activeLiveChat.guestContact || "Website guest"} | {activeLiveChat.status}
+                        {activeLiveChat.guestContact || "Website guest"} | {activeLiveChat.status} | {new Date(activeLiveChat.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                     <Badge variant="outline" className="font-black uppercase tracking-widest text-[10px]">
