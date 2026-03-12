@@ -96,6 +96,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-settings",
   "orange-hotel-hardware-settings",
   "orange-hotel-website-bookings",
+  "orange-hotel-live-chat",
   "orange-hotel-login-profiles",
 ] as const;
 
@@ -263,6 +264,7 @@ function getCanonicalDefaultValue(key: string) {
     case "orange-hotel-fnb-recipe-cost":
     case "orange-hotel-fnb-stock-sales":
     case "orange-hotel-website-bookings":
+    case "orange-hotel-live-chat":
       return [];
     case "orange-hotel-rooms-state":
       return ROOMS;

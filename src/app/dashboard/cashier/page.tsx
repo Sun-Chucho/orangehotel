@@ -10,6 +10,13 @@ import {
   type WebsiteBookingRecord,
   writeWebsiteBookings,
 } from "@/app/lib/website-bookings";
+import {
+  appendLiveChatMessage,
+  markThreadSeenByReception,
+  readLiveChatThreads,
+  STORAGE_LIVE_CHAT,
+  type LiveChatThread,
+} from "@/app/lib/live-chat";
 import { HISTORICAL_BOOKINGS } from "@/app/lib/seed-bookings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, Phone, Receipt, User } from "lucide-react";
+import { Clock, MessageCircle, Phone, Receipt, Send, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { toast } from "@/hooks/use-toast";
@@ -32,7 +39,7 @@ import { readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storag
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
-type TransactionTab = "completed" | "credit" | "website";
+type TransactionTab = "completed" | "credit" | "website" | "live-chat";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
 type BookingCurrency = "TSh" | "$";
@@ -138,6 +145,9 @@ export default function BookingPage() {
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
   const [websiteBookings, setWebsiteBookings] = useState<WebsiteBookingRecord[]>([]);
+  const [liveChats, setLiveChats] = useState<LiveChatThread[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [receptionReply, setReceptionReply] = useState("");
   const [receiptSeq, setReceiptSeq] = useState(84920);
   const previousWebsiteBookingIdsRef = useRef<string[]>([]);
 
@@ -173,6 +183,7 @@ export default function BookingPage() {
     applyCashierSnapshot();
     setRooms(readRoomsState());
     setWebsiteBookings(readWebsiteBookings());
+    setLiveChats(readLiveChatThreads());
 
     const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
       applyCashierSnapshot();
@@ -186,11 +197,15 @@ export default function BookingPage() {
         setWebsiteBookings(Array.isArray(value) ? value : readWebsiteBookings());
       },
     );
+    const unsubscribeLiveChat = subscribeToSyncedStorageKey<LiveChatThread[]>(STORAGE_LIVE_CHAT, (value) => {
+      setLiveChats(Array.isArray(value) ? value : readLiveChatThreads());
+    });
 
     return () => {
       unsubscribeCashier();
       unsubscribeRooms();
       unsubscribeWebsiteBookings();
+      unsubscribeLiveChat();
     };
   }, []);
 
@@ -198,7 +213,7 @@ export default function BookingPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const requestedTab = params.get("tab");
-    if (requestedTab === "completed" || requestedTab === "credit" || requestedTab === "website") {
+    if (requestedTab === "completed" || requestedTab === "credit" || requestedTab === "website" || requestedTab === "live-chat") {
       setTransactionTab(requestedTab);
     }
   }, []);
@@ -255,6 +270,14 @@ export default function BookingPage() {
   const unreadWebsiteBookings = useMemo(
     () => websiteBookings.filter((booking) => booking.status === "new"),
     [websiteBookings],
+  );
+  const unreadLiveChats = useMemo(
+    () => liveChats.filter((thread) => thread.unreadByReception > 0 && thread.status === "open"),
+    [liveChats],
+  );
+  const activeLiveChat = useMemo(
+    () => liveChats.find((thread) => thread.id === activeChatId) ?? liveChats[0] ?? null,
+    [activeChatId, liveChats],
   );
   const activeBookedRoomNumbers = useMemo(
     () => new Set(transactions.filter((tx) => tx.status !== "checked-out").map((tx) => tx.roomNumber)),
@@ -329,6 +352,18 @@ export default function BookingPage() {
     const nextWebsiteBookings = markWebsiteBookingsSeen(websiteBookings, bookingIds);
     setWebsiteBookings(nextWebsiteBookings);
     writeWebsiteBookings(nextWebsiteBookings);
+  };
+
+  const openReceptionChat = (threadId: string) => {
+    setActiveChatId(threadId);
+    markThreadSeenByReception(threadId);
+  };
+
+  const sendReceptionReply = () => {
+    if (!activeLiveChat || !receptionReply.trim()) return;
+    appendLiveChatMessage(activeLiveChat.id, "reception", receptionReply);
+    markThreadSeenByReception(activeLiveChat.id);
+    setReceptionReply("");
   };
 
   const resetBookingForm = () => {
@@ -519,6 +554,9 @@ export default function BookingPage() {
         <Badge variant="outline" className="h-10 px-4 justify-center border-amber-500 text-amber-700 font-black uppercase text-[10px] tracking-widest bg-amber-50">
           {unreadWebsiteBookings.length} Website Booking{unreadWebsiteBookings.length === 1 ? "" : "s"} New
         </Badge>
+        <Badge variant="outline" className="h-10 px-4 justify-center border-emerald-500 text-emerald-700 font-black uppercase text-[10px] tracking-widest bg-emerald-50">
+          {unreadLiveChats.length} Live Chat{unreadLiveChats.length === 1 ? "" : "s"} New
+        </Badge>
       </header>
       {isDirector && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
@@ -681,11 +719,105 @@ export default function BookingPage() {
                 <TabsTrigger value="website" className="text-[10px] font-black uppercase tracking-widest">
                   Website Booking {unreadWebsiteBookings.length > 0 ? `(${unreadWebsiteBookings.length})` : ""}
                 </TabsTrigger>
+                <TabsTrigger value="live-chat" className="text-[10px] font-black uppercase tracking-widest">
+                  Live Chat {unreadLiveChats.length > 0 ? `(${unreadLiveChats.length})` : ""}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {transactionTab === "live-chat" && (
+            <div className="grid min-h-[560px] md:grid-cols-[320px_1fr]">
+              <div className="border-r bg-muted/10">
+                <div className="border-b px-5 py-4">
+                  <p className="text-sm font-black uppercase tracking-widest">Reception Live Chat</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Website conversations appear here and update live.</p>
+                </div>
+                <div className="max-h-[500px] overflow-y-auto">
+                  {liveChats.map((thread) => (
+                    <button
+                      key={thread.id}
+                      type="button"
+                      onClick={() => openReceptionChat(thread.id)}
+                      className={`w-full border-b px-5 py-4 text-left transition hover:bg-white ${activeLiveChat?.id === thread.id ? "bg-white" : "bg-transparent"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black">{thread.guestName}</p>
+                          <p className="mt-1 text-xs font-bold text-muted-foreground">{thread.guestContact || "Website guest"}</p>
+                        </div>
+                        {thread.unreadByReception > 0 ? (
+                          <Badge className="bg-orange-500 text-white hover:bg-orange-500">{thread.unreadByReception}</Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
+                        {thread.messages[thread.messages.length - 1]?.text ?? "No messages yet"}
+                      </p>
+                    </button>
+                  ))}
+                  {liveChats.length === 0 && (
+                    <div className="px-5 py-10 text-center opacity-40">
+                      <MessageCircle className="mx-auto mb-3 h-10 w-10" />
+                      <p className="text-xs font-black uppercase tracking-widest">No live chats yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex min-h-[560px] flex-col">
+                {activeLiveChat ? (
+                  <>
+                    <div className="border-b px-5 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-lg font-black">{activeLiveChat.guestName}</p>
+                          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                            {activeLiveChat.guestContact || "Website guest"} | {activeLiveChat.status}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="font-black uppercase text-[10px] tracking-widest">
+                          {activeLiveChat.messages.length} Messages
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-3 overflow-y-auto bg-[#f8f6f3] px-5 py-5">
+                      {activeLiveChat.messages.map((message) => (
+                        <div key={message.id} className={`flex ${message.sender === "reception" ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.sender === "reception" ? "bg-orange-500 text-white" : "bg-white text-black shadow-sm"}`}>
+                            <p>{message.text}</p>
+                            <p className={`mt-2 text-[10px] font-black uppercase tracking-widest ${message.sender === "reception" ? "text-white/70" : "text-muted-foreground"}`}>
+                              {message.sender} | {new Date(message.createdAt).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t bg-white px-5 py-4">
+                      <div className="flex items-end gap-2">
+                        <textarea
+                          rows={2}
+                          value={receptionReply}
+                          onChange={(event) => setReceptionReply(event.target.value)}
+                          placeholder="Reply to guest..."
+                          className="min-h-[48px] flex-1 resize-none rounded-2xl border border-black/10 px-4 py-3 text-sm outline-none ring-orange-500 transition focus:ring-2"
+                        />
+                        <Button onClick={sendReceptionReply} disabled={!receptionReply.trim()} className="h-12 rounded-2xl px-4">
+                          <Send className="mr-2 h-4 w-4" /> Send
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center text-center opacity-40">
+                    <div>
+                      <MessageCircle className="mx-auto mb-3 h-12 w-12" />
+                      <p className="text-xs font-black uppercase tracking-widest">Select a live chat to reply</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {transactionTab === "website" && (
             <div className="border-b bg-amber-50/60 px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -771,7 +903,7 @@ export default function BookingPage() {
                   </TableRow>
                 ))}
 
-              {transactionTab !== "website" &&
+              {transactionTab !== "website" && transactionTab !== "live-chat" &&
                 (transactionTab === "completed" ? completedTransactions : creditTransactions).map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell className="font-black">{tx.roomNumber}</TableCell>
@@ -832,6 +964,7 @@ export default function BookingPage() {
 
               {((transactionTab === "website" && websiteBookings.length === 0) ||
                 (transactionTab !== "website" &&
+                  transactionTab !== "live-chat" &&
                   (transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0)) && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-12 text-center">

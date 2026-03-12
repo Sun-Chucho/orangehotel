@@ -3,8 +3,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, LoaderCircle, MapPin, ShieldCheck, Star } from "lucide-react";
+import { CheckCircle2, LoaderCircle, MapPin, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
 import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
+import {
+  appendLiveChatMessage,
+  createLiveChatThread,
+  getLandingChatThreadId,
+  markThreadSeenByGuest,
+  readLiveChatThreads,
+  type LiveChatThread,
+} from "@/app/lib/live-chat";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 const INVENTORY = {
   total: 53,
@@ -37,43 +46,43 @@ const dayDiff = (checkIn: string, checkOut: string) => {
 };
 
 const BAR_IMAGES = [
-  "https://i.postimg.cc/8sQNjf5J/P1200060.jpg",
-  "https://i.postimg.cc/gj926Tt2/Q6A0790-Enhanced-NR.jpg",
-  "https://i.postimg.cc/k4Sn9yMQ/Q6A0679-Enhanced-NR-1.jpg",
+  "/landing/bar-1.jpg",
+  "/landing/bar-2.jpg",
+  "/landing/bar-3.jpg",
 ] as const;
 
 const BREAKFAST_IMAGES = [
-  "https://i.postimg.cc/Hsz8fTPt/Q6A0206.jpg",
-  "https://i.postimg.cc/N0msv4jj/Q6A0216.jpg",
+  "/landing/breakfast-1.jpg",
+  "/landing/breakfast-2.jpg",
 ] as const;
 
 const LUNCH_IMAGES = [
-  "https://i.postimg.cc/gjqsC1fT/P1200333-Enhanced-NR.jpg",
-  "https://i.postimg.cc/xjK6NbcR/P1201108.jpg",
-  "https://i.postimg.cc/wMc2CnSW/Q6A0488-Enhanced-NR.jpg",
-  "https://i.postimg.cc/mgdX2fhp/Q6A0494-Enhanced-NR.jpg",
-  "https://i.postimg.cc/YS5xhp7Z/P1201042.jpg",
-  "https://i.postimg.cc/Hkj0zJkD/P1200326.jpg",
-  "https://i.postimg.cc/PrXQL3gK/P1200978-Enhanced-NR.jpg",
-  "https://i.postimg.cc/NF48JmHR/P1200980.jpg",
+  "/landing/lunch-1.jpg",
+  "/landing/lunch-2.jpg",
+  "/landing/lunch-3.jpg",
+  "/landing/lunch-4.jpg",
+  "/landing/lunch-5.jpg",
+  "/landing/lunch-6.jpg",
+  "/landing/lunch-7.jpg",
+  "/landing/lunch-8.jpg",
 ] as const;
 
 const RESTAURANT_IMAGES = [
-  "https://i.postimg.cc/13PXR2b5/P1200213.jpg",
-  "https://i.postimg.cc/mrgrCMLL/DJI-0323-Enhanced-NR.jpg",
-  "https://i.postimg.cc/hjJP3BQw/2Q6A0033.jpg",
-  "https://i.postimg.cc/prTQSyJr/2Q6A9990.jpg",
+  "/landing/restaurant-1.jpg",
+  "/landing/restaurant-2.jpg",
+  "/landing/restaurant-3.jpg",
+  "/landing/restaurant-4.jpg",
 ] as const;
 
-const MAIN_ROOM_IMAGE = "https://i.postimg.cc/v86MCy3K/Q6A0194.jpg";
+const MAIN_ROOM_IMAGE = "/landing/room-main.jpg";
 
 const ROOM_IMAGES = [
   MAIN_ROOM_IMAGE,
-  "https://i.postimg.cc/dVCqdYTY/Q6A0359.jpg",
-  "https://i.postimg.cc/WpQp4zhy/P1200562-Enhanced-NR.jpg",
-  "https://i.postimg.cc/RCjC0hWC/P1200571.jpg",
-  "https://i.postimg.cc/4yH0MJGV/Q6A0578-Enhanced-NR.jpg",
-  "https://i.postimg.cc/7L6r9r5S/Q6A0199.jpg",
+  "/landing/room-1.jpg",
+  "/landing/room-2.jpg",
+  "/landing/room-3.jpg",
+  "/landing/room-4.jpg",
+  "/landing/room-5.jpg",
 ] as const;
 
 const destinationCards = [
@@ -133,8 +142,15 @@ export default function Home() {
   const [barStoryHovered, setBarStoryHovered] = useState(false);
   const [roomStoryIndex, setRoomStoryIndex] = useState(0);
   const [restaurantShowcaseIndex, setRestaurantShowcaseIndex] = useState(0);
+  const [experienceShowcaseIndex, setExperienceShowcaseIndex] = useState(0);
   const [activeStory, setActiveStory] = useState<HighlightStory | null>(null);
   const [activeStorySlide, setActiveStorySlide] = useState(0);
+  const [showBookingPopup, setShowBookingPopup] = useState(false);
+  const [showChatWidget, setShowChatWidget] = useState(false);
+  const [chatGuestName, setChatGuestName] = useState("");
+  const [chatGuestContact, setChatGuestContact] = useState("");
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatThread, setChatThread] = useState<LiveChatThread | null>(null);
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -191,6 +207,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const interval = window.setInterval(() => {
+      setExperienceShowcaseIndex((current) => (current + 1) % experienceImages.length);
+    }, 2600);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     if (!activeStory) return;
 
     const interval = window.setInterval(() => {
@@ -200,7 +224,24 @@ export default function Home() {
     return () => window.clearInterval(interval);
   }, [activeStory]);
 
+  useEffect(() => {
+    const applyChatSnapshot = () => {
+      const threadId = getLandingChatThreadId();
+      const threads = readLiveChatThreads();
+      const nextThread = threadId ? threads.find((entry) => entry.id === threadId) ?? null : null;
+      setChatThread(nextThread);
+      if (nextThread?.unreadByGuest) {
+        markThreadSeenByGuest(nextThread.id);
+      }
+    };
+
+    applyChatSnapshot();
+    const unsubscribe = subscribeToSyncedStorageKey("orange-hotel-live-chat", applyChatSnapshot);
+    return () => unsubscribe();
+  }, []);
+
   const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
+  const experienceImages = [MAIN_ROOM_IMAGE, RESTAURANT_IMAGES[1], LUNCH_IMAGES[4], BAR_IMAGES[1]];
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -278,6 +319,37 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openBookingPopup = () => {
+    setShowBookingPopup(true);
+  };
+
+  const continueToBookingForm = () => {
+    setShowBookingPopup(false);
+    if (typeof window !== "undefined") {
+      document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const sendChatMessage = () => {
+    const nextMessage = chatMessage.trim();
+    if (!nextMessage) return;
+
+    if (!chatThread) {
+      const nextThread = createLiveChatThread(
+        chatGuestName || fullName || "Website Guest",
+        chatGuestContact || phone || email,
+        nextMessage,
+      );
+      setChatThread(nextThread);
+      setChatMessage("");
+      setShowChatWidget(true);
+      return;
+    }
+
+    appendLiveChatMessage(chatThread.id, "guest", nextMessage);
+    setChatMessage("");
   };
 
   return (
@@ -362,7 +434,7 @@ export default function Home() {
           {destinationCards.map((card) => (
             <article key={card.title} className="group overflow-hidden rounded-sm bg-white shadow-[0_18px_35px_rgba(0,0,0,0.08)]">
               <div className="relative h-64">
-                <Image src={card.image} alt={card.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+                <Image src={card.image} alt={card.title} fill sizes="(max-width: 768px) 100vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4 text-white">
                   <h3 className="font-headline text-2xl leading-tight">{card.title}</h3>
@@ -376,17 +448,14 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="relative h-[360px] overflow-hidden rounded-sm">
-          <div className="absolute inset-0">
-            {RESTAURANT_IMAGES.map((image, index) => (
-              <Image
-                key={image}
-                src={image}
-                alt={`Orange Hotel restaurant ${index + 1}`}
-                fill
-                className={`object-cover transition-all duration-1000 ${restaurantShowcaseIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
-              />
-            ))}
-          </div>
+          <Image
+            key={RESTAURANT_IMAGES[restaurantShowcaseIndex]}
+            src={RESTAURANT_IMAGES[restaurantShowcaseIndex]}
+            alt={`Orange Hotel restaurant ${restaurantShowcaseIndex + 1}`}
+            fill
+            sizes="100vw"
+            className="object-cover transition-all duration-700"
+          />
           <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
           <div className="relative flex h-full max-w-xl flex-col justify-center px-8 text-white md:px-12">
             <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Experience</p>
@@ -416,43 +485,34 @@ export default function Home() {
                 }}
               >
                 {isBarStory ? (
-                  <div className="absolute inset-0">
-                    {BAR_IMAGES.map((image, index) => (
-                      <Image
-                        key={image}
-                        src={image}
-                        alt={`${story.title} ${index + 1}`}
-                        fill
-                        className={`object-cover transition-all duration-1000 ${barStoryIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
-                      />
-                    ))}
-                  </div>
+                  <Image
+                    key={BAR_IMAGES[barStoryIndex]}
+                    src={BAR_IMAGES[barStoryIndex]}
+                    alt={`${story.title} ${barStoryIndex + 1}`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover transition-all duration-700"
+                  />
                 ) : isRestaurantStory ? (
-                  <div className="absolute inset-0">
-                    {chefImages.map((image, index) => (
-                      <Image
-                        key={image}
-                        src={image}
-                        alt={`${story.title} ${index + 1}`}
-                        fill
-                        className={`object-cover transition-all duration-1000 ${chefStoryIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
-                      />
-                    ))}
-                  </div>
+                  <Image
+                    key={chefImages[chefStoryIndex]}
+                    src={chefImages[chefStoryIndex]}
+                    alt={`${story.title} ${chefStoryIndex + 1}`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover transition-all duration-700"
+                  />
                 ) : isHotelStory ? (
-                  <div className="absolute inset-0">
-                    {ROOM_IMAGES.slice(1).map((image, index) => (
-                      <Image
-                        key={image}
-                        src={image}
-                        alt={`${story.title} ${index + 1}`}
-                        fill
-                        className={`object-cover transition-all duration-1000 ${roomStoryIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
-                      />
-                    ))}
-                  </div>
+                  <Image
+                    key={ROOM_IMAGES.slice(1)[roomStoryIndex]}
+                    src={ROOM_IMAGES.slice(1)[roomStoryIndex]}
+                    alt={`${story.title} ${roomStoryIndex + 1}`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover transition-all duration-700"
+                  />
                 ) : (
-                  <Image src={story.image} alt={story.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+                  <Image src={story.image} alt={story.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -472,15 +532,14 @@ export default function Home() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md" onClick={() => setActiveStory(null)}>
           <div className="grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-[#111111] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:grid-cols-[1.1fr_0.9fr]" onClick={(event) => event.stopPropagation()}>
             <div className="relative min-h-[340px] md:min-h-[620px]">
-              {activeStory.images.map((image, index) => (
-                <Image
-                  key={image}
-                  src={image}
-                  alt={`${activeStory.title} ${index + 1}`}
-                  fill
-                  className={`object-cover transition-all duration-1000 ${activeStorySlide === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
-                />
-              ))}
+              <Image
+                key={activeStory.images[activeStorySlide]}
+                src={activeStory.images[activeStorySlide]}
+                alt={`${activeStory.title} ${activeStorySlide + 1}`}
+                fill
+                sizes="(max-width: 768px) 100vw, 55vw"
+                className="object-cover transition-all duration-700"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
               <div className="absolute bottom-6 left-6 right-6 flex gap-2">
                 {activeStory.images.map((image, index) => (
@@ -530,10 +589,13 @@ export default function Home() {
                 <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Slide {activeStorySlide + 1} / {activeStory.images.length}</p>
                 <button
                   type="button"
-                  onClick={() => setActiveStory(null)}
+                  onClick={() => {
+                    setActiveStory(null);
+                    openBookingPopup();
+                  }}
                   className="rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
                 >
-                  Back To Landing Page
+                  Book Now
                 </button>
               </div>
             </div>
@@ -541,35 +603,102 @@ export default function Home() {
         </div>
       ) : null}
 
+      {showBookingPopup ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onClick={() => setShowBookingPopup(false)}>
+          <div className="w-full max-w-lg rounded-[28px] bg-[#121212] p-6 text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:p-8" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Reservation Popup</p>
+                <h3 className="mt-3 font-headline text-4xl leading-tight">Book Your Stay At Orange Hotel</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBookingPopup(false)}
+                className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/70 transition hover:border-white/40 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mt-5 text-sm leading-7 text-white/78">
+              Choose your preferred room class, then continue to the reservation form to confirm dates, guests, and contact details.
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setRoomType("standard")}
+                className={`rounded-2xl border px-5 py-5 text-left transition ${roomType === "standard" ? "border-orange-400 bg-orange-500/15" : "border-white/10 bg-white/5 hover:border-white/30"}`}
+              >
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-200">Standard</p>
+                <p className="mt-2 text-sm text-white/75">Comfortable stay option for business and leisure guests.</p>
+                <p className="mt-4 font-black">{formatTzs(INVENTORY.standard.price)} / night</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoomType("platinum")}
+                className={`rounded-2xl border px-5 py-5 text-left transition ${roomType === "platinum" ? "border-orange-400 bg-orange-500/15" : "border-white/10 bg-white/5 hover:border-white/30"}`}
+              >
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-200">Platinum</p>
+                <p className="mt-2 text-sm text-white/75">A more elevated stay with premium room experience and privacy.</p>
+                <p className="mt-4 font-black">{formatTzs(INVENTORY.platinum.price)} / night</p>
+              </button>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Selected Room: {roomType}</p>
+              <button
+                type="button"
+                onClick={continueToBookingForm}
+                className="rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
+              >
+                Open Booking Form
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="mx-auto max-w-6xl px-6 pb-14">
-        <div className="rounded-sm bg-[#1c1c1c] px-6 py-16 text-center text-white md:px-10">
-          <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Orange Experience</p>
-          <h2 className="mt-3 font-headline text-5xl">Rooms, Restaurant, And Bar</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Book your stay, start with breakfast, enjoy lunch in the restaurant, and close the day with signature drinks at the bar.</p>
-          <a href="#book" className="mt-8 inline-block border-b border-orange-300 pb-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
-            Discover More
-          </a>
+        <div className="relative overflow-hidden rounded-sm px-6 py-16 text-center text-white md:px-10">
+          <Image
+            key={experienceImages[experienceShowcaseIndex]}
+            src={experienceImages[experienceShowcaseIndex]}
+            alt={`Orange Experience ${experienceShowcaseIndex + 1}`}
+            fill
+            sizes="100vw"
+            className="object-cover transition-all duration-700"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.48)_45%,rgba(245,124,0,0.28)_100%)]" />
+          <div className="relative">
+            <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Orange Experience</p>
+            <h2 className="mt-3 font-headline text-5xl">Rooms, Restaurant, And Bar</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Book your stay, start with breakfast, enjoy lunch in the restaurant, and close the day with signature drinks at the bar.</p>
+            <a href="#book" className="mt-8 inline-block border-b border-orange-300 pb-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
+              Discover More
+            </a>
+          </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="grid overflow-hidden rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
           <div className="relative min-h-[260px] px-8 py-12 text-center">
-            <Image src={MAIN_ROOM_IMAGE} alt="Orange Hotel luxury room" fill className="object-cover" />
+            <Image src={MAIN_ROOM_IMAGE} alt="Orange Hotel luxury room" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Comfortable Stays</h3>
             </div>
           </div>
           <div className="relative min-h-[260px] border-y border-white/20 px-8 py-12 text-center md:border-x md:border-y-0">
-            <Image src={LUNCH_IMAGES[2]} alt="Orange Hotel dining" fill className="object-cover" />
+            <Image src={LUNCH_IMAGES[2]} alt="Orange Hotel dining" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Great Dining</h3>
             </div>
           </div>
           <div className="relative min-h-[260px] px-8 py-12 text-center">
-            <Image src={BAR_IMAGES[1]} alt="Orange Hotel bar" fill className="object-cover" />
+            <Image src={BAR_IMAGES[1]} alt="Orange Hotel bar" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Evening Bar Vibes</h3>
@@ -712,6 +841,89 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <div className="fixed bottom-5 right-5 z-[75]">
+        {showChatWidget ? (
+          <div className="mb-3 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[26px] border border-black/10 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center justify-between bg-black px-5 py-4 text-white">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-300">Live Chat</p>
+                <p className="mt-1 font-headline text-2xl leading-none">Orange Hotel Support</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChatWidget(false)}
+                className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition hover:border-white/40 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="max-h-[320px] space-y-3 overflow-y-auto bg-[#f8f6f3] px-4 py-4">
+              {chatThread?.messages.length ? (
+                chatThread.messages.map((message) => (
+                  <div key={message.id} className={`flex ${message.sender === "guest" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.sender === "guest" ? "bg-orange-500 text-white" : "bg-white text-black shadow-sm"}`}>
+                      {message.text}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-black shadow-sm">
+                  Start a conversation and reception will reply from the dashboard.
+                </div>
+              )}
+            </div>
+
+            {!chatThread ? (
+              <div className="grid gap-3 border-t px-4 py-4">
+                <input
+                  value={chatGuestName}
+                  onChange={(event) => setChatGuestName(event.target.value)}
+                  placeholder="Your name"
+                  className="h-11 rounded-xl border border-black/10 px-4 text-sm outline-none ring-orange-500 transition focus:ring-2"
+                />
+                <input
+                  value={chatGuestContact}
+                  onChange={(event) => setChatGuestContact(event.target.value)}
+                  placeholder="Phone or email"
+                  className="h-11 rounded-xl border border-black/10 px-4 text-sm outline-none ring-orange-500 transition focus:ring-2"
+                />
+              </div>
+            ) : null}
+
+            <div className="border-t bg-white px-4 py-4">
+              <div className="flex items-end gap-2">
+                <textarea
+                  rows={2}
+                  value={chatMessage}
+                  onChange={(event) => setChatMessage(event.target.value)}
+                  placeholder="Write your message..."
+                  className="min-h-[48px] flex-1 resize-none rounded-2xl border border-black/10 px-4 py-3 text-sm outline-none ring-orange-500 transition focus:ring-2"
+                />
+                <button
+                  type="button"
+                  onClick={sendChatMessage}
+                  disabled={!chatMessage.trim()}
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Send live chat message"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => setShowChatWidget((current) => !current)}
+          className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-500 text-white shadow-[0_16px_40px_rgba(245,124,0,0.45)] transition hover:scale-105 hover:bg-orange-400"
+          aria-label="Open live chat"
+        >
+          <MessageCircle className="h-7 w-7" />
+        </button>
+      </div>
     </main>
   );
 }
