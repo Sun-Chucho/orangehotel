@@ -198,13 +198,15 @@ export default function Home() {
       </header>
 
       <section className="relative min-h-[92vh] overflow-hidden">
-        <Image
-          src="https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=1800&q=80"
-          alt="Orange Hotel exterior and surroundings"
-          fill
-          className="object-cover"
-          priority
-        />
+        <video
+          className="absolute inset-0 h-full w-full object-cover"
+          autoPlay
+          muted
+          loop
+          playsInline
+        >
+          <source src="/smaller.mp4" type="video/mp4" />
+        </video>
         <div className="absolute inset-0 bg-[linear-gradient(130deg,rgba(0,0,0,0.58)_15%,rgba(0,0,0,0.25)_55%,rgba(245,124,0,0.32)_100%)]" />
 
         <div className="relative mx-auto flex min-h-[92vh] max-w-6xl items-end px-6 pb-16 pt-28">
@@ -426,8 +428,8 @@ export default function Home() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Contact</p>
-            <p className="mt-3 text-sm text-white/80">frontdesk@orangehotel.co.tz</p>
-            <p className="text-sm text-white/80">+255 700 000 000</p>
+            <p className="mt-3 text-sm text-white/80">orangehotelarusha.com</p>
+            <p className="text-sm text-white/80">+255702693911</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Quick Links</p>
