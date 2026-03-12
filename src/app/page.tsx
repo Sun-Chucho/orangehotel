@@ -3,7 +3,7 @@
 import Image, { type ImageProps } from "next/image";
 import Link from "next/link";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, LoaderCircle, MapPin, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
+import { CheckCircle2, ChevronRight, LoaderCircle, MapPin, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
 import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 import {
   appendLiveChatMessage,
@@ -78,6 +78,33 @@ const RESTAURANT_IMAGES = [
   "/landing/restaurant-4.jpg",
 ] as const;
 
+const FEATURED_EXPERIENCES = [
+  {
+    image: RESTAURANT_IMAGES[0],
+    eyebrow: "Breakfast Atmosphere",
+    title: "Start The Morning In A Warm, Elegant Dining Space",
+    description: "Guests begin the day with a calm breakfast setting, polished presentation, and a restaurant experience that immediately feels premium.",
+  },
+  {
+    image: RESTAURANT_IMAGES[1],
+    eyebrow: "Restaurant Presence",
+    title: "A Real Restaurant Setting That Strengthens The Brand",
+    description: "The space itself markets the hotel: open, inviting, and memorable enough to make dining part of the stay, not just an extra service.",
+  },
+  {
+    image: RESTAURANT_IMAGES[2],
+    eyebrow: "Lunch Energy",
+    title: "Lunch Service Designed To Feel Fresh And Photogenic",
+    description: "From plated meals to the full room atmosphere, this section shows guests that Orange Hotel delivers both quality food and visual appeal.",
+  },
+  {
+    image: RESTAURANT_IMAGES[3],
+    eyebrow: "Private Dining",
+    title: "Perfect For Guests, Meetings, And Celebratory Dining",
+    description: "The restaurant supports everyday service, business meals, and intimate occasions with an environment that feels ready for all three.",
+  },
+] as const;
+
 const MAIN_ROOM_IMAGE = "/landing/room-main.jpg";
 
 const ROOM_IMAGES = [
@@ -143,7 +170,6 @@ export default function Home() {
   const [heroVideoFade, setHeroVideoFade] = useState(0);
   const [chefStoryIndex, setChefStoryIndex] = useState(0);
   const [barStoryIndex, setBarStoryIndex] = useState(0);
-  const [barStoryHovered, setBarStoryHovered] = useState(false);
   const [roomStoryIndex, setRoomStoryIndex] = useState(0);
   const [restaurantShowcaseIndex, setRestaurantShowcaseIndex] = useState(0);
   const [experienceShowcaseIndex, setExperienceShowcaseIndex] = useState(0);
@@ -167,6 +193,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successRef, setSuccessRef] = useState("");
+  const [highlightCycle, setHighlightCycle] = useState(0);
 
   const nights = useMemo(() => {
     if (!checkIn || !checkOut) return 0;
@@ -180,40 +207,31 @@ export default function Home() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      setBarStoryIndex((current) => (current + 1) % BAR_IMAGES.length);
-    }, barStoryHovered ? 1800 : 3200);
+      setHighlightCycle((current) => current + 1);
+    }, 5200);
 
     return () => window.clearInterval(interval);
-  }, [barStoryHovered]);
+  }, []);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    if (highlightCycle === 0) return;
+
+    const lane = highlightCycle % 3;
+    if (lane === 1) {
       setChefStoryIndex((current) => (current + 1) % (BREAKFAST_IMAGES.length + LUNCH_IMAGES.length));
-    }, 2600);
-
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setRestaurantShowcaseIndex((current) => (current + 1) % RESTAURANT_IMAGES.length);
-    }, 3400);
-
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
+      return;
+    }
+    if (lane === 2) {
       setRoomStoryIndex((current) => (current + 1) % (ROOM_IMAGES.length - 1));
-    }, 3000);
-
-    return () => window.clearInterval(interval);
-  }, []);
+      return;
+    }
+    setBarStoryIndex((current) => (current + 1) % BAR_IMAGES.length);
+  }, [highlightCycle]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setExperienceShowcaseIndex((current) => (current + 1) % experienceImages.length);
-    }, 2600);
+    }, 6400);
 
     return () => window.clearInterval(interval);
   }, []);
@@ -453,18 +471,47 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="relative h-[360px] overflow-hidden rounded-sm">
           <LandingImage
-            key={RESTAURANT_IMAGES[restaurantShowcaseIndex]}
-            src={RESTAURANT_IMAGES[restaurantShowcaseIndex]}
-            alt={`Orange Hotel restaurant ${restaurantShowcaseIndex + 1}`}
+            key={FEATURED_EXPERIENCES[restaurantShowcaseIndex].image}
+            src={FEATURED_EXPERIENCES[restaurantShowcaseIndex].image}
+            alt={`Orange Hotel featured experience ${restaurantShowcaseIndex + 1}`}
             fill
             sizes="100vw"
-            className="object-cover transition-all duration-700"
+            className="object-cover transition-all duration-[2800ms] ease-in-out"
           />
           <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
-          <div className="relative flex h-full max-w-xl flex-col justify-center px-8 text-white md:px-12">
-            <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Experience</p>
-            <h2 className="mt-3 font-headline text-4xl">Breakfast Service, Lunch Plates, And A Real Restaurant Setting</h2>
-            <p className="mt-4 text-sm text-white/85">From morning breakfast to full lunch service, Orange Hotel brings guests into a restaurant space built for comfort, atmosphere, and memorable dining.</p>
+          <div className="relative flex h-full items-center justify-between gap-4 px-4 text-white md:px-8">
+            <div className="max-w-xl rounded-[28px] border border-white/10 bg-black/25 p-6 backdrop-blur-sm md:p-8">
+              <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Experience</p>
+              <p className="mt-4 text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">
+                {FEATURED_EXPERIENCES[restaurantShowcaseIndex].eyebrow}
+              </p>
+              <h2 className="mt-3 font-headline text-4xl">
+                {FEATURED_EXPERIENCES[restaurantShowcaseIndex].title}
+              </h2>
+              <p className="mt-4 text-sm text-white/85">
+                {FEATURED_EXPERIENCES[restaurantShowcaseIndex].description}
+              </p>
+              <div className="mt-6 flex gap-2">
+                {FEATURED_EXPERIENCES.map((slide, index) => (
+                  <button
+                    key={slide.image}
+                    type="button"
+                    onClick={() => setRestaurantShowcaseIndex(index)}
+                    className={`h-1.5 flex-1 rounded-full transition ${restaurantShowcaseIndex === index ? "bg-orange-400" : "bg-white/35 hover:bg-white/55"}`}
+                    aria-label={`Go to featured experience ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRestaurantShowcaseIndex((current) => (current + 1) % FEATURED_EXPERIENCES.length)}
+              className="flex h-12 min-w-[92px] shrink-0 items-center justify-center gap-2 rounded-full border border-orange-300/60 bg-orange-500/20 px-4 text-[11px] font-black uppercase tracking-[0.18em] text-white shadow-[0_0_24px_rgba(251,146,60,0.35)] transition hover:border-orange-200 hover:bg-orange-500/30 animate-pulse"
+              aria-label="Next featured experience"
+            >
+              Next
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </section>
@@ -481,8 +528,6 @@ export default function Home() {
               <article
                 key={story.title}
                 className="group relative min-h-[280px] overflow-hidden rounded-sm cursor-pointer"
-                onMouseEnter={isBarStory ? () => setBarStoryHovered(true) : undefined}
-                onMouseLeave={isBarStory ? () => setBarStoryHovered(false) : undefined}
                 onClick={() => {
                   setActiveStory(story);
                   setActiveStorySlide(0);
@@ -495,7 +540,7 @@ export default function Home() {
                     alt={`${story.title} ${barStoryIndex + 1}`}
                     fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-all duration-700"
+                    className="object-cover transition-all duration-[1600ms]"
                   />
                 ) : isRestaurantStory ? (
                   <LandingImage
@@ -504,7 +549,7 @@ export default function Home() {
                     alt={`${story.title} ${chefStoryIndex + 1}`}
                     fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-all duration-700"
+                    className="object-cover transition-all duration-[1600ms]"
                   />
                 ) : isHotelStory ? (
                   <LandingImage
@@ -513,7 +558,7 @@ export default function Home() {
                     alt={`${story.title} ${roomStoryIndex + 1}`}
                     fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-all duration-700"
+                    className="object-cover transition-all duration-[1600ms]"
                   />
                 ) : (
                   <LandingImage src={story.image} alt={story.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105" />
@@ -671,7 +716,7 @@ export default function Home() {
             alt={`Orange Experience ${experienceShowcaseIndex + 1}`}
             fill
             sizes="100vw"
-            className="object-cover transition-all duration-700"
+            className="object-cover transition-all duration-[1800ms]"
           />
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.48)_45%,rgba(245,124,0,0.28)_100%)]" />
           <div className="relative">
@@ -847,7 +892,7 @@ export default function Home() {
         </div>
       </footer>
 
-      <div className="fixed bottom-5 right-5 z-[75]">
+      <div className="fixed bottom-4 right-4 z-[120] md:bottom-6 md:right-6">
         {showChatWidget ? (
           <div className="mb-3 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[26px] border border-black/10 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between bg-black px-5 py-4 text-white">
@@ -923,10 +968,16 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setShowChatWidget((current) => !current)}
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-500 text-white shadow-[0_16px_40px_rgba(245,124,0,0.45)] transition hover:scale-105 hover:bg-orange-400"
+          className="flex items-center gap-3 rounded-full border border-white/20 bg-orange-500 px-5 py-4 text-white shadow-[0_18px_44px_rgba(245,124,0,0.45)] transition hover:scale-105 hover:bg-orange-400"
           aria-label="Open live chat"
         >
-          <MessageCircle className="h-7 w-7" />
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
+            <MessageCircle className="h-6 w-6" />
+          </span>
+          <span className="text-left">
+            <span className="block text-[10px] font-black uppercase tracking-[0.22em] text-white/75">Need Help?</span>
+            <span className="block text-sm font-black uppercase tracking-[0.16em]">Live Chat</span>
+          </span>
         </button>
       </div>
     </main>
