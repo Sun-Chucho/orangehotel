@@ -7,12 +7,34 @@ import { sanitizeForStorage } from "@/app/lib/storage-sanitize";
 
 // ── Connectivity monitoring ─────────────────────────────────────────────────
 let _isConnected = false;
+let _firebaseRealtimeConnected = false;
 const _connectionListeners = new Set<(connected: boolean) => void>();
 const _lastSyncedAt: Record<string, number> = {};
 
+function hasRecentSyncSuccess() {
+  const latestSync = Math.max(0, ...Object.values(_lastSyncedAt));
+  return latestSync > 0 && Date.now() - latestSync < 120000;
+}
+
+function getEffectiveConnectionState() {
+  if (_firebaseRealtimeConnected) return true;
+  if (hasRecentSyncSuccess()) return true;
+  if (typeof window !== "undefined" && window.navigator.onLine && Object.keys(_lastSyncedAt).length > 0) return true;
+  return false;
+}
+
 function emitConnectionState(connected: boolean) {
-  _isConnected = connected;
+  _firebaseRealtimeConnected = connected;
+  _isConnected = getEffectiveConnectionState();
   _connectionListeners.forEach((fn) => fn(_isConnected));
+}
+
+function markSyncHealthy(key?: string) {
+  if (key) {
+    _lastSyncedAt[key] = Date.now();
+  }
+  _isConnected = true;
+  _connectionListeners.forEach((fn) => fn(true));
 }
 
 async function fetchServerSyncedStorageValue<T>(key: string): Promise<T | null> {
@@ -59,7 +81,8 @@ if (typeof window !== "undefined") {
       });
     })
     .catch((error) => {
-      emitConnectionState(window.navigator.onLine);
+      _isConnected = window.navigator.onLine;
+      _connectionListeners.forEach((fn) => fn(_isConnected));
       console.error("Firebase connection monitoring failed", error);
     });
 }
@@ -70,7 +93,7 @@ export function isFirebaseConnected() {
 
 export function subscribeToConnectionStatus(onChange: (connected: boolean) => void) {
   _connectionListeners.add(onChange);
-  onChange(_isConnected || (typeof window !== "undefined" ? window.navigator.onLine : false));
+  onChange(_isConnected || getEffectiveConnectionState() || (typeof window !== "undefined" ? window.navigator.onLine : false));
   return () => {
     _connectionListeners.delete(onChange);
   };
@@ -367,15 +390,13 @@ export function syncStorageValueToFirebase<T>(key: string, value: T) {
   void ensureFirebaseAuthReady()
     .then(() => set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue))
     .then(() => {
-      emitConnectionState(true);
-      _lastSyncedAt[key] = Date.now();
+      markSyncHealthy(key);
     })
     .catch(async (error) => {
       console.error(`Firebase sync failed for ${key}`, error);
       try {
         await writeServerSyncedStorageValue(key, sanitizedValue);
-        emitConnectionState(true);
-        _lastSyncedAt[key] = Date.now();
+        markSyncHealthy(key);
       } catch (serverError) {
         emitConnectionState(false);
         console.error(`Server sync fallback failed for ${key}`, serverError);
@@ -417,8 +438,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
       await set(ref(firebaseDatabase, toStoragePath(key)), sanitizedPreferredValue);
     }
 
-    emitConnectionState(true);
-    _lastSyncedAt[key] = Date.now();
+    markSyncHealthy(key);
   } catch (error) {
     console.error(`Firebase hydrate failed for ${key}`, error);
     try {
@@ -427,8 +447,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
         localStorage.setItem(key, JSON.stringify(remoteValue));
         mirrorCanonicalStateToLegacyLocal(key, remoteValue);
       }
-      emitConnectionState(true);
-      _lastSyncedAt[key] = Date.now();
+      markSyncHealthy(key);
     } catch (serverError) {
       emitConnectionState(false);
       console.error(`Server hydrate fallback failed for ${key}`, serverError);
@@ -489,7 +508,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
               mirrorCanonicalStateToLegacyLocal(key, fallbackValue);
               void set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue).catch(() => undefined);
               onChange(fallbackValue);
-              emitConnectionState(true);
+              markSyncHealthy(key);
               return;
             }
             readSnapshotValue<T>(key, null, onChange);
@@ -498,7 +517,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
           const nextValue = sanitizeForStorage(snapshot.val() as T);
           mirrorCanonicalStateToLegacyLocal(key, nextValue);
           readSnapshotValue<T>(key, nextValue, onChange);
-          emitConnectionState(true);
+          markSyncHealthy(key);
         },
         (error) => {
           emitConnectionState(false);
@@ -521,7 +540,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
         mirrorCanonicalStateToLegacyLocal(key, remoteValue);
         onChange(remoteValue);
       }
-      emitConnectionState(true);
+      markSyncHealthy(key);
     } catch {
       // Keep polling silently; direct Firebase listener or next successful poll will recover status.
     }
@@ -542,11 +561,11 @@ export function removeStorageValueFromFirebase(key: string) {
   if (typeof window === "undefined") return;
   void ensureFirebaseAuthReady()
     .then(() => remove(ref(firebaseDatabase, toStoragePath(key))))
-    .then(() => emitConnectionState(true))
+    .then(() => markSyncHealthy(key))
     .catch((error) => {
       console.error(`Firebase remove failed for ${key}`, error);
       void removeServerSyncedStorageValue(key)
-        .then(() => emitConnectionState(true))
+        .then(() => markSyncHealthy(key))
         .catch((serverError) => {
           emitConnectionState(false);
           console.error(`Server sync delete fallback failed for ${key}`, serverError);
@@ -566,10 +585,10 @@ export async function clearFirebaseBusinessState() {
   try {
     await ensureFirebaseAuthReady();
     await Promise.all([...FIREBASE_SYNC_KEYS, ...LEGACY_DEMO_KEYS].map((key) => remove(ref(firebaseDatabase, toStoragePath(key))).catch(() => null)));
-    emitConnectionState(true);
+    markSyncHealthy();
   } catch {
     await Promise.all([...FIREBASE_SYNC_KEYS, ...LEGACY_DEMO_KEYS].map((key) => removeServerSyncedStorageValue(key).catch(() => null)));
-    emitConnectionState(true);
+    markSyncHealthy();
   }
 }
 
@@ -642,7 +661,7 @@ export async function getRemoteRecordCounts(): Promise<Record<string, number>> {
         }
       }),
     );
-    emitConnectionState(true);
+    markSyncHealthy();
   } catch {
     await Promise.all(
       FIREBASE_SYNC_KEYS.map(async (key) => {
@@ -668,15 +687,12 @@ export async function wipeStorageCategory(key: string) {
   try {
     await ensureFirebaseAuthReady();
     await set(ref(firebaseDatabase, toStoragePath(key)), defaultValue);
-    emitConnectionState(true);
+    markSyncHealthy(key);
   } catch {
     await writeServerSyncedStorageValue(key, defaultValue);
-    emitConnectionState(true);
+    markSyncHealthy(key);
   }
-  
-  // Update last synced
-  _lastSyncedAt[key] = Date.now();
-  
+
   // Trigger local state updates
   window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
 }

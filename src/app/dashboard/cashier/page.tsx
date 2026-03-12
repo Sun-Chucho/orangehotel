@@ -1,22 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ROOMS, Room } from "@/app/lib/mock-data";
 import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
-import {
-  markWebsiteBookingsSeen,
-  readWebsiteBookings,
-  STORAGE_WEBSITE_BOOKINGS,
-  type WebsiteBookingRecord,
-  writeWebsiteBookings,
-} from "@/app/lib/website-bookings";
-import {
-  appendLiveChatMessage,
-  markThreadSeenByReception,
-  readLiveChatThreads,
-  STORAGE_LIVE_CHAT,
-  type LiveChatThread,
-} from "@/app/lib/live-chat";
 import { HISTORICAL_BOOKINGS } from "@/app/lib/seed-bookings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, MessageCircle, Phone, Receipt, Send, User } from "lucide-react";
+import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { toast } from "@/hooks/use-toast";
@@ -39,7 +25,7 @@ import { readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storag
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
-type TransactionTab = "completed" | "credit" | "website" | "live-chat";
+type TransactionTab = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
 type BookingCurrency = "TSh" | "$";
@@ -144,12 +130,7 @@ export default function BookingPage() {
 
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
-  const [websiteBookings, setWebsiteBookings] = useState<WebsiteBookingRecord[]>([]);
-  const [liveChats, setLiveChats] = useState<LiveChatThread[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [receptionReply, setReceptionReply] = useState("");
   const [receiptSeq, setReceiptSeq] = useState(84920);
-  const previousWebsiteBookingIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const applyCashierSnapshot = () => {
@@ -182,8 +163,6 @@ export default function BookingPage() {
 
     applyCashierSnapshot();
     setRooms(readRoomsState());
-    setWebsiteBookings(readWebsiteBookings());
-    setLiveChats(readLiveChatThreads());
 
     const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
       applyCashierSnapshot();
@@ -191,21 +170,10 @@ export default function BookingPage() {
     const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
       setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
     });
-    const unsubscribeWebsiteBookings = subscribeToSyncedStorageKey<WebsiteBookingRecord[]>(
-      STORAGE_WEBSITE_BOOKINGS,
-      (value) => {
-        setWebsiteBookings(Array.isArray(value) ? value : readWebsiteBookings());
-      },
-    );
-    const unsubscribeLiveChat = subscribeToSyncedStorageKey<LiveChatThread[]>(STORAGE_LIVE_CHAT, (value) => {
-      setLiveChats(Array.isArray(value) ? value : readLiveChatThreads());
-    });
 
     return () => {
       unsubscribeCashier();
       unsubscribeRooms();
-      unsubscribeWebsiteBookings();
-      unsubscribeLiveChat();
     };
   }, []);
 
@@ -213,27 +181,10 @@ export default function BookingPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const requestedTab = params.get("tab");
-    if (requestedTab === "completed" || requestedTab === "credit" || requestedTab === "website" || requestedTab === "live-chat") {
+    if (requestedTab === "completed" || requestedTab === "credit") {
       setTransactionTab(requestedTab);
     }
   }, []);
-
-  useEffect(() => {
-    const previousIds = previousWebsiteBookingIdsRef.current;
-
-    if (previousIds.length > 0) {
-      const newBookings = websiteBookings.filter((booking) => !previousIds.includes(booking.id));
-      if (newBookings.length > 0) {
-        const latestBooking = newBookings[0];
-        toast({
-          title: "New website booking",
-          description: `${latestBooking.fullName} requested a ${latestBooking.roomType} room.`,
-        });
-      }
-    }
-
-    previousWebsiteBookingIdsRef.current = websiteBookings.map((booking) => booking.id);
-  }, [websiteBookings]);
 
   const nights = useMemo(() => daysBetween(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
   const packageConfig = selectedPackage === "none" ? null : SPECIAL_PACKAGES[selectedPackage];
@@ -266,18 +217,6 @@ export default function BookingPage() {
   const creditTransactions = useMemo(
     () => transactions.filter((tx) => tx.status === "credit"),
     [transactions],
-  );
-  const unreadWebsiteBookings = useMemo(
-    () => websiteBookings.filter((booking) => booking.status === "new"),
-    [websiteBookings],
-  );
-  const unreadLiveChats = useMemo(
-    () => liveChats.filter((thread) => thread.unreadByReception > 0 && thread.status === "open"),
-    [liveChats],
-  );
-  const activeLiveChat = useMemo(
-    () => liveChats.find((thread) => thread.id === activeChatId) ?? liveChats[0] ?? null,
-    [activeChatId, liveChats],
   );
   const activeBookedRoomNumbers = useMemo(
     () => new Set(transactions.filter((tx) => tx.status !== "checked-out").map((tx) => tx.roomNumber)),
@@ -346,24 +285,6 @@ export default function BookingPage() {
       canBook: true,
       className: "border-green-500 bg-green-50 text-green-700",
     };
-  };
-
-  const markWebsiteBookingsAsSeen = (bookingIds?: string[]) => {
-    const nextWebsiteBookings = markWebsiteBookingsSeen(websiteBookings, bookingIds);
-    setWebsiteBookings(nextWebsiteBookings);
-    writeWebsiteBookings(nextWebsiteBookings);
-  };
-
-  const openReceptionChat = (threadId: string) => {
-    setActiveChatId(threadId);
-    markThreadSeenByReception(threadId);
-  };
-
-  const sendReceptionReply = () => {
-    if (!activeLiveChat || !receptionReply.trim()) return;
-    appendLiveChatMessage(activeLiveChat.id, "reception", receptionReply);
-    markThreadSeenByReception(activeLiveChat.id);
-    setReceptionReply("");
   };
 
   const resetBookingForm = () => {
@@ -551,12 +472,6 @@ export default function BookingPage() {
             TSh {todayRevenueTSh.toLocaleString()} Today
           </Badge>
         </div>
-        <Badge variant="outline" className="h-10 px-4 justify-center border-amber-500 text-amber-700 font-black uppercase text-[10px] tracking-widest bg-amber-50">
-          {unreadWebsiteBookings.length} Website Booking{unreadWebsiteBookings.length === 1 ? "" : "s"} New
-        </Badge>
-        <Badge variant="outline" className="h-10 px-4 justify-center border-emerald-500 text-emerald-700 font-black uppercase text-[10px] tracking-widest bg-emerald-50">
-          {unreadLiveChats.length} Live Chat{unreadLiveChats.length === 1 ? "" : "s"} New
-        </Badge>
       </header>
       {isDirector && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
@@ -716,138 +631,14 @@ export default function BookingPage() {
               <TabsList className="h-10">
                 <TabsTrigger value="completed" className="text-[10px] font-black uppercase tracking-widest">Completed Transactions</TabsTrigger>
                 <TabsTrigger value="credit" className="text-[10px] font-black uppercase tracking-widest">Credit Transactions</TabsTrigger>
-                <TabsTrigger value="website" className="text-[10px] font-black uppercase tracking-widest">
-                  Website Booking {unreadWebsiteBookings.length > 0 ? `(${unreadWebsiteBookings.length})` : ""}
-                </TabsTrigger>
-                <TabsTrigger value="live-chat" className="text-[10px] font-black uppercase tracking-widest">
-                  Live Chat {unreadLiveChats.length > 0 ? `(${unreadLiveChats.length})` : ""}
-                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {transactionTab === "live-chat" && (
-            <div className="grid min-h-[560px] md:grid-cols-[320px_1fr]">
-              <div className="border-r bg-muted/10">
-                <div className="border-b px-5 py-4">
-                  <p className="text-sm font-black uppercase tracking-widest">Reception Live Chat</p>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">Website conversations appear here and update live.</p>
-                </div>
-                <div className="max-h-[500px] overflow-y-auto">
-                  {liveChats.map((thread) => (
-                    <button
-                      key={thread.id}
-                      type="button"
-                      onClick={() => openReceptionChat(thread.id)}
-                      className={`w-full border-b px-5 py-4 text-left transition hover:bg-white ${activeLiveChat?.id === thread.id ? "bg-white" : "bg-transparent"}`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black">{thread.guestName}</p>
-                          <p className="mt-1 text-xs font-bold text-muted-foreground">{thread.guestContact || "Website guest"}</p>
-                        </div>
-                        {thread.unreadByReception > 0 ? (
-                          <Badge className="bg-orange-500 text-white hover:bg-orange-500">{thread.unreadByReception}</Badge>
-                        ) : null}
-                      </div>
-                      <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
-                        {thread.messages[thread.messages.length - 1]?.text ?? "No messages yet"}
-                      </p>
-                    </button>
-                  ))}
-                  {liveChats.length === 0 && (
-                    <div className="px-5 py-10 text-center opacity-40">
-                      <MessageCircle className="mx-auto mb-3 h-10 w-10" />
-                      <p className="text-xs font-black uppercase tracking-widest">No live chats yet</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex min-h-[560px] flex-col">
-                {activeLiveChat ? (
-                  <>
-                    <div className="border-b px-5 py-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-lg font-black">{activeLiveChat.guestName}</p>
-                          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                            {activeLiveChat.guestContact || "Website guest"} | {activeLiveChat.status}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="font-black uppercase text-[10px] tracking-widest">
-                          {activeLiveChat.messages.length} Messages
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-3 overflow-y-auto bg-[#f8f6f3] px-5 py-5">
-                      {activeLiveChat.messages.map((message) => (
-                        <div key={message.id} className={`flex ${message.sender === "reception" ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.sender === "reception" ? "bg-orange-500 text-white" : "bg-white text-black shadow-sm"}`}>
-                            <p>{message.text}</p>
-                            <p className={`mt-2 text-[10px] font-black uppercase tracking-widest ${message.sender === "reception" ? "text-white/70" : "text-muted-foreground"}`}>
-                              {message.sender} | {new Date(message.createdAt).toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="border-t bg-white px-5 py-4">
-                      <div className="flex items-end gap-2">
-                        <textarea
-                          rows={2}
-                          value={receptionReply}
-                          onChange={(event) => setReceptionReply(event.target.value)}
-                          placeholder="Reply to guest..."
-                          className="min-h-[48px] flex-1 resize-none rounded-2xl border border-black/10 px-4 py-3 text-sm outline-none ring-orange-500 transition focus:ring-2"
-                        />
-                        <Button onClick={sendReceptionReply} disabled={!receptionReply.trim()} className="h-12 rounded-2xl px-4">
-                          <Send className="mr-2 h-4 w-4" /> Send
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-1 items-center justify-center text-center opacity-40">
-                    <div>
-                      <MessageCircle className="mx-auto mb-3 h-12 w-12" />
-                      <p className="text-xs font-black uppercase tracking-widest">Select a live chat to reply</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {transactionTab === "website" && (
-            <div className="border-b bg-amber-50/60 px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-black uppercase tracking-widest text-amber-800">Website Booking Requests</p>
-                <p className="text-xs font-bold text-amber-700">New landing-page bookings sync here for Reception follow-up.</p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => markWebsiteBookingsAsSeen()}
-                disabled={unreadWebsiteBookings.length === 0}
-                className="h-10 font-black uppercase text-[10px] tracking-widest border-amber-500 text-amber-800"
-              >
-                Mark All Seen
-              </Button>
-            </div>
-          )}
           <Table>
             <TableHeader className="bg-muted/10">
               <TableRow>
-                {transactionTab === "website" ? (
-                  <>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Reference</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Stay</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Contact</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
-                  </>
-                ) : (
-                  <>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Room #</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Guest Name</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Check-In Date</TableHead>
@@ -855,56 +646,10 @@ export default function BookingPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Checked By</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right">Action</TableHead>
-                  </>
-                )}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactionTab === "website" &&
-                websiteBookings.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell className="font-black">{booking.bookingReference}</TableCell>
-                    <TableCell className="font-bold">
-                      <p>{booking.fullName}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                        {booking.guests} Guest{booking.guests === 1 ? "" : "s"} | {booking.roomType}
-                      </p>
-                    </TableCell>
-                    <TableCell className="font-bold">
-                      <p>{booking.checkIn} to {booking.checkOut}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                        {booking.nights} Night{booking.nights === 1 ? "" : "s"} | TZS {booking.totalAmount.toLocaleString()}
-                      </p>
-                    </TableCell>
-                    <TableCell className="font-bold">
-                      <p>{booking.phone}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">{booking.email}</p>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col items-start gap-2">
-                        <Badge className={booking.status === "new" ? "bg-amber-500 text-black hover:bg-amber-500" : "bg-emerald-600 text-white hover:bg-emerald-600"}>
-                          {booking.status === "new" ? "New" : "Seen"}
-                        </Badge>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                          {new Date(booking.createdAt).toLocaleString()}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        onClick={() => markWebsiteBookingsAsSeen([booking.id])}
-                        disabled={booking.status === "seen"}
-                        className="h-9 font-black uppercase text-[10px] tracking-widest"
-                      >
-                        Mark Seen
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-
-              {transactionTab !== "website" && transactionTab !== "live-chat" &&
-                (transactionTab === "completed" ? completedTransactions : creditTransactions).map((tx) => (
+              {(transactionTab === "completed" ? completedTransactions : creditTransactions).map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell className="font-black">{tx.roomNumber}</TableCell>
                   <TableCell className="font-bold">{tx.guestName}</TableCell>
@@ -962,16 +707,13 @@ export default function BookingPage() {
                 </TableRow>
               ))}
 
-              {((transactionTab === "website" && websiteBookings.length === 0) ||
-                (transactionTab !== "website" &&
-                  transactionTab !== "live-chat" &&
-                  (transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0)) && (
+              {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">
-                        {transactionTab === "website" ? "No website bookings found" : "No bookings found"}
+                        No bookings found
                       </p>
                     </div>
                   </TableCell>

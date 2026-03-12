@@ -18,6 +18,8 @@ import {
   Settings,
   Building2,
   FileSpreadsheet,
+  MessageCircle,
+  MonitorSmartphone,
   LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,6 +44,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: ['manager', 'director'] },
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['director', 'kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
+  { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['manager', 'director', 'cashier'] },
+  { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['manager', 'director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
@@ -50,7 +54,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
-  cashier: ['/dashboard/cashier'],
+  cashier: ['/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat'],
   kitchen: ['/dashboard/kitchen'],
   barista: ['/dashboard/barista'],
 };
