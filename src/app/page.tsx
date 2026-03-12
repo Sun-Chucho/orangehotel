@@ -13,6 +13,14 @@ const INVENTORY = {
 } as const;
 
 type RoomType = "standard" | "platinum";
+type HighlightStory = {
+  title: string;
+  tag: string;
+  image: string;
+  images: readonly string[];
+  eyebrow: string;
+  description: string;
+};
 
 const formatTzs = (value: number) =>
   new Intl.NumberFormat("en-TZ", {
@@ -57,12 +65,22 @@ const RESTAURANT_IMAGES = [
   "https://i.postimg.cc/prTQSyJr/2Q6A9990.jpg",
 ] as const;
 
+const MAIN_ROOM_IMAGE = "https://i.postimg.cc/v86MCy3K/Q6A0194.jpg";
+
+const ROOM_IMAGES = [
+  MAIN_ROOM_IMAGE,
+  "https://i.postimg.cc/dVCqdYTY/Q6A0359.jpg",
+  "https://i.postimg.cc/WpQp4zhy/P1200562-Enhanced-NR.jpg",
+  "https://i.postimg.cc/RCjC0hWC/P1200571.jpg",
+  "https://i.postimg.cc/4yH0MJGV/Q6A0578-Enhanced-NR.jpg",
+  "https://i.postimg.cc/7L6r9r5S/Q6A0199.jpg",
+] as const;
+
 const destinationCards = [
   {
     title: "Luxury Rooms",
     description: "Elegant Standard and Platinum stays designed for rest, privacy, and comfort.",
-    image:
-      "https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?auto=format&fit=crop&w=900&q=80",
+    image: MAIN_ROOM_IMAGE,
   },
   {
     title: "Signature Restaurant",
@@ -81,22 +99,30 @@ const destinationCards = [
   },
 ];
 
-const stories = [
+const stories: HighlightStory[] = [
   {
     title: "Chef Specials This Week",
     tag: "Restaurant",
     image: BREAKFAST_IMAGES[0],
+    images: [...BREAKFAST_IMAGES, ...LUNCH_IMAGES],
+    eyebrow: "Breakfast To Lunch",
+    description: "Start the morning with fresh breakfast plates, then move into colorful lunch service prepared for hotel guests, business visitors, and private diners.",
   },
   {
     title: "Platinum Room Experience",
     tag: "Hotel",
-    image:
-      "https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=700&q=80",
+    image: ROOM_IMAGES[1],
+    images: ROOM_IMAGES,
+    eyebrow: "Luxury Stay",
+    description: "Quiet rooms, polished interiors, and comfortable finishes shape a stay experience that feels calm, private, and consistently premium.",
   },
   {
     title: "Friday Bar Nights",
     tag: "Bar & Lounge",
     image: BAR_IMAGES[0],
+    images: BAR_IMAGES,
+    eyebrow: "Lounge Moments",
+    description: "Signature bottles, rich ambience, and a polished evening setting make the bar one of the most memorable spaces in the hotel.",
   },
 ];
 
@@ -105,7 +131,10 @@ export default function Home() {
   const [chefStoryIndex, setChefStoryIndex] = useState(0);
   const [barStoryIndex, setBarStoryIndex] = useState(0);
   const [barStoryHovered, setBarStoryHovered] = useState(false);
+  const [roomStoryIndex, setRoomStoryIndex] = useState(0);
   const [restaurantShowcaseIndex, setRestaurantShowcaseIndex] = useState(0);
+  const [activeStory, setActiveStory] = useState<HighlightStory | null>(null);
+  const [activeStorySlide, setActiveStorySlide] = useState(0);
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -152,6 +181,24 @@ export default function Home() {
 
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setRoomStoryIndex((current) => (current + 1) % (ROOM_IMAGES.length - 1));
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!activeStory) return;
+
+    const interval = window.setInterval(() => {
+      setActiveStorySlide((current) => (current + 1) % activeStory.images.length);
+    }, 2400);
+
+    return () => window.clearInterval(interval);
+  }, [activeStory]);
 
   const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
 
@@ -355,13 +402,18 @@ export default function Home() {
           {stories.map((story) => {
             const isBarStory = story.tag === "Bar & Lounge";
             const isRestaurantStory = story.tag === "Restaurant";
+            const isHotelStory = story.tag === "Hotel";
 
             return (
               <article
                 key={story.title}
-                className="group relative min-h-[280px] overflow-hidden rounded-sm"
+                className="group relative min-h-[280px] overflow-hidden rounded-sm cursor-pointer"
                 onMouseEnter={isBarStory ? () => setBarStoryHovered(true) : undefined}
                 onMouseLeave={isBarStory ? () => setBarStoryHovered(false) : undefined}
+                onClick={() => {
+                  setActiveStory(story);
+                  setActiveStorySlide(0);
+                }}
               >
                 {isBarStory ? (
                   <div className="absolute inset-0">
@@ -387,6 +439,18 @@ export default function Home() {
                       />
                     ))}
                   </div>
+                ) : isHotelStory ? (
+                  <div className="absolute inset-0">
+                    {ROOM_IMAGES.slice(1).map((image, index) => (
+                      <Image
+                        key={image}
+                        src={image}
+                        alt={`${story.title} ${index + 1}`}
+                        fill
+                        className={`object-cover transition-all duration-1000 ${roomStoryIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
+                      />
+                    ))}
+                  </div>
                 ) : (
                   <Image src={story.image} alt={story.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
                 )}
@@ -394,12 +458,88 @@ export default function Home() {
                 <div className="absolute bottom-4 left-4 right-4 text-white">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200">{story.tag}</p>
                   <h3 className="mt-2 font-headline text-2xl leading-tight">{story.title}</h3>
+                  <p className="mt-3 inline-flex items-center border-b border-white/50 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85 transition group-hover:text-orange-200">
+                    Open Story
+                  </p>
                 </div>
               </article>
             );
           })}
         </div>
       </section>
+
+      {activeStory ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md" onClick={() => setActiveStory(null)}>
+          <div className="grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-[#111111] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:grid-cols-[1.1fr_0.9fr]" onClick={(event) => event.stopPropagation()}>
+            <div className="relative min-h-[340px] md:min-h-[620px]">
+              {activeStory.images.map((image, index) => (
+                <Image
+                  key={image}
+                  src={image}
+                  alt={`${activeStory.title} ${index + 1}`}
+                  fill
+                  className={`object-cover transition-all duration-1000 ${activeStorySlide === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
+                />
+              ))}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6 flex gap-2">
+                {activeStory.images.map((image, index) => (
+                  <button
+                    key={`${image}-dot`}
+                    type="button"
+                    onClick={() => setActiveStorySlide(index)}
+                    className={`h-1.5 flex-1 rounded-full transition ${activeStorySlide === index ? "bg-orange-400" : "bg-white/30 hover:bg-white/50"}`}
+                    aria-label={`Show slide ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col justify-between p-6 md:p-10">
+              <div>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">{activeStory.tag}</p>
+                    <h3 className="mt-3 font-headline text-4xl leading-tight">{activeStory.title}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveStory(null)}
+                    className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/70 transition hover:border-white/40 hover:text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+                <p className="mt-6 text-[11px] font-black uppercase tracking-[0.22em] text-orange-200">{activeStory.eyebrow}</p>
+                <p className="mt-3 max-w-md text-sm leading-7 text-white/80">{activeStory.description}</p>
+                <div className="mt-8 space-y-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-200">Why Guests Notice It</p>
+                    <p className="mt-2 text-sm leading-6 text-white/78">
+                      Real spaces, strong atmosphere, and a visual style that feels memorable from the first glance to the final impression.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-200">Orange Hotel Promise</p>
+                    <p className="mt-2 text-sm leading-6 text-white/78">
+                      Designed to attract attention online and give guests a clear sense of the experience waiting inside the hotel.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Slide {activeStorySlide + 1} / {activeStory.images.length}</p>
+                <button
+                  type="button"
+                  onClick={() => setActiveStory(null)}
+                  className="rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
+                >
+                  Back To Landing Page
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="rounded-sm bg-[#1c1c1c] px-6 py-16 text-center text-white md:px-10">
@@ -413,15 +553,27 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
-        <div className="grid rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
-          <div className="px-8 py-12 text-center">
+        <div className="grid overflow-hidden rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
+          <div className="relative min-h-[260px] px-8 py-12 text-center">
+            <Image src={MAIN_ROOM_IMAGE} alt="Orange Hotel luxury room" fill className="object-cover" />
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Comfortable Stays</h3>
+            </div>
           </div>
-          <div className="border-y border-white/20 px-8 py-12 text-center md:border-x md:border-y-0">
+          <div className="relative min-h-[260px] border-y border-white/20 px-8 py-12 text-center md:border-x md:border-y-0">
+            <Image src={LUNCH_IMAGES[2]} alt="Orange Hotel dining" fill className="object-cover" />
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Great Dining</h3>
+            </div>
           </div>
-          <div className="px-8 py-12 text-center">
+          <div className="relative min-h-[260px] px-8 py-12 text-center">
+            <Image src={BAR_IMAGES[1]} alt="Orange Hotel bar" fill className="object-cover" />
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Evening Bar Vibes</h3>
+            </div>
           </div>
         </div>
       </section>
