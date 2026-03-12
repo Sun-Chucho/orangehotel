@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import Image, { type ImageProps } from "next/image";
 import Link from "next/link";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, LoaderCircle, MapPin, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
@@ -30,6 +30,10 @@ type HighlightStory = {
   eyebrow: string;
   description: string;
 };
+
+function LandingImage(props: ImageProps) {
+  return <Image {...props} unoptimized />;
+}
 
 const formatTzs = (value: number) =>
   new Intl.NumberFormat("en-TZ", {
@@ -357,7 +361,7 @@ export default function Home() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/20 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <Link href="/" className="flex items-center gap-3 text-white">
-            <Image src="/logo.jpeg" alt="Orange Hotel logo" width={42} height={42} className="rounded-lg border border-white/40" priority />
+            <LandingImage src="/logo.jpeg" alt="Orange Hotel logo" width={42} height={42} className="rounded-lg border border-white/40" priority />
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] text-white/70">Orange Hotel</p>
               <p className="font-headline text-lg leading-none">Signature Stay</p>
@@ -434,7 +438,7 @@ export default function Home() {
           {destinationCards.map((card) => (
             <article key={card.title} className="group overflow-hidden rounded-sm bg-white shadow-[0_18px_35px_rgba(0,0,0,0.08)]">
               <div className="relative h-64">
-                <Image src={card.image} alt={card.title} fill sizes="(max-width: 768px) 100vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" />
+                <LandingImage src={card.image} alt={card.title} fill sizes="(max-width: 768px) 100vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4 text-white">
                   <h3 className="font-headline text-2xl leading-tight">{card.title}</h3>
@@ -448,7 +452,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="relative h-[360px] overflow-hidden rounded-sm">
-          <Image
+          <LandingImage
             key={RESTAURANT_IMAGES[restaurantShowcaseIndex]}
             src={RESTAURANT_IMAGES[restaurantShowcaseIndex]}
             alt={`Orange Hotel restaurant ${restaurantShowcaseIndex + 1}`}
@@ -485,7 +489,7 @@ export default function Home() {
                 }}
               >
                 {isBarStory ? (
-                  <Image
+                  <LandingImage
                     key={BAR_IMAGES[barStoryIndex]}
                     src={BAR_IMAGES[barStoryIndex]}
                     alt={`${story.title} ${barStoryIndex + 1}`}
@@ -494,7 +498,7 @@ export default function Home() {
                     className="object-cover transition-all duration-700"
                   />
                 ) : isRestaurantStory ? (
-                  <Image
+                  <LandingImage
                     key={chefImages[chefStoryIndex]}
                     src={chefImages[chefStoryIndex]}
                     alt={`${story.title} ${chefStoryIndex + 1}`}
@@ -503,7 +507,7 @@ export default function Home() {
                     className="object-cover transition-all duration-700"
                   />
                 ) : isHotelStory ? (
-                  <Image
+                  <LandingImage
                     key={ROOM_IMAGES.slice(1)[roomStoryIndex]}
                     src={ROOM_IMAGES.slice(1)[roomStoryIndex]}
                     alt={`${story.title} ${roomStoryIndex + 1}`}
@@ -512,7 +516,7 @@ export default function Home() {
                     className="object-cover transition-all duration-700"
                   />
                 ) : (
-                  <Image src={story.image} alt={story.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105" />
+                  <LandingImage src={story.image} alt={story.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -532,7 +536,7 @@ export default function Home() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md" onClick={() => setActiveStory(null)}>
           <div className="grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-[#111111] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:grid-cols-[1.1fr_0.9fr]" onClick={(event) => event.stopPropagation()}>
             <div className="relative min-h-[340px] md:min-h-[620px]">
-              <Image
+              <LandingImage
                 key={activeStory.images[activeStorySlide]}
                 src={activeStory.images[activeStorySlide]}
                 alt={`${activeStory.title} ${activeStorySlide + 1}`}
@@ -661,7 +665,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="relative overflow-hidden rounded-sm px-6 py-16 text-center text-white md:px-10">
-          <Image
+          <LandingImage
             key={experienceImages[experienceShowcaseIndex]}
             src={experienceImages[experienceShowcaseIndex]}
             alt={`Orange Experience ${experienceShowcaseIndex + 1}`}
@@ -684,21 +688,21 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="grid overflow-hidden rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
           <div className="relative min-h-[260px] px-8 py-12 text-center">
-            <Image src={MAIN_ROOM_IMAGE} alt="Orange Hotel luxury room" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
+            <LandingImage src={MAIN_ROOM_IMAGE} alt="Orange Hotel luxury room" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Comfortable Stays</h3>
             </div>
           </div>
           <div className="relative min-h-[260px] border-y border-white/20 px-8 py-12 text-center md:border-x md:border-y-0">
-            <Image src={LUNCH_IMAGES[2]} alt="Orange Hotel dining" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
+            <LandingImage src={LUNCH_IMAGES[2]} alt="Orange Hotel dining" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Great Dining</h3>
             </div>
           </div>
           <div className="relative min-h-[260px] px-8 py-12 text-center">
-            <Image src={BAR_IMAGES[1]} alt="Orange Hotel bar" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
+            <LandingImage src={BAR_IMAGES[1]} alt="Orange Hotel bar" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Evening Bar Vibes</h3>
@@ -832,6 +836,7 @@ export default function Home() {
             <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Contact</p>
             <p className="mt-3 text-sm text-white/80">orangehotelarusha.com</p>
             <p className="text-sm text-white/80">+255702693911</p>
+            <p className="text-sm text-white/80">Instagram: orangehotelarusha</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Quick Links</p>
