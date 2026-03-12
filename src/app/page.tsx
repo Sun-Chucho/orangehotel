@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, LoaderCircle, MapPin, ShieldCheck, Star } from "lucide-react";
 import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 
@@ -28,6 +28,35 @@ const dayDiff = (checkIn: string, checkOut: string) => {
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 };
 
+const BAR_IMAGES = [
+  "https://i.postimg.cc/8sQNjf5J/P1200060.jpg",
+  "https://i.postimg.cc/gj926Tt2/Q6A0790-Enhanced-NR.jpg",
+  "https://i.postimg.cc/k4Sn9yMQ/Q6A0679-Enhanced-NR-1.jpg",
+] as const;
+
+const BREAKFAST_IMAGES = [
+  "https://i.postimg.cc/Hsz8fTPt/Q6A0206.jpg",
+  "https://i.postimg.cc/N0msv4jj/Q6A0216.jpg",
+] as const;
+
+const LUNCH_IMAGES = [
+  "https://i.postimg.cc/gjqsC1fT/P1200333-Enhanced-NR.jpg",
+  "https://i.postimg.cc/xjK6NbcR/P1201108.jpg",
+  "https://i.postimg.cc/wMc2CnSW/Q6A0488-Enhanced-NR.jpg",
+  "https://i.postimg.cc/mgdX2fhp/Q6A0494-Enhanced-NR.jpg",
+  "https://i.postimg.cc/YS5xhp7Z/P1201042.jpg",
+  "https://i.postimg.cc/Hkj0zJkD/P1200326.jpg",
+  "https://i.postimg.cc/PrXQL3gK/P1200978-Enhanced-NR.jpg",
+  "https://i.postimg.cc/NF48JmHR/P1200980.jpg",
+] as const;
+
+const RESTAURANT_IMAGES = [
+  "https://i.postimg.cc/13PXR2b5/P1200213.jpg",
+  "https://i.postimg.cc/mrgrCMLL/DJI-0323-Enhanced-NR.jpg",
+  "https://i.postimg.cc/hjJP3BQw/2Q6A0033.jpg",
+  "https://i.postimg.cc/prTQSyJr/2Q6A9990.jpg",
+] as const;
+
 const destinationCards = [
   {
     title: "Luxury Rooms",
@@ -38,20 +67,17 @@ const destinationCards = [
   {
     title: "Signature Restaurant",
     description: "Fresh breakfast, lunch, and dinner menus prepared by our in-house culinary team.",
-    image:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
+    image: RESTAURANT_IMAGES[0],
   },
   {
     title: "Cocktail Bar",
     description: "A refined evening bar experience with classic pours, mocktails, and lounge service.",
-    image:
-      "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=900&q=80",
+    image: BAR_IMAGES[2],
   },
   {
     title: "Events & Private Dining",
     description: "Host business dinners, celebrations, and group bookings with curated service options.",
-    image:
-      "https://images.unsplash.com/photo-1569949381669-ecf31ae8e613?auto=format&fit=crop&w=900&q=80",
+    image: RESTAURANT_IMAGES[3],
   },
 ];
 
@@ -59,8 +85,7 @@ const stories = [
   {
     title: "Chef Specials This Week",
     tag: "Restaurant",
-    image:
-      "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=900&q=80",
+    image: BREAKFAST_IMAGES[0],
   },
   {
     title: "Platinum Room Experience",
@@ -71,12 +96,16 @@ const stories = [
   {
     title: "Friday Bar Nights",
     tag: "Bar & Lounge",
-    image:
-      "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=700&q=80",
+    image: BAR_IMAGES[0],
   },
 ];
 
 export default function Home() {
+  const [heroVideoFade, setHeroVideoFade] = useState(0);
+  const [chefStoryIndex, setChefStoryIndex] = useState(0);
+  const [barStoryIndex, setBarStoryIndex] = useState(0);
+  const [barStoryHovered, setBarStoryHovered] = useState(false);
+  const [restaurantShowcaseIndex, setRestaurantShowcaseIndex] = useState(0);
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -99,6 +128,32 @@ export default function Home() {
   const pricePerNight = roomType === "standard" ? INVENTORY.standard.price : INVENTORY.platinum.price;
   const total = nights * pricePerNight;
   const minDate = new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setBarStoryIndex((current) => (current + 1) % BAR_IMAGES.length);
+    }, barStoryHovered ? 1800 : 3200);
+
+    return () => window.clearInterval(interval);
+  }, [barStoryHovered]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setChefStoryIndex((current) => (current + 1) % (BREAKFAST_IMAGES.length + LUNCH_IMAGES.length));
+    }, 2600);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setRestaurantShowcaseIndex((current) => (current + 1) % RESTAURANT_IMAGES.length);
+    }, 3400);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -204,9 +259,34 @@ export default function Home() {
           muted
           loop
           playsInline
+          onTimeUpdate={(event) => {
+            const { currentTime, duration } = event.currentTarget;
+            if (!Number.isFinite(duration) || duration <= 3) {
+              setHeroVideoFade(0);
+              return;
+            }
+
+            const fadeWindowStart = duration - 3;
+            if (currentTime <= fadeWindowStart) {
+              setHeroVideoFade(0);
+              return;
+            }
+
+            setHeroVideoFade(Math.min((currentTime - fadeWindowStart) / 3, 1));
+          }}
         >
           <source src="/smaller.mp4" type="video/mp4" />
         </video>
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={
+            {
+              opacity: heroVideoFade,
+              background:
+                "radial-gradient(circle at center, transparent 0%, transparent 42%, rgba(0, 0, 0, 0.18) 68%, rgba(0, 0, 0, 0.82) 100%), linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.7))",
+            } as CSSProperties
+          }
+        />
         <div className="absolute inset-0 bg-[linear-gradient(130deg,rgba(0,0,0,0.58)_15%,rgba(0,0,0,0.25)_55%,rgba(245,124,0,0.32)_100%)]" />
 
         <div className="relative mx-auto flex min-h-[92vh] max-w-6xl items-end px-6 pb-16 pt-28">
@@ -249,17 +329,22 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <div className="relative h-[360px] overflow-hidden rounded-sm">
-          <Image
-            src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1800&q=80"
-            alt="Signature interior"
-            fill
-            className="object-cover"
-          />
+          <div className="absolute inset-0">
+            {RESTAURANT_IMAGES.map((image, index) => (
+              <Image
+                key={image}
+                src={image}
+                alt={`Orange Hotel restaurant ${index + 1}`}
+                fill
+                className={`object-cover transition-all duration-1000 ${restaurantShowcaseIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
+              />
+            ))}
+          </div>
           <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
           <div className="relative flex h-full max-w-xl flex-col justify-center px-8 text-white md:px-12">
             <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Experience</p>
-            <h2 className="mt-3 font-headline text-4xl">Stay Well, Dine Better, Unwind At The Bar</h2>
-            <p className="mt-4 text-sm text-white/85">From check-in to last call, Orange Hotel delivers a complete hospitality experience under one roof.</p>
+            <h2 className="mt-3 font-headline text-4xl">Breakfast Service, Lunch Plates, And A Real Restaurant Setting</h2>
+            <p className="mt-4 text-sm text-white/85">From morning breakfast to full lunch service, Orange Hotel brings guests into a restaurant space built for comfort, atmosphere, and memorable dining.</p>
           </div>
         </div>
       </section>
@@ -267,16 +352,52 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-14">
         <h2 className="font-headline text-4xl">Latest Highlights</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-[1.3fr_0.8fr_0.9fr]">
-          {stories.map((story) => (
-            <article key={story.title} className="group relative min-h-[280px] overflow-hidden rounded-sm">
-              <Image src={story.image} alt={story.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 text-white">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200">{story.tag}</p>
-                <h3 className="mt-2 font-headline text-2xl leading-tight">{story.title}</h3>
-              </div>
-            </article>
-          ))}
+          {stories.map((story) => {
+            const isBarStory = story.tag === "Bar & Lounge";
+            const isRestaurantStory = story.tag === "Restaurant";
+
+            return (
+              <article
+                key={story.title}
+                className="group relative min-h-[280px] overflow-hidden rounded-sm"
+                onMouseEnter={isBarStory ? () => setBarStoryHovered(true) : undefined}
+                onMouseLeave={isBarStory ? () => setBarStoryHovered(false) : undefined}
+              >
+                {isBarStory ? (
+                  <div className="absolute inset-0">
+                    {BAR_IMAGES.map((image, index) => (
+                      <Image
+                        key={image}
+                        src={image}
+                        alt={`${story.title} ${index + 1}`}
+                        fill
+                        className={`object-cover transition-all duration-1000 ${barStoryIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
+                      />
+                    ))}
+                  </div>
+                ) : isRestaurantStory ? (
+                  <div className="absolute inset-0">
+                    {chefImages.map((image, index) => (
+                      <Image
+                        key={image}
+                        src={image}
+                        alt={`${story.title} ${index + 1}`}
+                        fill
+                        className={`object-cover transition-all duration-1000 ${chefStoryIndex === index ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Image src={story.image} alt={story.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4 text-white">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200">{story.tag}</p>
+                  <h3 className="mt-2 font-headline text-2xl leading-tight">{story.title}</h3>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -284,7 +405,7 @@ export default function Home() {
         <div className="rounded-sm bg-[#1c1c1c] px-6 py-16 text-center text-white md:px-10">
           <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Orange Experience</p>
           <h2 className="mt-3 font-headline text-5xl">Rooms, Restaurant, And Bar</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Book your stay, enjoy chef-crafted meals, and relax with signature drinks in our lounge bar.</p>
+          <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Book your stay, start with breakfast, enjoy lunch in the restaurant, and close the day with signature drinks at the bar.</p>
           <a href="#book" className="mt-8 inline-block border-b border-orange-300 pb-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
             Discover More
           </a>
