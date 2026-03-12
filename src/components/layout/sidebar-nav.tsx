@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo } from 'react';
 import { 
   LayoutDashboard, 
@@ -57,6 +57,7 @@ const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
 
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
+  const router = useRouter();
   
   const handleNavigate = () => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -124,7 +125,11 @@ export function SidebarNav({ role }: { role: Role }) {
             <Link
               key={item.href}
               href={item.href}
-              onClick={handleNavigate}
+              onClick={(event) => {
+                event.preventDefault();
+                handleNavigate();
+                router.push(item.href);
+              }}
               className={cn(
                 "flex items-center gap-3 px-3 py-3 rounded-xl transition-all group mb-1",
                 isActive 

@@ -12,6 +12,7 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { readJson, writeJson } from "@/app/lib/storage";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 interface CancelledKitchenTicket {
   id: string;
@@ -52,13 +53,28 @@ export default function CancelledPage() {
   }, []);
 
   useEffect(() => {
-    const current = readJson<CancelledKitchenTicket[]>(STORAGE_CANCELLED);
-    const legacy = readJson<CancelledKitchenTicket[]>(LEGACY_STORAGE_CANCELLED);
-    if (Array.isArray(current)) {
-      setCancelled(current);
-      return;
-    }
-    if (Array.isArray(legacy)) setCancelled(legacy);
+    const applyCancelledSnapshot = () => {
+      const current = readJson<CancelledKitchenTicket[]>(STORAGE_CANCELLED);
+      const legacy = readJson<CancelledKitchenTicket[]>(LEGACY_STORAGE_CANCELLED);
+      if (Array.isArray(current)) {
+        setCancelled(current);
+        return;
+      }
+      if (Array.isArray(legacy)) {
+        setCancelled(legacy);
+        return;
+      }
+      setCancelled([]);
+    };
+
+    applyCancelledSnapshot();
+    const unsubscribeCancelled = subscribeToSyncedStorageKey<CancelledKitchenTicket[]>(STORAGE_CANCELLED, () => {
+      applyCancelledSnapshot();
+    });
+
+    return () => {
+      unsubscribeCancelled();
+    };
   }, []);
 
   const totalCancelledValue = useMemo(
