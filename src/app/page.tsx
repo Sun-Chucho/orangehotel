@@ -3,7 +3,7 @@
 import Image, { type ImageProps } from "next/image";
 import Link from "next/link";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronRight, LoaderCircle, MapPin, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
+import { CheckCircle2, ChevronRight, Instagram, LoaderCircle, Mail, MapPin, MessageCircle, Phone, Send, ShieldCheck, Star } from "lucide-react";
 import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 import {
   appendLiveChatMessage,
@@ -33,6 +33,66 @@ type HighlightStory = {
 
 function LandingImage(props: ImageProps) {
   return <Image {...props} unoptimized />;
+}
+
+function CrossfadeStoryImage({
+  src,
+  alt,
+  sizes,
+}: {
+  src: string;
+  alt: string;
+  sizes: string;
+}) {
+  const [displayedSrc, setDisplayedSrc] = useState(src);
+  const [incomingSrc, setIncomingSrc] = useState<string | null>(null);
+  const [isFading, setIsFading] = useState(false);
+  const [showIncoming, setShowIncoming] = useState(false);
+
+  useEffect(() => {
+    if (src === displayedSrc) return;
+
+    setIncomingSrc(src);
+    setShowIncoming(false);
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      setIsFading(true);
+      setShowIncoming(true);
+    });
+
+    const timeout = window.setTimeout(() => {
+      setDisplayedSrc(src);
+      setIncomingSrc(null);
+      setIsFading(false);
+      setShowIncoming(false);
+    }, 1800);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeout);
+    };
+  }, [displayedSrc, src]);
+
+  return (
+    <>
+      <LandingImage
+        src={displayedSrc}
+        alt={alt}
+        fill
+        sizes={sizes}
+        className={`object-cover transition-opacity duration-[1800ms] ease-in-out ${isFading ? "opacity-0" : "opacity-100"}`}
+      />
+      {incomingSrc ? (
+        <LandingImage
+          src={incomingSrc}
+          alt={alt}
+          fill
+          sizes={sizes}
+          className={`object-cover transition-opacity duration-[1800ms] ease-in-out ${showIncoming ? "opacity-100" : "opacity-0"}`}
+        />
+      ) : null}
+    </>
+  );
 }
 
 const formatTzs = (value: number) =>
@@ -80,28 +140,40 @@ const RESTAURANT_IMAGES = [
 
 const FEATURED_EXPERIENCES = [
   {
-    image: RESTAURANT_IMAGES[0],
+    image: BREAKFAST_IMAGES[0],
     eyebrow: "Breakfast Atmosphere",
-    title: "Start The Morning In A Warm, Elegant Dining Space",
-    description: "Guests begin the day with a calm breakfast setting, polished presentation, and a restaurant experience that immediately feels premium.",
+    title: "Begin The Day With Elegant Breakfast Service And A Welcoming Dining Mood",
+    description: "Invite guests into a refined morning setting where fresh breakfast service, polished presentation, and calm ambience immediately position Orange Hotel as a premium stay.",
+  },
+  {
+    image: BREAKFAST_IMAGES[1],
+    eyebrow: "Morning Indulgence",
+    title: "Turn Breakfast Into A Memorable Hotel Experience Guests Want To Repeat",
+    description: "Beautiful breakfast visuals, comfortable seating, and attentive service create a strong first impression that lifts guest satisfaction and encourages longer stays.",
+  },
+  {
+    image: LUNCH_IMAGES[2],
+    eyebrow: "Lunch Appeal",
+    title: "Serve Vibrant Lunch Plates In A Space Designed To Feel Fresh And Premium",
+    description: "Colorful dishes, generous portions, and polished plating help Orange Hotel market its restaurant as a destination for both in-house guests and walk-in diners.",
+  },
+  {
+    image: LUNCH_IMAGES[5],
+    eyebrow: "Signature Dining",
+    title: "Create A Food Experience That Feels Social, Photogenic, And Worth Sharing",
+    description: "Each plate becomes part of the hotel's story, helping the brand attract leisure guests, business clients, and social media attention at the same time.",
   },
   {
     image: RESTAURANT_IMAGES[1],
     eyebrow: "Restaurant Presence",
-    title: "A Real Restaurant Setting That Strengthens The Brand",
-    description: "The space itself markets the hotel: open, inviting, and memorable enough to make dining part of the stay, not just an extra service.",
-  },
-  {
-    image: RESTAURANT_IMAGES[2],
-    eyebrow: "Lunch Energy",
-    title: "Lunch Service Designed To Feel Fresh And Photogenic",
-    description: "From plated meals to the full room atmosphere, this section shows guests that Orange Hotel delivers both quality food and visual appeal.",
+    title: "Present A Real Restaurant Setting That Strengthens The Hotel Brand",
+    description: "An open, inviting dining room gives guests confidence in the overall experience and makes the restaurant feel like a signature part of the property.",
   },
   {
     image: RESTAURANT_IMAGES[3],
     eyebrow: "Private Dining",
-    title: "Perfect For Guests, Meetings, And Celebratory Dining",
-    description: "The restaurant supports everyday service, business meals, and intimate occasions with an environment that feels ready for all three.",
+    title: "Position The Space For Guests, Business Meetings, And Celebratory Dining",
+    description: "From relaxed breakfast service to private lunches and special gatherings, the restaurant is built to support revenue across multiple guest moments.",
   },
 ] as const;
 
@@ -534,31 +606,22 @@ export default function Home() {
                 }}
               >
                 {isBarStory ? (
-                  <LandingImage
-                    key={BAR_IMAGES[barStoryIndex]}
+                  <CrossfadeStoryImage
                     src={BAR_IMAGES[barStoryIndex]}
                     alt={`${story.title} ${barStoryIndex + 1}`}
-                    fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-all duration-[1600ms]"
                   />
                 ) : isRestaurantStory ? (
-                  <LandingImage
-                    key={chefImages[chefStoryIndex]}
+                  <CrossfadeStoryImage
                     src={chefImages[chefStoryIndex]}
                     alt={`${story.title} ${chefStoryIndex + 1}`}
-                    fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-all duration-[1600ms]"
                   />
                 ) : isHotelStory ? (
-                  <LandingImage
-                    key={ROOM_IMAGES.slice(1)[roomStoryIndex]}
+                  <CrossfadeStoryImage
                     src={ROOM_IMAGES.slice(1)[roomStoryIndex]}
                     alt={`${story.title} ${roomStoryIndex + 1}`}
-                    fill
                     sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition-all duration-[1600ms]"
                   />
                 ) : (
                   <LandingImage src={story.image} alt={story.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105" />
@@ -871,22 +934,57 @@ export default function Home() {
         </form>
       </section>
 
-      <footer className="bg-[#0f0f0f] text-white">
-        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-12 md:grid-cols-3">
-          <div>
-            <h3 className="font-headline text-3xl">Orange Hotel</h3>
-            <p className="mt-3 text-sm text-white/70">A modern luxury stay shaped around comfort, precision service, and secure online booking.</p>
+      <footer className="border-t border-white/10 bg-[#0b0b0b] text-white">
+        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-14 md:grid-cols-[1.2fr_1fr_0.8fr]">
+          <div className="max-w-md">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Orange Hotel</p>
+            <h3 className="mt-3 font-headline text-4xl leading-tight">Luxury Stay With Precision Hospitality</h3>
+            <p className="mt-4 text-sm leading-7 text-white/72">
+              A modern luxury stay shaped around comfort, precision service, and secure online booking.
+            </p>
           </div>
+
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Contact</p>
-            <p className="mt-3 text-sm text-white/80">orangehotelarusha.com</p>
-            <p className="text-sm text-white/80">+255702693911</p>
-            <p className="text-sm text-white/80">Instagram: orangehotelarusha</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Contact</p>
+            <div className="mt-5 space-y-3">
+              <a
+                href="https://orangehotelarusha.com"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
+              >
+                <Mail className="h-4 w-4 text-orange-300" />
+                <span>orangehotelarusha.com</span>
+              </a>
+              <a
+                href="tel:+255702693911"
+                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
+              >
+                <Phone className="h-4 w-4 text-orange-300" />
+                <span>+255702693911</span>
+              </a>
+              <a
+                href="https://instagram.com/orangehotelarusha"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
+              >
+                <Instagram className="h-4 w-4 text-orange-300" />
+                <span>Instagram: orangehotelarusha</span>
+              </a>
+            </div>
           </div>
+
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Quick Links</p>
-            <div className="mt-3 space-y-2 text-sm text-white/80">
-              <a href="#book" className="block hover:text-orange-300">Book Now</a>
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Quick Links</p>
+            <div className="mt-5">
+              <a
+                href="#book"
+                className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
+              >
+                Book Now
+                <ChevronRight className="h-4 w-4" />
+              </a>
             </div>
           </div>
         </div>
