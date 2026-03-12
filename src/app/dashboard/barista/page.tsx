@@ -91,10 +91,22 @@ const STORAGE_MENU = "orange-hotel-barista-menu";
 const STORAGE_PAYMENTS = "orange-hotel-barista-payments";
 const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 
-const normalizeCategory = (value: string): Exclude<BaristaCategory, "all"> => {
-  if (value === "espresso" || value === "coffee" || value === "tea" || value === "cold" || value === "snacks") {
-    return value;
+const normalizeCategory = (value: string, itemName = ""): Exclude<BaristaCategory, "all"> => {
+  const normalizedValue = value.trim().toLowerCase();
+  const normalizedName = itemName.trim().toLowerCase();
+
+  if (normalizedValue === "espresso" || normalizedValue === "coffee" || normalizedValue === "tea" || normalizedValue === "cold" || normalizedValue === "snacks") {
+    return normalizedValue;
   }
+
+  if (normalizedValue === "soft drink" || normalizedValue === "energy drink" || normalizedValue === "water" || normalizedValue === "beer" || normalizedValue === "wine" || normalizedValue === "cider" || normalizedValue === "spirit" || normalizedValue === "sparkling" || normalizedValue === "whisky" || normalizedValue === "gin" || normalizedValue === "liqueur" || normalizedValue === "cognac" || normalizedValue === "aperitif" || normalizedValue === "malt" || normalizedValue === "bar") {
+    return "cold";
+  }
+
+  if (normalizedName.includes("espresso") || normalizedName.includes("macchiato")) return "espresso";
+  if (normalizedName.includes("tea")) return "tea";
+  if (normalizedName.includes("ice cream") || normalizedName.includes("snack")) return "snacks";
+  if (normalizedName.includes("iced") || normalizedName.includes("soda") || normalizedName.includes("water") || normalizedName.includes("juice") || normalizedName.includes("beer") || normalizedName.includes("wine")) return "cold";
   return "coffee";
 };
 
@@ -110,7 +122,7 @@ function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): Bar
         id: item.id,
         name,
         price: typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
-        category: normalizeCategory(item.category),
+        category: normalizeCategory(item.category, name),
         prepMinutes: 2,
         barcode: item.barcode || "",
       };
@@ -520,12 +532,21 @@ export default function BaristaPage() {
   };
 
   const filteredMenu = useMemo(
-    () =>
-      menuItems.filter((item) => {
+    () => {
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      return menuItems.filter((item) => {
         const inCategory = category === "all" || item.category === category;
-        const inSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const searchHaystack = [
+          item.name,
+          item.category,
+          item.barcode ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        const inSearch = !normalizedSearch || searchHaystack.includes(normalizedSearch);
         return inCategory && inSearch;
-      }),
+      });
+    },
     [category, menuItems, searchTerm],
   );
 
