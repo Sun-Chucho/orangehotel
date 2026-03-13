@@ -948,13 +948,11 @@ export default function Home() {
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Contact</p>
             <div className="mt-5 space-y-3">
               <a
-                href="https://orangehotelarusha.com"
-                target="_blank"
-                rel="noreferrer"
+                href="mailto:orangehotelarusha@gmail.com"
                 className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
               >
                 <Mail className="h-4 w-4 text-orange-300" />
-                <span>orangehotelarusha.com</span>
+                <span>orangehotelarusha@gmail.com</span>
               </a>
               <a
                 href="tel:+255702693911"
