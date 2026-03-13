@@ -179,7 +179,7 @@ export default function BaristaPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<BaristaTicket[]>([]);
   const [ticketSeq, setTicketSeq] = useState(1);
-  const [menuItems, setMenuItems] = useState<BaristaMenuItem[]>([]);
+  const [storedMenuItems, setStoredMenuItems] = useState<BaristaMenuItem[]>(BARISTA_MENU);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
   const [baristaStoreItems, setBaristaStoreItems] = useState<MainStoreItem[]>([]);
@@ -219,7 +219,7 @@ export default function BaristaPage() {
         STORAGE_TICKETS,
         STORAGE_SEQ,
         STORAGE_PAYMENTS,
-        "__legacy_menu__", // We ignore old menu
+        STORAGE_MENU,
         490,
       );
       setTickets(snapshot.tickets);
@@ -234,9 +234,9 @@ export default function BaristaPage() {
           totSold: item.totSold ?? 0,
         })) as InventoryItem[];
         writeJson(STORAGE_INVENTORY_ITEMS, seed);
-        setMenuItems(normalizeBaristaMenuItemsFromInventory(seed));
+        setStoredMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : normalizeBaristaMenuItemsFromInventory(seed));
       } else {
-        setMenuItems(normalizeBaristaMenuItemsFromInventory(inventory));
+        setStoredMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : normalizeBaristaMenuItemsFromInventory(inventory));
       }
     };
 
@@ -275,16 +275,6 @@ export default function BaristaPage() {
   useEffect(() => {
     if (queueTab === "from-store") loadFromStoreData();
   }, [queueTab]);
-
-  useEffect(() => {
-    if (menuItems.length === 0) return;
-
-    const normalizedMenuItems = normalizeBaristaMenuItems(menuItems, baristaStoreItems);
-    if (JSON.stringify(normalizedMenuItems) === JSON.stringify(menuItems)) return;
-
-    setMenuItems(normalizedMenuItems);
-    writePosState(STORAGE_BARISTA_STATE, tickets, ticketSeq, baristaPayments, normalizedMenuItems);
-  }, [baristaPayments, baristaStoreItems, menuItems, ticketSeq, tickets]);
 
   useEffect(() => {
     if (serviceMode === "restaurant") {
@@ -438,6 +428,11 @@ export default function BaristaPage() {
     writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
     setUseQty("1");
   };
+
+  const menuItems = useMemo(
+    () => normalizeBaristaMenuItems(storedMenuItems, baristaStoreItems),
+    [baristaStoreItems, storedMenuItems],
+  );
 
   const filteredMenu = useMemo(
     () => {
@@ -639,7 +634,7 @@ export default function BaristaPage() {
     const nextPayments = [paymentRecord, ...baristaPayments];
     setTickets(nextTickets);
     setBaristaPayments(nextPayments);
-    writePosState(STORAGE_BARISTA_STATE, nextTickets, nextSeq, nextPayments, menuItems);
+    writePosState(STORAGE_BARISTA_STATE, nextTickets, nextSeq, nextPayments, storedMenuItems);
 
     setCart([]);
     setPendingOrder(null);
@@ -673,7 +668,7 @@ export default function BaristaPage() {
     if (!approved) return;
     const nextTickets = tickets.filter((ticket) => ticket.id !== id);
     setTickets(nextTickets);
-    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, menuItems);
+    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, storedMenuItems);
   };
 
   const cancelTicket = async (id: string) => {
@@ -704,13 +699,14 @@ export default function BaristaPage() {
 
     const nextTickets = tickets.filter((ticket) => ticket.id !== id);
     setTickets(nextTickets);
-    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, menuItems);
+    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, storedMenuItems);
   };
 
   if (isManager) {
-    return (
-      <div className="space-y-6">
-        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+  return (
+    <div className="space-y-6">
+      {dialog}
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
               <Coffee className="w-7 h-7" />

@@ -59,9 +59,6 @@ export default function DashboardLayout({
 
       localStorage.setItem("orange-hotel-role", savedRole);
 
-      await hydrateDefaultAppStateFromFirebase();
-      if (!active) return;
-
       setRole(savedRole);
       if (savedShift) setShift(savedShift);
       setMounted(true);
@@ -69,6 +66,10 @@ export default function DashboardLayout({
       if (typeof window !== "undefined") {
         setSidebarOpen(window.innerWidth >= 768);
       }
+
+      void hydrateDefaultAppStateFromFirebase().catch((error) => {
+        console.error("Dashboard hydration failed", error);
+      });
     }
 
     void initializeDashboard();
