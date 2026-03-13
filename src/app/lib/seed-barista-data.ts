@@ -18,7 +18,7 @@ export const BARISTA_INVENTORY_SEED: Partial<InventoryItem>[] = [
   { barcode: "6200100150015", name: "Drostdy Hof Red", category: "Wine", size: "750ml", stock: 3, buyingPrice: 10250, sellingPrice: 20000, status: "ACTIVE", minStock: 2, unit: "Bottle", totSold: 0 },
   { barcode: "6200100160016", name: "Drostdy Hof White", category: "Wine", size: "750ml", stock: 2, buyingPrice: 10250, sellingPrice: 20000, status: "ACTIVE", minStock: 1, unit: "Bottle", totSold: 0 },
   { barcode: "6200100170017", name: "Saint Anna", category: "Wine", size: "750ml", stock: 3, buyingPrice: 13000, sellingPrice: 20000, status: "ACTIVE", minStock: 2, unit: "Bottle", totSold: 0 },
-  { barcode: "6200100180018", name: "Classic Dompo", category: "Wine", size: "750ml", stock: 0, buyingPrice: 0, sellingPrice: 20000, status: "ACTIVE", minStock: 0, unit: "Bottle", totSold: 0 },
+  { barcode: "6200100180018", name: "Classic Dompo", category: "Wine", size: "750ml", stock: 3, buyingPrice: 0, sellingPrice: 20000, status: "ACTIVE", minStock: 1, unit: "Bottle", totSold: 0 },
   { barcode: "6200100190019", name: "Shiraz KWV", category: "Wine", size: "750ml", stock: 2, buyingPrice: 24000, sellingPrice: 40000, status: "ACTIVE", minStock: 1, unit: "Bottle", totSold: 0 },
   { barcode: "6200100200020", name: "Merlot KWV", category: "Wine", size: "750ml", stock: 2, buyingPrice: 24000, sellingPrice: 40000, status: "ACTIVE", minStock: 1, unit: "Bottle", totSold: 0 },
   { barcode: "6200100210021", name: "Apothic Red", category: "Wine", size: "750ml", stock: 2, buyingPrice: 24500, sellingPrice: 38000, status: "ACTIVE", minStock: 1, unit: "Bottle", totSold: 0 },

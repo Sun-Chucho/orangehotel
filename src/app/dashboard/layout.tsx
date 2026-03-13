@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { Role } from "@/app/lib/mock-data";
 import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
+import { InventoryItem } from "@/app/lib/mock-data";
+import { readJson, readPosState, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -13,6 +16,68 @@ import { cn } from "@/lib/utils";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
+const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v2";
+const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
+
+function applyBusinessCorrections() {
+  if (typeof window === "undefined") return;
+
+  if (!localStorage.getItem(KITCHEN_TRANSACTIONS_RESET_KEY)) {
+    const kitchenSnapshot = readPosState<unknown, unknown, unknown>(
+      STORAGE_KITCHEN_STATE,
+      "orange-hotel-kitchen-tickets",
+      "orange-hotel-kitchen-seq",
+      "orange-hotel-kitchen-payments",
+      "orange-hotel-kitchen-menu",
+      300,
+    );
+    writePosState(STORAGE_KITCHEN_STATE, [], kitchenSnapshot.ticketSeq, [], kitchenSnapshot.menuItems);
+    localStorage.setItem(KITCHEN_TRANSACTIONS_RESET_KEY, "1");
+  }
+
+  if (!localStorage.getItem(DOMPO_STOCK_FIX_KEY)) {
+    const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
+    const dompoSeed = BARISTA_INVENTORY_SEED.find(
+      (item) => item.name === "Classic Dompo" && item.size === "750ml",
+    );
+
+    if (inventoryItems.length > 0) {
+      const dompoIndex = inventoryItems.findIndex(
+        (item) => item.name === "Classic Dompo" && item.size === "750ml",
+      );
+
+      const nextInventoryItems = [...inventoryItems];
+      if (dompoIndex >= 0) {
+        nextInventoryItems[dompoIndex] = {
+          ...nextInventoryItems[dompoIndex],
+          stock: 3,
+          minStock: Math.max(nextInventoryItems[dompoIndex].minStock ?? 0, 1),
+          unit: nextInventoryItems[dompoIndex].unit || "Bottle",
+        };
+      } else if (dompoSeed) {
+        nextInventoryItems.push({
+          id: `inv-${dompoSeed.barcode || "dompo-750ml"}`,
+          barcode: dompoSeed.barcode || "",
+          name: dompoSeed.name || "Classic Dompo",
+          category: dompoSeed.category || "Wine",
+          size: dompoSeed.size || "750ml",
+          stock: 3,
+          buyingPrice: dompoSeed.buyingPrice || 0,
+          sellingPrice: dompoSeed.sellingPrice || 20000,
+          status: "ACTIVE",
+          minStock: 1,
+          unit: dompoSeed.unit || "Bottle",
+          totSold: dompoSeed.totSold || 0,
+          price: dompoSeed.sellingPrice || 20000,
+        });
+      }
+
+      writeJson("orange-hotel-inventory-items", nextInventoryItems);
+    }
+
+    localStorage.setItem(DOMPO_STOCK_FIX_KEY, "1");
+  }
+}
 
 export default function DashboardLayout({
   children,
@@ -67,9 +132,13 @@ export default function DashboardLayout({
         setSidebarOpen(window.innerWidth >= 768);
       }
 
-      void hydrateDefaultAppStateFromFirebase().catch((error) => {
-        console.error("Dashboard hydration failed", error);
-      });
+      void hydrateDefaultAppStateFromFirebase()
+        .then(() => {
+          applyBusinessCorrections();
+        })
+        .catch((error) => {
+          console.error("Dashboard hydration failed", error);
+        });
     }
 
     void initializeDashboard();
