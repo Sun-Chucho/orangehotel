@@ -437,9 +437,10 @@ export default function BaristaPage() {
   const filteredMenu = useMemo(
     () => {
       const normalizedSearch = searchTerm.trim().toLowerCase();
+      const compactSearch = normalizedSearch.replace(/\s+/g, "");
       const searchTokens = normalizedSearch.split(/\s+/).filter(Boolean);
       return menuItems.filter((item) => {
-        const inCategory = category === "all" || item.category === category;
+        const inCategory = normalizedSearch.length > 0 || category === "all" || item.category === category;
         const searchHaystack = [
           item.name,
           item.category,
@@ -447,7 +448,11 @@ export default function BaristaPage() {
         ]
           .join(" ")
           .toLowerCase();
-        const inSearch = searchTokens.length === 0 || searchTokens.every((token) => searchHaystack.includes(token));
+        const compactHaystack = searchHaystack.replace(/\s+/g, "");
+        const inSearch =
+          searchTokens.length === 0 ||
+          searchTokens.every((token) => searchHaystack.includes(token)) ||
+          compactHaystack.includes(compactSearch);
         return inCategory && inSearch;
       });
     },
