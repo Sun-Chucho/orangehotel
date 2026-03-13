@@ -935,7 +935,7 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-white/10 bg-[#0b0b0b] text-white">
-        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-14 md:grid-cols-[1.2fr_1fr_0.8fr]">
+        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-14 md:grid-cols-[1.1fr_1fr_1.1fr]">
           <div className="max-w-md">
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Orange Hotel</p>
             <h3 className="mt-3 font-headline text-4xl leading-tight">Luxury Stay With Precision Hospitality</h3>
@@ -964,7 +964,7 @@ export default function Home() {
                 <span>+255702693911</span>
               </a>
               <a
-                href="https://instagram.com/orangehotelarusha"
+                href="https://www.instagram.com/orangehotelarusha/"
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
@@ -976,8 +976,26 @@ export default function Home() {
           </div>
 
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Quick Links</p>
-            <div className="mt-5">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Location</p>
+            <div className="mt-5 space-y-4">
+              <a
+                href="https://google.com/maps/dir//Orange+Hotel,+Colonel+Middleton+Rd,+Arusha/@-3.3723504,36.6849352,15z/data=!3m1!4b1!4m8!4m7!1m0!1m5!1m1!1s0x18371d2bb7e9ac29:0x7365b393cb52b793!2m2!1d36.6840467!2d-3.3675175?entry=ttu&g_ep=EgoyMDI2MDMxMC4wIKXMDSoASAFQAw%3D%3D"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
+              >
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+                <span>Orange Hotel, Colonel Middleton Rd, Arusha</span>
+              </a>
+              <div className="overflow-hidden rounded-[22px] border border-white/10 bg-white/5 p-2">
+                <iframe
+                  title="Orange Hotel map"
+                  src="https://www.google.com/maps?q=Orange+Hotel,+Colonel+Middleton+Rd,+Arusha&output=embed"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-44 w-full rounded-[16px] border-0"
+                />
+              </div>
               <a
                 href="#book"
                 className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
