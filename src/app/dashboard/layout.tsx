@@ -3,21 +3,24 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
-import { Role } from "@/app/lib/mock-data";
+import { InventoryItem, Role } from "@/app/lib/mock-data";
 import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
-import { InventoryItem } from "@/app/lib/mock-data";
 import { readJson, readPosState, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
+import { readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v2";
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
+const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v1";
 
 function applyBusinessCorrections() {
   if (typeof window === "undefined") return;
@@ -77,6 +80,31 @@ function applyBusinessCorrections() {
 
     localStorage.setItem(DOMPO_STOCK_FIX_KEY, "1");
   }
+
+  if (!localStorage.getItem(BARISTA_STOCK_FIX_KEY)) {
+    const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
+    if (inventoryItems.length > 0) {
+      const stockOverrides: Record<string, number> = {
+        "Kilimanjaro Premium Lager|375ml": 15,
+        "Safari Lager|330ml": 19,
+        "Serengeti Lager|330ml": 20,
+        "Serengeti Lemon|300ml": 0,
+      };
+
+      const nextInventoryItems = inventoryItems.map((item) => {
+        const key = `${item.name}|${item.size ?? ""}`;
+        if (!(key in stockOverrides)) return item;
+        return {
+          ...item,
+          stock: stockOverrides[key],
+        };
+      });
+
+      writeJson("orange-hotel-inventory-items", nextInventoryItems);
+    }
+
+    localStorage.setItem(BARISTA_STOCK_FIX_KEY, "1");
+  }
 }
 
 export default function DashboardLayout({
@@ -90,6 +118,10 @@ export default function DashboardLayout({
   const [shift, setShift] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeUsername, setActiveUsername] = useState("");
+  const [usernameDialogOpen, setUsernameDialogOpen] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
 
   const allowedByRole: Record<Role, string[]> = {
     manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/fnb-suite', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/settings', '/dashboard/settings/sync'],
@@ -123,6 +155,7 @@ export default function DashboardLayout({
       }
 
       localStorage.setItem("orange-hotel-role", savedRole);
+      setActiveUsername(localStorage.getItem("orange-hotel-username") ?? savedRole);
 
       setRole(savedRole);
       if (savedShift) setShift(savedShift);
@@ -167,6 +200,35 @@ export default function DashboardLayout({
       window.removeEventListener("orange-hotel-sidebar-close", onSidebarClose as EventListener);
     };
   }, []);
+
+  const saveUsername = async () => {
+    const nextUsername = usernameDraft.trim();
+    const previousUsername = activeUsername.trim();
+    if (!nextUsername || !previousUsername) return;
+
+    setUsernameSaving(true);
+    try {
+      const profiles = readLocalLoginProfiles() ?? {};
+      const currentProfile = profiles[role] ?? {
+        username: previousUsername,
+        updatedAt: Date.now(),
+        users: [],
+      };
+      const nextProfile = renameProfileUser(currentProfile, previousUsername, nextUsername);
+      const nextProfiles = {
+        ...profiles,
+        [role]: nextProfile,
+      };
+
+      writeLocalLoginProfiles(nextProfiles);
+      localStorage.setItem("orange-hotel-username", nextUsername);
+      setActiveUsername(nextUsername);
+      setUsernameDialogOpen(false);
+      await saveLoginProfileToServer(role, nextProfile);
+    } finally {
+      setUsernameSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!mounted) return;
@@ -235,12 +297,27 @@ export default function DashboardLayout({
             
             <div className="flex items-center gap-3 border-l pl-6">
               <div className="text-right hidden sm:block">
+                <p className="text-xs font-bold leading-none">{activeUsername || role}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase tracking-widest">Username</p>
+              </div>
+              <div className="text-right hidden sm:block">
                 <p className="text-sm font-black leading-none uppercase tracking-tight">{role}</p>
                 <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase tracking-widest">Active Session</p>
               </div>
               <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-white shadow-lg">
                 <User className="w-5 h-5" />
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 text-[10px] font-black uppercase tracking-widest"
+                onClick={() => {
+                  setUsernameDraft(activeUsername || role);
+                  setUsernameDialogOpen(true);
+                }}
+              >
+                Change Username
+              </Button>
             </div>
           </div>
         </header>
@@ -249,6 +326,29 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      <Dialog open={usernameDialogOpen} onOpenChange={setUsernameDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase tracking-tight">Change Username</DialogTitle>
+            <DialogDescription>Update the username for the current logged-in account.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={usernameDraft}
+            onChange={(event) => setUsernameDraft(event.target.value)}
+            placeholder="Enter new username"
+            className="h-11"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUsernameDialogOpen(false)} disabled={usernameSaving}>
+              Cancel
+            </Button>
+            <Button onClick={() => void saveUsername()} disabled={!usernameDraft.trim() || usernameSaving}>
+              {usernameSaving ? "Saving..." : "Update Username"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

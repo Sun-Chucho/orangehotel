@@ -112,3 +112,35 @@ export function upsertProfileUser(
     updatedAt: now,
   };
 }
+
+export function renameProfileUser(
+  entry: LoginProfileEntry | null | undefined,
+  previousUsername: string,
+  nextUsername: string,
+): LoginProfileEntry {
+  const normalizedPrevious = previousUsername.trim().toLowerCase();
+  const normalizedNext = nextUsername.trim();
+  const now = Date.now();
+  const existingUsers = Array.isArray(entry?.users) ? entry.users : [];
+  const previousUser = existingUsers.find((user) => user.username.trim().toLowerCase() === normalizedPrevious);
+  const nextUser = existingUsers.find((user) => user.username.trim().toLowerCase() === normalizedNext.toLowerCase());
+  const filteredUsers = existingUsers.filter((user) => {
+    const normalizedUser = user.username.trim().toLowerCase();
+    return normalizedUser !== normalizedPrevious && normalizedUser !== normalizedNext.toLowerCase();
+  });
+
+  return {
+    username: normalizedNext,
+    password: entry?.password,
+    shift: entry?.shift,
+    users: [
+      ...filteredUsers,
+      {
+        username: normalizedNext,
+        password: previousUser?.password ?? nextUser?.password ?? entry?.password,
+        updatedAt: now,
+      },
+    ],
+    updatedAt: now,
+  };
+}
