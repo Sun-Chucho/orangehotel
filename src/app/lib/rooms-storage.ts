@@ -4,6 +4,8 @@ import { readJson, writeJson } from "@/app/lib/storage";
 interface ActiveBookingRoom {
   roomNumber: string;
   status?: "completed" | "credit" | "checked-out";
+  checkOutDate?: string;
+  checkOutTime?: string;
 }
 
 export const STORAGE_ROOMS = "orange-hotel-rooms-state";
@@ -45,10 +47,19 @@ export function updateRoomStatusById(roomId: string, status: Room["status"]): Ro
   return nextRooms;
 }
 
+export function isBookingStillActive(booking: ActiveBookingRoom) {
+  if (booking.status === "checked-out") return false;
+  if (!booking.checkOutDate) return true;
+
+  const checkoutAt = new Date(`${booking.checkOutDate}T${booking.checkOutTime || "00:00"}:00`);
+  if (!Number.isFinite(checkoutAt.getTime())) return true;
+  return Date.now() <= checkoutAt.getTime();
+}
+
 export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {
   const occupiedRooms = new Set(
     bookings
-      .filter((booking) => booking.status !== "checked-out")
+      .filter((booking) => isBookingStillActive(booking))
       .map((booking) => booking.roomNumber),
   );
 

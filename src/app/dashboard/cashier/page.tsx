@@ -21,7 +21,7 @@ import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { toast } from "@/hooks/use-toast";
-import { readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
+import { isBookingStillActive, readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
@@ -210,6 +210,15 @@ export default function BookingPage() {
     phone.trim().length >= 7 &&
     nights >= 1 &&
     Boolean(selectedRoomNumber);
+  const bookingBlockerMessage = !guestName.trim()
+    ? "Enter guest name."
+    : phone.trim().length < 7
+      ? "Enter a valid phone number."
+      : nights < 1
+        ? "Check-out date must be after check-in date."
+        : !selectedRoomNumber
+          ? "No available room is selected for this room type."
+          : null;
 
   useEffect(() => {
     if (!checkInDate) return;
@@ -238,7 +247,7 @@ export default function BookingPage() {
     () =>
       new Set(
         transactions
-          .filter((tx) => tx.status !== "checked-out" && tx.id !== editingBookingId)
+          .filter((tx) => tx.id !== editingBookingId && isBookingStillActive(tx))
           .map((tx) => tx.roomNumber),
       ),
     [editingBookingId, transactions],
@@ -706,6 +715,9 @@ export default function BookingPage() {
               <span>Total</span>
               <span className="text-primary">{bookingCurrency} {total.toLocaleString()}</span>
             </div>
+            {bookingBlockerMessage && (
+              <p className="pt-2 text-xs font-bold text-amber-700">{bookingBlockerMessage}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
