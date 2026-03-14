@@ -37,6 +37,11 @@ type ItemCategory = "Kitchen" | "Bar";
 
 interface PosPaymentRecord {
   total: number;
+  lines?: Array<{ name: string; qty: number }>;
+}
+
+interface PosStateSnapshot {
+  payments?: PosPaymentRecord[];
 }
 
 const KITCHEN_CATEGORY_OPTIONS = [
@@ -87,8 +92,10 @@ export function InventoryControlView({
   const isDirector = useIsDirector();
   const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
+  const [baristaView, setBaristaView] = useState<"inventory" | "finance">("inventory");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
+  const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
 
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenSubCategory, setKitchenSubCategory] = useState("");
@@ -141,21 +148,25 @@ export function InventoryControlView({
     const applyInventorySnapshot = () => {
       const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
       const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+      const baristaState = readJson<PosStateSnapshot>(STORAGE_BARISTA_STATE);
       const normalizedStore: MainStoreItem[] = store.map((item) => ({
         ...item,
         lane: item.lane === "barista" ? "barista" : "kitchen",
       }));
       setItems(inv);
       setStoreItems(normalizedStore);
+      setBaristaPayments(Array.isArray(baristaState?.payments) ? baristaState.payments : []);
     };
 
     applyInventorySnapshot();
     const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyInventorySnapshot);
     const unsubscribeStore = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applyInventorySnapshot);
+    const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyInventorySnapshot);
 
     return () => {
       unsubscribeInventory();
       unsubscribeStore();
+      unsubscribeBarista();
     };
   }, []);
 
@@ -163,6 +174,82 @@ export function InventoryControlView({
   const baristaStore = useMemo(() => storeItems.filter((item) => item.lane === "barista"), [storeItems]);
   const kitchenInventoryItems = useMemo(() => items.filter((item) => item.category === "Kitchen"), [items]);
   const baristaInventoryItems = useMemo(() => items.filter((item) => item.category === "Bar"), [items]);
+  const canViewBaristaFinance = role === "manager" || role === "director";
+
+  const baristaSalesByItem = useMemo(() => {
+    const salesMap = new Map<string, number>();
+
+    baristaPayments.forEach((payment) => {
+      if (!Array.isArray(payment.lines)) return;
+
+      payment.lines.forEach((line) => {
+        const key = normalizeStockName(line.name.replace(/\s+TOTS?$/i, "").trim());
+        salesMap.set(key, (salesMap.get(key) ?? 0) + line.qty);
+      });
+    });
+
+    return salesMap;
+  }, [baristaPayments]);
+
+  const baristaFinanceRows = useMemo(
+    () =>
+      baristaStore.map((item) => {
+        const inventoryMatch = items.find(
+          (entry) =>
+            entry.category === "Bar" &&
+            normalizeStockName(entry.name) === normalizeStockName(item.name) &&
+            normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
+        );
+        const buyingPrice =
+          typeof item.buyingPrice === "number" && item.buyingPrice > 0
+            ? item.buyingPrice
+            : typeof inventoryMatch?.buyingPrice === "number" && inventoryMatch.buyingPrice > 0
+              ? inventoryMatch.buyingPrice
+              : 0;
+        const sellingPrice =
+          typeof item.sellingPrice === "number" && item.sellingPrice > 0
+            ? item.sellingPrice
+            : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
+              ? inventoryMatch.sellingPrice
+              : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
+                ? inventoryMatch.price
+                : 0;
+        const quantitySold = baristaSalesByItem.get(normalizeStockName(item.name.replace(/\s+TOTS?$/i, "").trim())) ?? 0;
+        const capital = item.stock * buyingPrice;
+        const revenue = quantitySold * sellingPrice;
+        const profitLoss = revenue - capital;
+
+        return {
+          ...item,
+          buyingPrice,
+          sellingPrice,
+          quantitySold,
+          capital,
+          revenue,
+          profitLoss,
+        };
+      }),
+    [baristaSalesByItem, baristaStore, items],
+  );
+
+  const baristaCapitalTotal = useMemo(
+    () => baristaFinanceRows.reduce((sum, item) => sum + item.capital, 0),
+    [baristaFinanceRows],
+  );
+  const baristaRevenueTotal = useMemo(
+    () => {
+      const itemizedRevenue = baristaFinanceRows.reduce((sum, item) => sum + item.revenue, 0);
+      const fallbackRevenue = baristaPayments
+        .filter((payment) => !Array.isArray(payment.lines) || payment.lines.length === 0)
+        .reduce((sum, payment) => sum + (payment.total || 0), 0);
+      return itemizedRevenue + fallbackRevenue;
+    },
+    [baristaFinanceRows, baristaPayments],
+  );
+  const baristaProfitLossTotal = useMemo(
+    () => baristaRevenueTotal - baristaCapitalTotal,
+    [baristaCapitalTotal, baristaRevenueTotal],
+  );
 
   const resetStoreForm = (lane: StoreLane) => {
     if (lane === "kitchen") {
@@ -586,6 +673,81 @@ export function InventoryControlView({
     </Card>
   );
 
+  const renderBaristaFinance = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Orange Capital</p>
+            <p className="mt-2 text-2xl font-black">TSh {baristaCapitalTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Orange Revenue</p>
+            <p className="mt-2 text-2xl font-black">TSh {baristaRevenueTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Profit And Loss</p>
+            <p className={`mt-2 text-2xl font-black ${baristaProfitLossTotal >= 0 ? "text-green-600" : "text-red-600"}`}>
+              TSh {baristaProfitLossTotal.toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg uppercase font-black">Barista Stock Finance</CardTitle>
+          <CardDescription>
+            Capital = quantity in stock x buying price. Revenue = quantity sold x selling price. Profit/Loss = revenue - capital.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Item</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Stock Qty</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty Sold</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Buying Price</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Capital</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Selling Price</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Revenue</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Profit/Loss</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {baristaFinanceRows.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-bold">{item.name}</TableCell>
+                  <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                  <TableCell className="font-bold">{item.quantitySold}</TableCell>
+                  <TableCell className="font-bold">{item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}</TableCell>
+                  <TableCell className="font-bold">TSh {item.capital.toLocaleString()}</TableCell>
+                  <TableCell className="font-bold">{item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}</TableCell>
+                  <TableCell className="font-bold">TSh {item.revenue.toLocaleString()}</TableCell>
+                  <TableCell className={`font-bold ${item.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    TSh {item.profitLoss.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {baristaFinanceRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No barista finance records
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {dialog}
@@ -626,8 +788,21 @@ export function InventoryControlView({
 
       {activeTab === "barista-stock" && (
         <div className="space-y-6">
-          {renderStoreCard("barista", "Barista Stock", baristaStore)}
-          {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
+          {canViewBaristaFinance && (
+            <Tabs value={baristaView} onValueChange={(value) => setBaristaView(value as "inventory" | "finance")}>
+              <TabsList className="h-11">
+                <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+                <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+          {(!canViewBaristaFinance || baristaView === "inventory") && (
+            <>
+              {renderStoreCard("barista", "Barista Stock", baristaStore)}
+              {renderInventoryTable("Barista Inventory Records", baristaInventoryItems)}
+            </>
+          )}
+          {canViewBaristaFinance && baristaView === "finance" && renderBaristaFinance()}
         </div>
       )}
 
