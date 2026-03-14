@@ -132,6 +132,7 @@ export default function BookingPage() {
 
   const [showSettlementPopup, setShowSettlementPopup] = useState(false);
   const [showPayNowPopup, setShowPayNowPopup] = useState(false);
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [selectedExtendBookingId, setSelectedExtendBookingId] = useState<string | null>(null);
   const [extendCheckOutDate, setExtendCheckOutDate] = useState("");
   const [extendCheckOutTime, setExtendCheckOutTime] = useState("12:00");
@@ -234,8 +235,13 @@ export default function BookingPage() {
     [transactions],
   );
   const activeBookedRoomNumbers = useMemo(
-    () => new Set(transactions.filter((tx) => tx.status !== "checked-out").map((tx) => tx.roomNumber)),
-    [transactions],
+    () =>
+      new Set(
+        transactions
+          .filter((tx) => tx.status !== "checked-out" && tx.id !== editingBookingId)
+          .map((tx) => tx.roomNumber),
+      ),
+    [editingBookingId, transactions],
   );
   const roomPickerRooms = useMemo(() => {
     const wantedType = roomType === "standard" ? "Standard" : "Platinum";
@@ -250,6 +256,8 @@ export default function BookingPage() {
   );
 
   useEffect(() => {
+    if (editingBookingId) return;
+
     if (availableRooms.length === 0) {
       setSelectedRoomNumber("");
       return;
@@ -315,6 +323,7 @@ export default function BookingPage() {
   };
 
   const resetBookingForm = () => {
+    setEditingBookingId(null);
     setGuestName("");
     setPhone("");
     setCheckInDate(today);
@@ -327,6 +336,25 @@ export default function BookingPage() {
     setPackageRate("");
     setShowSettlementPopup(false);
     setShowPayNowPopup(false);
+  };
+
+  const openEditBooking = (booking: BookingRecord) => {
+    if (isDirector) return;
+
+    setEditingBookingId(booking.id);
+    setGuestName(booking.guestName);
+    setPhone(booking.phone);
+    setCheckInDate(booking.checkInDate);
+    setCheckInTime(booking.checkInTime || "14:00");
+    setCheckOutDate(booking.checkOutDate);
+    setCheckOutTime(booking.checkOutTime || "12:00");
+    setSelectedRoomNumber(booking.roomNumber);
+    setRoomType(booking.roomType);
+    setSelectedPackage(booking.specialPackage ?? "none");
+    setPackageRate(String(booking.ratePerNight ?? ""));
+    setShowSettlementPopup(false);
+    setShowPayNowPopup(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const clearBookingForm = async () => {
@@ -347,6 +375,47 @@ export default function BookingPage() {
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
     if (isDirector) return;
     if (!canSubmitBooking) return;
+
+    if (editingBookingId) {
+      const existingBooking = transactions.find((entry) => entry.id === editingBookingId);
+      if (!existingBooking) return;
+
+      const nextTransactions = transactions.map((entry) =>
+        entry.id === editingBookingId
+          ? {
+              ...entry,
+              guestName: guestName.trim(),
+              phone: phone.trim(),
+              roomType,
+              roomNumber: selectedRoomNumber,
+              specialPackage: selectedPackage === "none" ? undefined : selectedPackage,
+              currency: bookingCurrency,
+              ratePerNight: rate,
+              payment: paymentMethod,
+              checkInDate,
+              checkInTime,
+              checkOutDate,
+              checkOutTime,
+              nights,
+              total,
+              status,
+              checkedBy: localStorage.getItem("orange-hotel-username") || "Reception",
+            }
+          : entry,
+      );
+
+      setTransactions(nextTransactions);
+      writeCashierState(nextTransactions, receiptSeq);
+
+      if (existingBooking.roomNumber !== selectedRoomNumber) {
+        markRoomStatus(existingBooking.roomNumber, "available");
+      }
+      markRoomStatus(selectedRoomNumber, "occupied");
+
+      setTransactionTab(status === "credit" ? "credit" : "completed");
+      resetBookingForm();
+      return;
+    }
 
     const nextReceipt = receiptSeq + 1;
 
@@ -512,10 +581,18 @@ export default function BookingPage() {
       <Card className="shadow-2xl border-none bg-white overflow-hidden">
         <div className="h-1.5 bg-primary" />
         <CardHeader>
-          <CardTitle className="text-xl font-black uppercase tracking-tight">New Booking</CardTitle>
-          <CardDescription>Guest details, room selection, stay dates, and payment</CardDescription>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">{editingBookingId ? "Edit Booking" : "New Booking"}</CardTitle>
+          <CardDescription>
+            {editingBookingId ? "Update an existing booking record, including past booking dates." : "Guest details, room selection, stay dates, and payment"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
+          {editingBookingId && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Editing Existing Booking</p>
+              <p className="mt-1 text-sm font-bold text-amber-900">Past dates are allowed while updating this record.</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -633,14 +710,14 @@ export default function BookingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <Button variant="outline" onClick={clearBookingForm} className="h-11 font-black uppercase text-[10px] tracking-widest">
-              Clear
+              {editingBookingId ? "Cancel Edit" : "Clear"}
             </Button>
             <Button
               onClick={openSettlementPopup}
               disabled={!canSubmitBooking}
               className="h-11 font-black uppercase text-[10px] tracking-widest"
             >
-              Complete Booking
+              {editingBookingId ? "Update Booking" : "Complete Booking"}
             </Button>
           </div>
         </CardContent>
@@ -711,8 +788,17 @@ export default function BookingPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    {tx.status !== "checked-out" && !isDirector ? (
+                    {!isDirector ? (
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => openEditBooking(tx)}
+                          className="h-9 font-black uppercase text-[10px] tracking-widest"
+                        >
+                          Edit
+                        </Button>
+                        {tx.status !== "checked-out" && (
+                          <>
                         <Button
                           variant="outline"
                           onClick={() => openExtendStay(tx)}
@@ -726,6 +812,8 @@ export default function BookingPage() {
                         >
                           Check Out
                         </Button>
+                          </>
+                        )}
                       </div>
                     ) : (
                       <Badge className="bg-gray-200 text-gray-700 border-gray-200 hover:bg-gray-200">View</Badge>
