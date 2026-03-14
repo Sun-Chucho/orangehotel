@@ -82,6 +82,10 @@ function getLogicLabel(rule: StockLogicRule | undefined) {
   return `1 ${rule.storeUnit} -> ${rule.unitToMenu} ${rule.departmentUnit}`;
 }
 
+function normalizeBaristaFinanceTarget(value: string) {
+  return normalizeStockName(value.replace(/\s+TOTS?$/i, "").trim());
+}
+
 export function InventoryControlView({
   initialTab,
   visibleTabs = ["kitchen-stock", "barista-stock"],
@@ -176,6 +180,23 @@ export function InventoryControlView({
   const baristaInventoryItems = useMemo(() => items.filter((item) => item.category === "Bar"), [items]);
   const canViewBaristaFinance = role === "manager" || role === "director";
 
+  const resolveBaristaInventoryMatch = (item: MainStoreItem) =>
+    items.find((entry) => {
+      if (entry.category !== "Bar") return false;
+
+      const storeTargets = [
+        item.name,
+        getStoreItemLabel(item),
+      ].map(normalizeBaristaFinanceTarget);
+
+      const inventoryTargets = [
+        entry.name,
+        entry.size ? `${entry.name} ${entry.size}` : entry.name,
+      ].map(normalizeBaristaFinanceTarget);
+
+      return storeTargets.some((target) => inventoryTargets.includes(target));
+    });
+
   const baristaSalesByItem = useMemo(() => {
     const salesMap = new Map<string, number>();
 
@@ -183,7 +204,7 @@ export function InventoryControlView({
       if (!Array.isArray(payment.lines)) return;
 
       payment.lines.forEach((line) => {
-        const key = normalizeStockName(line.name.replace(/\s+TOTS?$/i, "").trim());
+        const key = normalizeBaristaFinanceTarget(line.name);
         salesMap.set(key, (salesMap.get(key) ?? 0) + line.qty);
       });
     });
@@ -194,12 +215,7 @@ export function InventoryControlView({
   const baristaFinanceRows = useMemo(
     () =>
       baristaStore.map((item) => {
-        const inventoryMatch = items.find(
-          (entry) =>
-            entry.category === "Bar" &&
-            normalizeStockName(entry.name) === normalizeStockName(item.name) &&
-            normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
-        );
+        const inventoryMatch = resolveBaristaInventoryMatch(item);
         const buyingPrice =
           typeof item.buyingPrice === "number" && item.buyingPrice > 0
             ? item.buyingPrice
@@ -212,9 +228,9 @@ export function InventoryControlView({
             : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
               ? inventoryMatch.sellingPrice
               : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
-                ? inventoryMatch.price
+              ? inventoryMatch.price
                 : 0;
-        const quantitySold = baristaSalesByItem.get(normalizeStockName(item.name.replace(/\s+TOTS?$/i, "").trim())) ?? 0;
+        const quantitySold = baristaSalesByItem.get(normalizeBaristaFinanceTarget(getStoreItemLabel(item))) ?? 0;
         const capital = item.stock * buyingPrice;
         const revenue = quantitySold * sellingPrice;
         const profitLoss = revenue - capital;
