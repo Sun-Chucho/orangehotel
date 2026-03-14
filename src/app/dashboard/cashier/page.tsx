@@ -97,6 +97,13 @@ function daysBetween(checkIn: string, checkOut: string): number {
   return Math.ceil(ms / 86400000);
 }
 
+function addDays(dateText: string, days: number): string {
+  const baseDate = new Date(`${dateText}T00:00:00`);
+  if (!Number.isFinite(baseDate.getTime())) return dateText;
+  baseDate.setDate(baseDate.getDate() + days);
+  return baseDate.toISOString().slice(0, 10);
+}
+
 function isOverstay(record: BookingRecord): boolean {
   if (record.status === "checked-out") return false;
   const checkoutAt = new Date(`${record.checkOutDate}T${record.checkOutTime || "00:00"}:00`);
@@ -107,6 +114,7 @@ export default function BookingPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
   const today = new Date().toISOString().slice(0, 10);
+  const defaultCheckOutDate = addDays(today, 1);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
   const [roomType, setRoomType] = useState<RoomType>("standard");
@@ -116,7 +124,7 @@ export default function BookingPage() {
   const [phone, setPhone] = useState("");
   const [checkInDate, setCheckInDate] = useState(today);
   const [checkInTime, setCheckInTime] = useState("14:00");
-  const [checkOutDate, setCheckOutDate] = useState("");
+  const [checkOutDate, setCheckOutDate] = useState(defaultCheckOutDate);
   const [checkOutTime, setCheckOutTime] = useState("12:00");
   const [selectedRoomNumber, setSelectedRoomNumber] = useState("");
   const [selectedPackage, setSelectedPackage] = useState<SpecialPackage | "none">("none");
@@ -201,6 +209,13 @@ export default function BookingPage() {
     phone.trim().length >= 7 &&
     nights >= 1 &&
     Boolean(selectedRoomNumber);
+
+  useEffect(() => {
+    if (!checkInDate) return;
+    if (!checkOutDate || daysBetween(checkInDate, checkOutDate) < 1) {
+      setCheckOutDate(addDays(checkInDate, 1));
+    }
+  }, [checkInDate, checkOutDate]);
 
   useEffect(() => {
     if (!packageConfig) {
@@ -292,7 +307,7 @@ export default function BookingPage() {
     setPhone("");
     setCheckInDate(today);
     setCheckInTime("14:00");
-    setCheckOutDate("");
+    setCheckOutDate(defaultCheckOutDate);
     setCheckOutTime("12:00");
     setSelectedRoomNumber("");
     setRoomType("standard");

@@ -7,6 +7,7 @@ import {
   adjustInventoryQuantity,
   MainStoreItem,
   getStoreItemLabel,
+  normalizeStockName,
   STORAGE_MAIN_STORE_ITEMS,
   STORAGE_INVENTORY_ITEMS,
   STORAGE_STORE_MOVEMENTS,
@@ -35,6 +36,7 @@ type BaristaCategory = "all" | "espresso" | "coffee" | "tea" | "cold" | "snacks"
 type ServiceMode = "restaurant" | "room-service" | "take-away";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentStatus = "completed" | "credit";
+type BaristaOrderLine = { name: string; qty: number };
 
 interface BaristaMenuItem {
   id: string;
@@ -56,7 +58,7 @@ interface BaristaTicket {
   createdAt: number;
   mode: ServiceMode;
   destination: string;
-  lines: Array<{ name: string; qty: number }>;
+  lines: BaristaOrderLine[];
   total: number;
 }
 
@@ -70,6 +72,7 @@ interface BaristaPaymentRecord {
   total: number;
   status: BaristaPaymentStatus;
   method: BaristaPaymentMethod;
+  lines?: BaristaOrderLine[];
 }
 
 interface CancelledBaristaTicket extends BaristaTicket {
@@ -80,7 +83,7 @@ interface CancelledBaristaTicket extends BaristaTicket {
 interface PendingOrder {
   mode: ServiceMode;
   destination: string;
-  lines: Array<{ name: string; qty: number }>;
+  lines: BaristaOrderLine[];
   total: number;
 }
 
@@ -181,6 +184,7 @@ export default function BaristaPage() {
   const [ticketSeq, setTicketSeq] = useState(1);
   const [storedMenuItems, setStoredMenuItems] = useState<BaristaMenuItem[]>(BARISTA_MENU);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
   const [baristaStoreItems, setBaristaStoreItems] = useState<MainStoreItem[]>([]);
   const [fromStoreEntries, setFromStoreEntries] = useState<StoreMovementLog[]>([]);
@@ -227,6 +231,7 @@ export default function BaristaPage() {
       setBaristaPayments(snapshot.payments);
       
       const inventory = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
+      setInventoryItems(inventory);
       if (inventory.length === 0) {
         const seed = BARISTA_INVENTORY_SEED.map((item) => ({
           ...item,
@@ -234,6 +239,7 @@ export default function BaristaPage() {
           totSold: item.totSold ?? 0,
         })) as InventoryItem[];
         writeJson(STORAGE_INVENTORY_ITEMS, seed);
+        setInventoryItems(seed);
         setStoredMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : normalizeBaristaMenuItemsFromInventory(seed));
       } else {
         setStoredMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : normalizeBaristaMenuItemsFromInventory(inventory));
@@ -293,7 +299,7 @@ export default function BaristaPage() {
     usageLogs.filter((entry) => entry.movementId === movementId).reduce((sum, entry) => sum + entry.quantityUsed, 0);
 
   const updateBaristaStoreStock = (
-    lines: Array<{ name: string; qty: number }>,
+    lines: BaristaOrderLine[],
     direction: "consume" | "restore",
   ) => {
     const allStoreItems = readJson<Array<MainStoreItem & { lane?: "kitchen" | "barista" }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
@@ -472,6 +478,92 @@ export default function BaristaPage() {
     () => [...baristaPayments].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
     [baristaPayments],
   );
+  const resolveBaristaInventoryItem = (item: MainStoreItem) =>
+    inventoryItems.find((entry) => {
+      if ((entry.category ?? "").toLowerCase() === "kitchen") return false;
+
+      const itemNames = [
+        item.name,
+        getStoreItemLabel(item),
+      ].map((value) => normalizeStockName(value));
+      const entryNames = [
+        entry.name,
+        entry.size ? `${entry.name} ${entry.size}` : entry.name,
+      ].map((value) => normalizeStockName(value));
+
+      return itemNames.some((value) => entryNames.includes(value));
+    });
+
+  const baristaSalesByItem = useMemo(() => {
+    const salesMap = new Map<string, number>();
+
+    baristaPayments.forEach((payment) => {
+      if (!Array.isArray(payment.lines)) return;
+
+      payment.lines.forEach((line) => {
+        const key = normalizeBaristaTarget(line.name);
+        salesMap.set(key, (salesMap.get(key) ?? 0) + line.qty);
+      });
+    });
+
+    return salesMap;
+  }, [baristaPayments]);
+
+  const baristaInventoryRows = useMemo(
+    () =>
+      baristaStoreItems.map((item) => {
+        const inventoryMatch = resolveBaristaInventoryItem(item);
+        const buyingPrice =
+          typeof item.buyingPrice === "number" && item.buyingPrice > 0
+            ? item.buyingPrice
+            : typeof inventoryMatch?.buyingPrice === "number" && inventoryMatch.buyingPrice > 0
+              ? inventoryMatch.buyingPrice
+              : 0;
+        const sellingPrice =
+          typeof item.sellingPrice === "number" && item.sellingPrice > 0
+            ? item.sellingPrice
+            : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
+              ? inventoryMatch.sellingPrice
+              : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
+              ? inventoryMatch.price
+              : 0;
+        const quantitySold = baristaSalesByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) ?? 0;
+        const capital = item.stock * buyingPrice;
+        const revenue = quantitySold * sellingPrice;
+        const profitLoss = revenue - capital;
+
+        return {
+          ...item,
+          buyingPrice,
+          sellingPrice,
+          quantitySold,
+          capital,
+          revenue,
+          profitLoss,
+        };
+      }),
+    [baristaSalesByItem, baristaStoreItems, inventoryItems],
+  );
+
+  const baristaCapitalTotal = useMemo(
+    () => baristaInventoryRows.reduce((sum, item) => sum + item.capital, 0),
+    [baristaInventoryRows],
+  );
+  const totalBaristaRevenue = useMemo(
+    () => {
+      const itemizedRevenue = baristaInventoryRows.reduce((sum, item) => sum + item.revenue, 0);
+      const fallbackRevenue = baristaPayments
+        .filter((payment) => !Array.isArray(payment.lines) || payment.lines.length === 0)
+        .reduce((sum, payment) => sum + (payment.total || 0), 0);
+
+      return itemizedRevenue + fallbackRevenue;
+    },
+    [baristaInventoryRows, baristaPayments],
+  );
+  const baristaProfitLoss = useMemo(
+    () => totalBaristaRevenue - baristaCapitalTotal,
+    [baristaCapitalTotal, totalBaristaRevenue],
+  );
 
   const activeBaristaProfile = useMemo(() => readLocalLoginProfiles()?.barista ?? null, [activeUsername, role]);
 
@@ -633,6 +725,7 @@ export default function BaristaPage() {
       total: pendingOrder.total,
       status,
       method,
+      lines: pendingOrder.lines,
     };
 
     const nextTickets = [ticket, ...tickets];
@@ -724,6 +817,28 @@ export default function BaristaPage() {
             </div>
           </div>
         </header>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Orange Capital</p>
+              <p className="mt-2 text-2xl font-black">TSh {baristaCapitalTotal.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Orange Revenue</p>
+              <p className="mt-2 text-2xl font-black">TSh {totalBaristaRevenue.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Profit And Loss</p>
+              <p className={`mt-2 text-2xl font-black ${baristaProfitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                TSh {baristaProfitLoss.toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
         <Card className="border-none shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
@@ -735,16 +850,28 @@ export default function BaristaPage() {
                 <TableRow>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty Sold</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Selling Price</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Revenue</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Profit/Loss</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
                   <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {baristaStoreItems.map((item) => (
+                {baristaInventoryRows.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-bold">{item.name}</TableCell>
                     <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                    <TableCell className="font-bold">{item.quantitySold}</TableCell>
+                    <TableCell className="font-bold">
+                      {item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
+                    </TableCell>
+                    <TableCell className="font-bold">TSh {item.revenue.toLocaleString()}</TableCell>
+                    <TableCell className={`font-bold ${item.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      TSh {item.profitLoss.toLocaleString()}
+                    </TableCell>
                     <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
                     <TableCell className="font-bold">{item.minStock}</TableCell>
                     <TableCell className="font-black uppercase text-[10px] tracking-widest">
@@ -754,7 +881,7 @@ export default function BaristaPage() {
                 ))}
                 {baristaStoreItems.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    <TableCell colSpan={9} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                       No barista store stock
                     </TableCell>
                   </TableRow>
@@ -786,6 +913,28 @@ export default function BaristaPage() {
             {baristaPayments.length} Sales Records
           </Badge>
         </header>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Orange Capital</p>
+              <p className="mt-2 text-2xl font-black">TSh {baristaCapitalTotal.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista Orange Revenue</p>
+              <p className="mt-2 text-2xl font-black">TSh {totalBaristaRevenue.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Profit And Loss</p>
+              <p className={`mt-2 text-2xl font-black ${baristaProfitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                TSh {baristaProfitLoss.toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
         <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "sales")}>
           <TabsList className="h-10">
@@ -806,6 +955,10 @@ export default function BaristaPage() {
                   <TableRow>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty Sold</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Selling Price</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Revenue</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Profit/Loss</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
@@ -813,7 +966,7 @@ export default function BaristaPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {baristaStoreItems.map((item) => {
+                  {baristaInventoryRows.map((item) => {
                     const itemEntries = fromStoreEntries.filter((entry) => entry.itemName === item.name);
                     const received = itemEntries.reduce((sum, entry) => sum + entry.convertedQty, 0);
                     const used = itemEntries.reduce((sum, entry) => sum + getUsedQty(entry.id), 0);
@@ -822,6 +975,14 @@ export default function BaristaPage() {
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.name}</TableCell>
                         <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                        <TableCell className="font-bold">{item.quantitySold}</TableCell>
+                        <TableCell className="font-bold">
+                          {item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
+                        </TableCell>
+                        <TableCell className="font-bold">TSh {item.revenue.toLocaleString()}</TableCell>
+                        <TableCell className={`font-bold ${item.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          TSh {item.profitLoss.toLocaleString()}
+                        </TableCell>
                         <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
                         <TableCell className="font-bold">{received} units</TableCell>
                         <TableCell className="font-bold">{used} units</TableCell>
@@ -831,7 +992,7 @@ export default function BaristaPage() {
                   })}
                   {baristaStoreItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                         No inventory records
                       </TableCell>
                     </TableRow>
