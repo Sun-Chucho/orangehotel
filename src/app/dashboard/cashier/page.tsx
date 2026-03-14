@@ -248,6 +248,18 @@ export default function BookingPage() {
       ),
     [activeBookedRoomNumbers, roomPickerRooms],
   );
+
+  useEffect(() => {
+    if (availableRooms.length === 0) {
+      setSelectedRoomNumber("");
+      return;
+    }
+
+    const selectedStillAvailable = availableRooms.some((room) => room.number === selectedRoomNumber);
+    if (!selectedStillAvailable) {
+      setSelectedRoomNumber(availableRooms[0].number);
+    }
+  }, [availableRooms, selectedRoomNumber]);
   const selectedExtendBooking = useMemo(
     () => transactions.find((entry) => entry.id === selectedExtendBookingId) ?? null,
     [selectedExtendBookingId, transactions],
