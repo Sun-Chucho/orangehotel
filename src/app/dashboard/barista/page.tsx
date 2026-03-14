@@ -172,7 +172,8 @@ export default function BaristaPage() {
   const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<Role | null>(null);
   const isManager = role === "manager";
-  const [directorTab, setDirectorTab] = useState<"inventory" | "sales">("inventory");
+  const [managerTab, setManagerTab] = useState<"inventory" | "finance">("finance");
+  const [directorTab, setDirectorTab] = useState<"inventory" | "finance">("finance");
   const [category, setCategory] = useState<BaristaCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -565,6 +566,60 @@ export default function BaristaPage() {
     [baristaCapitalTotal, totalBaristaRevenue],
   );
 
+  const renderFinanceTable = () => (
+    <Card className="border-none shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Finance</CardTitle>
+        <CardDescription>
+          Capital = quantity in stock x buying price. Revenue = quantity sold x selling price. Profit/Loss = revenue - capital.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader className="bg-muted/10">
+            <TableRow>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Stock Qty</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty Sold</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Buying Price</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Capital</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Selling Price</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Revenue</TableHead>
+              <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Profit/Loss</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {baristaInventoryRows.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                <TableCell className="font-bold">{item.quantitySold}</TableCell>
+                <TableCell className="font-bold">
+                  {item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}
+                </TableCell>
+                <TableCell className="font-bold">TSh {item.capital.toLocaleString()}</TableCell>
+                <TableCell className="font-bold">
+                  {item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
+                </TableCell>
+                <TableCell className="font-bold">TSh {item.revenue.toLocaleString()}</TableCell>
+                <TableCell className={`font-bold ${item.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  TSh {item.profitLoss.toLocaleString()}
+                </TableCell>
+              </TableRow>
+            ))}
+            {baristaInventoryRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                  No barista finance records
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+
   const activeBaristaProfile = useMemo(() => readLocalLoginProfiles()?.barista ?? null, [activeUsername, role]);
 
   const updateBaristaPassword = async () => {
@@ -839,57 +894,65 @@ export default function BaristaPage() {
             </CardContent>
           </Card>
         </div>
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
-            <CardDescription>Store additions update here immediately. Menu creation now lives in Menu Create.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader className="bg-muted/10">
-                <TableRow>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty Sold</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Selling Price</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Revenue</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Profit/Loss</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {baristaInventoryRows.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-bold">{item.name}</TableCell>
-                    <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
-                    <TableCell className="font-bold">{item.quantitySold}</TableCell>
-                    <TableCell className="font-bold">
-                      {item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
-                    </TableCell>
-                    <TableCell className="font-bold">TSh {item.revenue.toLocaleString()}</TableCell>
-                    <TableCell className={`font-bold ${item.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      TSh {item.profitLoss.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
-                    <TableCell className="font-bold">{item.minStock}</TableCell>
-                    <TableCell className="font-black uppercase text-[10px] tracking-widest">
-                      {item.stock <= 0 ? "Out" : item.stock < item.minStock ? "Low" : "In Stock"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {baristaStoreItems.length === 0 && (
+        <Tabs value={managerTab} onValueChange={(value) => setManagerTab(value as "inventory" | "finance")}>
+          <TabsList className="h-10">
+            <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
+            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {managerTab === "finance" ? renderFinanceTable() : (
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
+              <CardDescription>Store additions update here immediately. Menu creation now lives in Menu Create.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/10">
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                      No barista store stock
-                    </TableCell>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty Sold</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Selling Price</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Revenue</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Profit/Loss</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Tot Status</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Low Threshold</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {baristaInventoryRows.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-bold">{item.name}</TableCell>
+                      <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                      <TableCell className="font-bold">{item.quantitySold}</TableCell>
+                      <TableCell className="font-bold">
+                        {item.sellingPrice > 0 ? `TSh ${item.sellingPrice.toLocaleString()}` : "-"}
+                      </TableCell>
+                      <TableCell className="font-bold">TSh {item.revenue.toLocaleString()}</TableCell>
+                      <TableCell className={`font-bold ${item.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        TSh {item.profitLoss.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="font-bold">{formatTotStatus(item)}</TableCell>
+                      <TableCell className="font-bold">{item.minStock}</TableCell>
+                      <TableCell className="font-black uppercase text-[10px] tracking-widest">
+                        {item.stock <= 0 ? "Out" : item.stock < item.minStock ? "Low" : "In Stock"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {baristaStoreItems.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                        No barista store stock
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
@@ -936,10 +999,10 @@ export default function BaristaPage() {
           </Card>
         </div>
 
-        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "sales")}>
+        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "finance")}>
           <TabsList className="h-10">
+            <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
             <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
-            <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -1002,45 +1065,48 @@ export default function BaristaPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Sales</CardTitle>
-              <CardDescription>Completed and credit sales summary</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/10">
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {baristaPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="font-black">{payment.code}</TableCell>
-                      <TableCell className="font-bold">{payment.destination}</TableCell>
-                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
-                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
-                      <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
-                      <TableCell className="font-bold text-sm">{new Date(payment.createdAt).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                  {baristaPayments.length === 0 && (
+          <div className="space-y-6">
+            {renderFinanceTable()}
+            <Card className="border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Payment Records</CardTitle>
+                <CardDescription>Completed and credit sales records from barista settlements</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-muted/10">
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                        No sales records
-                      </TableCell>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {baristaPayments.map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="font-black">{payment.code}</TableCell>
+                        <TableCell className="font-bold">{payment.destination}</TableCell>
+                        <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
+                        <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
+                        <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-sm">{new Date(payment.createdAt).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                    {baristaPayments.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                          No sales records
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     );
