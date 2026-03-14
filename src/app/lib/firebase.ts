@@ -24,6 +24,7 @@ export const firebaseAuth = getAuth(firebaseApp);
 export const firebaseDatabase = getDatabase(firebaseApp);
 
 let authReadyPromise: Promise<void> | null = null;
+const AUTH_READY_TIMEOUT_MS = 2500;
 
 export function ensureFirebaseAuthReady() {
   if (typeof window === "undefined") {
@@ -43,20 +44,39 @@ export function ensureFirebaseAuthReady() {
       }
 
       await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+
+        const timeoutId = window.setTimeout(() => {
+          console.warn("Firebase auth bootstrap timed out, continuing without client auth.");
+          unsubscribe();
+          finish();
+        }, AUTH_READY_TIMEOUT_MS);
+
         const unsubscribe = onAuthStateChanged(
           firebaseAuth,
           (user) => {
             if (!user) return;
+            window.clearTimeout(timeoutId);
             unsubscribe();
-            resolve();
+            finish();
           },
-          () => undefined,
+          () => {
+            window.clearTimeout(timeoutId);
+            unsubscribe();
+            finish();
+          },
         );
 
         signInAnonymously(firebaseAuth).catch((error) => {
+          window.clearTimeout(timeoutId);
           console.warn("Firebase anonymous auth unavailable, continuing without client auth.", error);
           unsubscribe();
-          resolve();
+          finish();
         });
       });
     })().catch((error) => {
