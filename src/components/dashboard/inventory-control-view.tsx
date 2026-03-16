@@ -119,6 +119,7 @@ export function InventoryControlView({
   const [baristaThreshold, setBaristaThreshold] = useState("1");
   const [baristaBuyingPrice, setBaristaBuyingPrice] = useState("");
   const [baristaSellingPrice, setBaristaSellingPrice] = useState("");
+  const [sellingPriceDrafts, setSellingPriceDrafts] = useState<Record<string, string>>({});
   const [editModal, setEditModal] = useState<{
     lane: StoreLane;
     itemId: string;
@@ -289,6 +290,45 @@ export function InventoryControlView({
     setBaristaThreshold("1");
     setBaristaBuyingPrice("");
     setBaristaSellingPrice("");
+  };
+
+  const saveInlineSellingPrice = (lane: StoreLane, itemId: string, rawValue: string) => {
+    if (isDirector) return;
+
+    const sellingPrice = Number(rawValue);
+    if (Number.isNaN(sellingPrice) || sellingPrice < 0) return;
+
+    const matchingStore = storeItems.find((entry) => entry.id === itemId && entry.lane === lane);
+    if (!matchingStore) return;
+
+    const nextStoreItems = storeItems.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            sellingPrice,
+          }
+        : item,
+    );
+    const nextInventoryItems = items.map((item) => {
+      const sameLaneCategory = lane === "kitchen" ? "Kitchen" : "Bar";
+      if (
+        item.category === sameLaneCategory &&
+        normalizeStockName(item.name) === normalizeStockName(matchingStore.name) &&
+        normalizeStockName(item.size ?? "") === normalizeStockName(matchingStore.size ?? "")
+      ) {
+        return {
+          ...item,
+          sellingPrice,
+          price: sellingPrice,
+        };
+      }
+      return item;
+    });
+
+    setStoreItems(nextStoreItems);
+    setItems(nextInventoryItems);
+    writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    writeJson(STORAGE_INVENTORY_ITEMS, nextInventoryItems);
   };
 
   const openEditModal = (lane: StoreLane, item: MainStoreItem) => {
@@ -615,7 +655,31 @@ export function InventoryControlView({
                   </TableCell>
                 )}
                 <TableCell className="font-bold">
-                  {typeof displaySellingPrice === "number" && displaySellingPrice > 0 ? `TSh ${displaySellingPrice.toLocaleString()}` : "-"}
+                  {isDirector ? (
+                    typeof displaySellingPrice === "number" && displaySellingPrice > 0 ? `TSh ${displaySellingPrice.toLocaleString()}` : "-"
+                  ) : (
+                    <Input
+                      type="number"
+                      min="0"
+                      value={sellingPriceDrafts[item.id] ?? (typeof displaySellingPrice === "number" && displaySellingPrice > 0 ? String(displaySellingPrice) : "")}
+                      onChange={(event) =>
+                        setSellingPriceDrafts((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                      onBlur={(event) => {
+                        saveInlineSellingPrice(lane, item.id, event.target.value);
+                        setSellingPriceDrafts((current) => {
+                          const next = { ...current };
+                          delete next[item.id];
+                          return next;
+                        });
+                      }}
+                      placeholder="Selling price"
+                      className="h-9 min-w-[120px]"
+                    />
+                  )}
                 </TableCell>
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
