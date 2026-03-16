@@ -582,6 +582,19 @@ export default function BaristaPage() {
     return salesMap;
   }, [baristaPayments]);
 
+  const baristaMenuPriceByItem = useMemo(() => {
+    const priceMap = new Map<string, number>();
+
+    menuItems.forEach((item) => {
+      const key = normalizeBaristaTarget(item.name);
+      if (typeof item.price === "number" && item.price > 0) {
+        priceMap.set(key, item.price);
+      }
+    });
+
+    return priceMap;
+  }, [menuItems]);
+
   const baristaInventoryRows = useMemo(
     () =>
       baristaStoreItems.map((item) => {
@@ -597,9 +610,12 @@ export default function BaristaPage() {
             ? item.sellingPrice
             : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
               ? inventoryMatch.sellingPrice
+              : typeof baristaMenuPriceByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) === "number" &&
+                (baristaMenuPriceByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) ?? 0) > 0
+                ? (baristaMenuPriceByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) ?? 0)
               : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
-              ? inventoryMatch.price
-              : 0;
+                ? inventoryMatch.price
+                : 0;
         const quantitySold = baristaSalesByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) ?? 0;
         const capital = item.stock * buyingPrice;
         const revenue = quantitySold * sellingPrice;
@@ -616,7 +632,7 @@ export default function BaristaPage() {
           profitLoss,
         };
       }),
-    [baristaSalesByItem, baristaStoreItems, inventoryItems],
+    [baristaMenuPriceByItem, baristaSalesByItem, baristaStoreItems, inventoryItems],
   );
 
   const baristaCapitalTotal = useMemo(
