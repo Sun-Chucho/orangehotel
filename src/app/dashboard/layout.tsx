@@ -79,7 +79,23 @@ function syncBaristaMenuItemsWithSharedData(
   inventoryItems: InventoryItem[],
   storeItems: MainStoreItem[],
 ) {
-  return menuItems.map((item) => {
+  const inventoryMenuItems = inventoryItems
+    .filter((item) => (item.category ?? "").toLowerCase() !== "kitchen")
+    .map((item) => ({
+      id: item.id,
+      name: getBaristaInventoryLabel(item),
+      price:
+        typeof item.sellingPrice === "number" && item.sellingPrice > 0
+          ? item.sellingPrice
+          : typeof item.price === "number" && item.price > 0
+            ? item.price
+            : 0,
+      category: item.category,
+      prepMinutes: 2,
+      barcode: item.barcode || "",
+    }));
+
+  const syncedItems = menuItems.map((item) => {
     const target = normalizeBaristaMenuTarget(item.name);
     const inventoryMatch = inventoryItems.find((entry) => {
       const entryTargets = [
@@ -120,6 +136,13 @@ function syncBaristaMenuItemsWithSharedData(
       barcode: nextBarcode,
     };
   });
+
+  const existingTargets = new Set(syncedItems.map((item) => normalizeBaristaMenuTarget(item.name)));
+  const missingInventoryMenuItems = inventoryMenuItems.filter(
+    (item) => !existingTargets.has(normalizeBaristaMenuTarget(item.name)),
+  );
+
+  return [...syncedItems, ...missingInventoryMenuItems];
 }
 
 function applyBusinessCorrections() {

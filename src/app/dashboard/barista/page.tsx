@@ -153,11 +153,8 @@ function syncBaristaMenuItemsWithSharedInventory(
   inventory: InventoryItem[],
   storeItems: MainStoreItem[],
 ) {
-  if (menuItems.length === 0) {
-    return normalizeBaristaMenuItemsFromInventory(inventory);
-  }
-
-  return menuItems.map((item) => {
+  const normalizedInventoryMenu = normalizeBaristaMenuItemsFromInventory(inventory);
+  const syncedItems = menuItems.length === 0 ? normalizedInventoryMenu : menuItems.map((item) => {
     const normalizedItemTarget = normalizeBaristaTarget(item.name);
     const inventoryMatch = inventory.find((entry) => {
       const entryTargets = [
@@ -198,6 +195,13 @@ function syncBaristaMenuItemsWithSharedInventory(
       category: nextCategory,
     };
   });
+
+  const existingTargets = new Set(syncedItems.map((item) => normalizeBaristaTarget(item.name)));
+  const missingInventoryMenuItems = normalizedInventoryMenu.filter(
+    (item) => !existingTargets.has(normalizeBaristaTarget(item.name)),
+  );
+
+  return [...syncedItems, ...missingInventoryMenuItems];
 }
 
 function normalizeBaristaTarget(name: string) {
