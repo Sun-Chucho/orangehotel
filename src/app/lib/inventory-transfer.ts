@@ -14,6 +14,8 @@ export interface MainStoreItem {
   sellingPrice?: number;
   totLimit?: number;
   totSold?: number;
+  damages?: number;
+  receivedStock?: number;
 }
 
 export interface StoreMovementLog {

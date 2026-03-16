@@ -119,6 +119,8 @@ export interface InventoryItem {
   status: 'ACTIVE' | 'INACTIVE';
   minStock: number;
   unit: string;
+  damages?: number;
+  receivedStock?: number;
 }
 
 export const INVENTORY: InventoryItem[] = [];
