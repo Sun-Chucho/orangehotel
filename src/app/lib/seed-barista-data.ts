@@ -46,7 +46,7 @@ export const BARISTA_INVENTORY_SEED: Partial<InventoryItem>[] = [
   { barcode: "6200100430043", name: "Flying Fish", category: "Beer", size: "330ml", stock: 12, buyingPrice: 1925, sellingPrice: 10000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
   { barcode: "6200100440044", name: "Grand Malt", category: "Malt", size: "330ml", stock: 9, buyingPrice: 2083, sellingPrice: 6000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
   { barcode: "6200100450045", name: "Safari Lager", category: "Beer", size: "330ml", stock: 19, buyingPrice: 0, sellingPrice: 5000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
-  { barcode: "6200100460046", name: "Kilimanjaro Premium Lager", category: "Beer", size: "375ml", stock: 15, buyingPrice: 0, sellingPrice: 5000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
+  { barcode: "6200100460046", name: "Kilimanjaro Premium Lager", category: "Beer", size: "375ml", stock: 13, buyingPrice: 0, sellingPrice: 5000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
   { barcode: "6200100470047", name: "Kilimanjaro Lite", category: "Beer", size: "330ml", stock: 12, buyingPrice: 1929, sellingPrice: 5000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
   { barcode: "6200100480048", name: "Savanna", category: "Cider", size: "330ml", stock: 12, buyingPrice: 3250, sellingPrice: 10000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },
   { barcode: "6200100490049", name: "Brutal Fruit", category: "Cider", size: "275ml", stock: 12, buyingPrice: 3200, sellingPrice: 10000, status: "ACTIVE", minStock: 5, unit: "Bottle", totSold: 0 },

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
+import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeStockName } from "@/app/lib/inventory-transfer";
 import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
 import { readJson, readPosState, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
@@ -20,7 +21,38 @@ import { readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, wr
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v2";
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
-const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v1";
+const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v4";
+const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v1";
+
+function resolveBarInventorySellingPrice(
+  inventoryItems: InventoryItem[],
+  storeItem: Pick<MainStoreItem, "name" | "size">,
+) {
+  const storeTargets = [
+    normalizeStockName(storeItem.name),
+    normalizeStockName(getStoreItemLabel(storeItem)),
+  ];
+
+  const inventoryMatch = inventoryItems.find((item) => {
+    if (item.category !== "Bar") return false;
+    const inventoryTargets = [
+      normalizeStockName(item.name),
+      normalizeStockName(item.size ? `${item.name} ${item.size}` : item.name),
+    ];
+
+    return storeTargets.some((target) => inventoryTargets.includes(target));
+  });
+
+  if (typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0) {
+    return inventoryMatch.sellingPrice;
+  }
+
+  if (typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0) {
+    return inventoryMatch.price;
+  }
+
+  return 0;
+}
 
 function applyBusinessCorrections() {
   if (typeof window === "undefined") return;
@@ -85,7 +117,7 @@ function applyBusinessCorrections() {
     const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
     if (inventoryItems.length > 0) {
       const stockOverrides: Record<string, number> = {
-        "Kilimanjaro Premium Lager|375ml": 15,
+        "Kilimanjaro Premium Lager|375ml": 13,
         "Safari Lager|330ml": 19,
         "Serengeti Lager|330ml": 20,
         "Serengeti Lemon|300ml": 0,
@@ -104,6 +136,37 @@ function applyBusinessCorrections() {
     }
 
     localStorage.setItem(BARISTA_STOCK_FIX_KEY, "1");
+  }
+
+  if (!localStorage.getItem(BARISTA_FINANCE_PRICE_FIX_KEY)) {
+    const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
+    const storeItems = readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+
+    if (inventoryItems.length > 0 && storeItems.length > 0) {
+      let hasChanges = false;
+      const nextStoreItems = storeItems.map((item) => {
+        if (item.lane !== "barista" || (typeof item.sellingPrice === "number" && item.sellingPrice > 0)) {
+          return item;
+        }
+
+        const sellingPrice = resolveBarInventorySellingPrice(inventoryItems, item);
+        if (sellingPrice <= 0) {
+          return item;
+        }
+
+        hasChanges = true;
+        return {
+          ...item,
+          sellingPrice,
+        };
+      });
+
+      if (hasChanges) {
+        writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+      }
+    }
+
+    localStorage.setItem(BARISTA_FINANCE_PRICE_FIX_KEY, "1");
   }
 }
 
@@ -142,8 +205,6 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
-    let active = true;
-
     async function initializeDashboard() {
       const savedRole = normalizeRole(localStorage.getItem('orange-hotel-role'));
       const savedShift = localStorage.getItem('orange-hotel-shift');
@@ -156,29 +217,23 @@ export default function DashboardLayout({
 
       localStorage.setItem("orange-hotel-role", savedRole);
       setActiveUsername(localStorage.getItem("orange-hotel-username") ?? savedRole);
-
       setRole(savedRole);
       if (savedShift) setShift(savedShift);
-      setMounted(true);
 
-      if (typeof window !== "undefined") {
-        setSidebarOpen(window.innerWidth >= 768);
+      try {
+        await hydrateDefaultAppStateFromFirebase();
+        applyBusinessCorrections();
+      } catch (error) {
+        console.error("Dashboard hydration failed", error);
+      } finally {
+        if (typeof window !== "undefined") {
+          setSidebarOpen(window.innerWidth >= 768);
+        }
+        setMounted(true);
       }
-
-      void hydrateDefaultAppStateFromFirebase()
-        .then(() => {
-          applyBusinessCorrections();
-        })
-        .catch((error) => {
-          console.error("Dashboard hydration failed", error);
-        });
     }
 
     void initializeDashboard();
-
-    return () => {
-      active = false;
-    };
   }, [router]);
 
   useEffect(() => {
