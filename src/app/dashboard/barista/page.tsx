@@ -607,6 +607,7 @@ export default function BaristaPage() {
 
         return {
           ...item,
+          displayName: getStoreItemLabel(item),
           buyingPrice,
           sellingPrice,
           quantitySold,
@@ -663,7 +664,7 @@ export default function BaristaPage() {
           <TableBody>
             {baristaInventoryRows.map((item) => (
               <TableRow key={item.id}>
-                <TableCell className="font-bold">{item.name}</TableCell>
+                <TableCell className="font-bold">{item.displayName}</TableCell>
                 <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                 <TableCell className="font-bold">{item.quantitySold}</TableCell>
                 <TableCell className="font-bold">
@@ -996,7 +997,7 @@ export default function BaristaPage() {
                 <TableBody>
                   {baristaInventoryRows.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-bold">{item.name}</TableCell>
+                      <TableCell className="font-bold">{item.displayName}</TableCell>
                       <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                       <TableCell className="font-bold">{item.quantitySold}</TableCell>
                       <TableCell className="font-bold">
@@ -1108,7 +1109,7 @@ export default function BaristaPage() {
                     const remaining = Math.max(0, received - used);
                     return (
                       <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.name}</TableCell>
+                        <TableCell className="font-bold">{item.displayName}</TableCell>
                         <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                         <TableCell className="font-bold">{item.quantitySold}</TableCell>
                         <TableCell className="font-bold">

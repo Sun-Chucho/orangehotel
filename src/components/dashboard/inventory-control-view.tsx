@@ -238,6 +238,7 @@ export function InventoryControlView({
 
         return {
           ...item,
+          displayName: getStoreItemLabel(item),
           buyingPrice,
           sellingPrice,
           quantitySold,
@@ -802,7 +803,7 @@ export function InventoryControlView({
             <TableBody>
               {baristaFinanceRows.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-bold">{item.name}</TableCell>
+                  <TableCell className="font-bold">{item.displayName}</TableCell>
                   <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
                   <TableCell className="font-bold">{item.quantitySold}</TableCell>
                   <TableCell className="font-bold">{item.buyingPrice > 0 ? `TSh ${item.buyingPrice.toLocaleString()}` : "-"}</TableCell>
