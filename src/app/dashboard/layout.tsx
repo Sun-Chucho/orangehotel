@@ -7,9 +7,10 @@ import { COMPANY_STOCK_SHEET } from "@/app/lib/company-stock-seed";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
 import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeStockName } from "@/app/lib/inventory-transfer";
+import { getTotLimit } from "@/app/lib/barista-stock";
 import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
-import { readJson, readPosState, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
+import { readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, User, Clock, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v4";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v1";
+const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v1";
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 
 function resolveBarInventorySellingPrice(
@@ -55,6 +57,69 @@ function resolveBarInventorySellingPrice(
   }
 
   return 0;
+}
+
+function normalizeBaristaMenuTarget(value: string) {
+  return normalizeStockName(value.replace(/\s+TOTS?$/i, "").trim());
+}
+
+function getBaristaInventoryLabel(item: Pick<InventoryItem, "name" | "size">) {
+  const rawName = item.name.trim();
+  const isTotItem = /\s+TOTS?$/i.test(rawName);
+  const baseName = rawName.replace(/\s+TOTS?$/i, "").trim();
+  const size = item.size?.trim() ?? "";
+
+  if (!size) return isTotItem ? `${baseName} TOTS` : baseName;
+  if (rawName.toLowerCase().includes(size.toLowerCase())) return rawName;
+  return isTotItem ? `${baseName} ${size} TOTS`.trim() : `${baseName} ${size}`.trim();
+}
+
+function syncBaristaMenuItemsWithSharedData(
+  menuItems: Array<{ id: string; name: string; price: number; category: string; prepMinutes: number; barcode?: string }>,
+  inventoryItems: InventoryItem[],
+  storeItems: MainStoreItem[],
+) {
+  return menuItems.map((item) => {
+    const target = normalizeBaristaMenuTarget(item.name);
+    const inventoryMatch = inventoryItems.find((entry) => {
+      const entryTargets = [
+        normalizeBaristaMenuTarget(entry.name),
+        normalizeBaristaMenuTarget(getBaristaInventoryLabel(entry)),
+      ];
+      return entryTargets.includes(target);
+    });
+    const storeMatch = storeItems.find((entry) => normalizeBaristaMenuTarget(getStoreItemLabel(entry)) === target);
+
+    if (!inventoryMatch && !storeMatch) {
+      return item;
+    }
+
+    const nextName = storeMatch
+      ? getTotLimit(storeMatch) > 0
+        ? `${getStoreItemLabel(storeMatch)} TOTS`
+        : getStoreItemLabel(storeMatch)
+      : inventoryMatch
+        ? getBaristaInventoryLabel(inventoryMatch)
+        : item.name;
+    const nextPrice =
+      typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
+        ? inventoryMatch.sellingPrice
+        : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
+          ? inventoryMatch.price
+          : item.price;
+    const nextBarcode = inventoryMatch?.barcode || item.barcode;
+
+    if (nextName === item.name && nextPrice === item.price && nextBarcode === item.barcode) {
+      return item;
+    }
+
+    return {
+      ...item,
+      name: nextName,
+      price: nextPrice,
+      barcode: nextBarcode,
+    };
+  });
 }
 
 function applyBusinessCorrections() {
@@ -170,6 +235,29 @@ function applyBusinessCorrections() {
     }
 
     localStorage.setItem(BARISTA_FINANCE_PRICE_FIX_KEY, "1");
+  }
+
+  if (!localStorage.getItem(BARISTA_SHARED_STATE_FIX_KEY)) {
+    const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
+    const storeItems = (readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? []).filter((item) => item.lane === "barista");
+    const baristaSnapshot = readPosState<{ id: string }, { id: string }, { id: string; name: string; price: number; category: string; prepMinutes: number; barcode?: string }>(
+      STORAGE_BARISTA_STATE,
+      "orange-hotel-barista-orders",
+      "orange-hotel-barista-seq",
+      "orange-hotel-barista-payments",
+      "orange-hotel-barista-menu",
+      490,
+    );
+
+    if (inventoryItems.length > 0 && storeItems.length > 0 && baristaSnapshot.menuItems.length > 0) {
+      const nextMenuItems = syncBaristaMenuItemsWithSharedData(baristaSnapshot.menuItems, inventoryItems, storeItems);
+
+      if (JSON.stringify(nextMenuItems) !== JSON.stringify(baristaSnapshot.menuItems)) {
+        writePosState(STORAGE_BARISTA_STATE, baristaSnapshot.tickets, baristaSnapshot.ticketSeq, baristaSnapshot.payments, nextMenuItems);
+      }
+    }
+
+    localStorage.setItem(BARISTA_SHARED_STATE_FIX_KEY, "1");
   }
 
   if (!localStorage.getItem(COMPANY_STOCK_SHEET_FIX_KEY)) {
