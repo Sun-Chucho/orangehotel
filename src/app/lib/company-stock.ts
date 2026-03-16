@@ -1,15 +1,22 @@
 export type CompanyStockCategory =
-  | "kitchen-equipment"
-  | "technology"
-  | "electronics"
-  | "cleaning-supplies"
-  | "furniture";
+  | "linen"
+  | "cutleries"
+  | "cups-pots"
+  | "glasses"
+  | "plates-bowls"
+  | "others"
+  | "staff-utensils"
+  | "reception"
+  | "lights";
 
 export interface CompanyStockItem {
   id: string;
   name: string;
-  description: string;
-  quantity: number;
+  openingStock: string;
+  received: string;
+  issued: string;
+  damaged: string;
+  balance: string;
   category: CompanyStockCategory;
   createdAt: number;
 }

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { STORAGE_COMPANY_STOCK } from "@/app/lib/company-stock";
+import { COMPANY_STOCK_SHEET } from "@/app/lib/company-stock-seed";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
 import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeStockName } from "@/app/lib/inventory-transfer";
@@ -23,6 +25,7 @@ const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v4";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v1";
+const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 
 function resolveBarInventorySellingPrice(
   inventoryItems: InventoryItem[],
@@ -167,6 +170,11 @@ function applyBusinessCorrections() {
     }
 
     localStorage.setItem(BARISTA_FINANCE_PRICE_FIX_KEY, "1");
+  }
+
+  if (!localStorage.getItem(COMPANY_STOCK_SHEET_FIX_KEY)) {
+    writeJson(STORAGE_COMPANY_STOCK, COMPANY_STOCK_SHEET);
+    localStorage.setItem(COMPANY_STOCK_SHEET_FIX_KEY, "1");
   }
 }
 
