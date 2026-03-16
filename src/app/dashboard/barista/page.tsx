@@ -148,6 +148,58 @@ function normalizeBaristaMenuItemsFromInventory(inventory: InventoryItem[]): Bar
   return Array.from(deduped.values());
 }
 
+function syncBaristaMenuItemsWithSharedInventory(
+  menuItems: BaristaMenuItem[],
+  inventory: InventoryItem[],
+  storeItems: MainStoreItem[],
+) {
+  if (menuItems.length === 0) {
+    return normalizeBaristaMenuItemsFromInventory(inventory);
+  }
+
+  return menuItems.map((item) => {
+    const normalizedItemTarget = normalizeBaristaTarget(item.name);
+    const inventoryMatch = inventory.find((entry) => {
+      const entryTargets = [
+        normalizeBaristaTarget(entry.name),
+        normalizeBaristaTarget(getBaristaInventoryLabel(entry)),
+      ];
+      return entryTargets.includes(normalizedItemTarget);
+    });
+    const storeMatch = storeItems.find((entry) => normalizeBaristaTarget(getStoreItemLabel(entry)) === normalizedItemTarget);
+
+    if (!inventoryMatch && !storeMatch) {
+      return item;
+    }
+
+    const nextName = storeMatch
+      ? getTotLimit(storeMatch) > 0
+        ? `${getStoreItemLabel(storeMatch)} TOTS`
+        : getStoreItemLabel(storeMatch)
+      : inventoryMatch
+        ? getBaristaInventoryLabel(inventoryMatch)
+        : item.name;
+    const nextPrice =
+      typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
+        ? inventoryMatch.sellingPrice
+        : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
+          ? inventoryMatch.price
+          : item.price;
+    const nextCategory = inventoryMatch ? normalizeCategory(inventoryMatch.category, nextName) : item.category;
+
+    if (nextName === item.name && nextPrice === item.price && nextCategory === item.category) {
+      return item;
+    }
+
+    return {
+      ...item,
+      name: nextName,
+      price: nextPrice,
+      category: nextCategory,
+    };
+  });
+}
+
 function normalizeBaristaTarget(name: string) {
   return name.replace(/\s+TOTS?$/i, "").trim().toLowerCase();
 }
@@ -241,9 +293,9 @@ export default function BaristaPage() {
         })) as InventoryItem[];
         writeJson(STORAGE_INVENTORY_ITEMS, seed);
         setInventoryItems(seed);
-        setStoredMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : normalizeBaristaMenuItemsFromInventory(seed));
+        setStoredMenuItems(syncBaristaMenuItemsWithSharedInventory(snapshot.menuItems, seed, readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? []));
       } else {
-        setStoredMenuItems(snapshot.menuItems.length > 0 ? snapshot.menuItems : normalizeBaristaMenuItemsFromInventory(inventory));
+        setStoredMenuItems(syncBaristaMenuItemsWithSharedInventory(snapshot.menuItems, inventory, readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? []));
       }
     };
 
@@ -282,6 +334,26 @@ export default function BaristaPage() {
   useEffect(() => {
     if (queueTab === "from-store") loadFromStoreData();
   }, [queueTab]);
+
+  useEffect(() => {
+    const snapshot = readPosState<BaristaTicket, BaristaPaymentRecord, BaristaMenuItem>(
+      STORAGE_BARISTA_STATE,
+      STORAGE_TICKETS,
+      STORAGE_SEQ,
+      STORAGE_PAYMENTS,
+      STORAGE_MENU,
+      490,
+    );
+    const syncedMenuItems = syncBaristaMenuItemsWithSharedInventory(snapshot.menuItems, inventoryItems, baristaStoreItems);
+
+    if (JSON.stringify(syncedMenuItems) !== JSON.stringify(snapshot.menuItems)) {
+      writePosState(STORAGE_BARISTA_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, syncedMenuItems);
+    }
+
+    if (JSON.stringify(syncedMenuItems) !== JSON.stringify(storedMenuItems)) {
+      setStoredMenuItems(syncedMenuItems);
+    }
+  }, [inventoryItems, baristaStoreItems]);
 
   useEffect(() => {
     if (serviceMode === "restaurant") {
