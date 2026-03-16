@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { Pencil } from "lucide-react";
 
 const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> = [
   { value: "linen", label: "Linen" },
@@ -36,6 +37,7 @@ export default function CompanyStockPage() {
   const [damaged, setDamaged] = useState("");
   const [balance, setBalance] = useState("");
   const [category, setCategory] = useState<CompanyStockCategory>("linen");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     const applyCompanyStockSnapshot = () => {
@@ -55,31 +57,8 @@ export default function CompanyStockPage() {
 
   const filteredItems = useMemo(() => items.filter((item) => item.category === tab), [items, tab]);
 
-  const addItem = async () => {
-    if (isDirector) return;
-    if (name.trim().length === 0) return;
-    const approved = await confirm({
-      title: "Add Company Stock",
-      description: `Are you sure you want to add ${name.trim()} to company stock?`,
-      actionLabel: "Add Item",
-    });
-    if (!approved) return;
-    const nextItems = [
-      {
-        id: `cs-${Date.now()}`,
-        name: name.trim(),
-        openingStock: openingStock.trim(),
-        received: received.trim(),
-        issued: issued.trim(),
-        damaged: damaged.trim(),
-        balance: balance.trim(),
-        category,
-        createdAt: Date.now(),
-      },
-      ...items,
-    ];
-    setItems(nextItems);
-    writeJson(STORAGE_COMPANY_STOCK, nextItems);
+  const resetForm = () => {
+    setEditingItemId(null);
     setName("");
     setOpeningStock("");
     setReceived("");
@@ -87,6 +66,52 @@ export default function CompanyStockPage() {
     setDamaged("");
     setBalance("");
     setCategory("linen");
+  };
+
+  const startEdit = (item: CompanyStockItem) => {
+    setEditingItemId(item.id);
+    setName(item.name);
+    setOpeningStock(item.openingStock);
+    setReceived(item.received);
+    setIssued(item.issued);
+    setDamaged(item.damaged);
+    setBalance(item.balance);
+    setCategory(item.category);
+  };
+
+  const saveItem = async () => {
+    if (isDirector) return;
+    if (name.trim().length === 0) return;
+    const approved = await confirm({
+      title: editingItemId ? "Update Company Stock" : "Add Company Stock",
+      description: editingItemId
+        ? `Are you sure you want to update ${name.trim()} in company stock?`
+        : `Are you sure you want to add ${name.trim()} to company stock?`,
+      actionLabel: editingItemId ? "Update Item" : "Add Item",
+    });
+    if (!approved) return;
+
+    const nextItem: CompanyStockItem = {
+      id: editingItemId ?? `cs-${Date.now()}`,
+      name: name.trim(),
+      openingStock: openingStock.trim(),
+      received: received.trim(),
+      issued: issued.trim(),
+      damaged: damaged.trim(),
+      balance: balance.trim(),
+      category,
+      createdAt: editingItemId
+        ? items.find((item) => item.id === editingItemId)?.createdAt ?? Date.now()
+        : Date.now(),
+    };
+
+    const nextItems = editingItemId
+      ? items.map((item) => (item.id === editingItemId ? nextItem : item))
+      : [nextItem, ...items];
+
+    setItems(nextItems);
+    writeJson(STORAGE_COMPANY_STOCK, nextItems);
+    resetForm();
   };
 
   return (
@@ -132,9 +157,14 @@ export default function CompanyStockPage() {
                   </option>
                 ))}
               </select>
-              <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={addItem}>
-                Add
+              <Button className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={saveItem}>
+                {editingItemId ? "Update" : "Add"}
               </Button>
+              {editingItemId && (
+                <Button variant="outline" className="h-10 font-black uppercase tracking-widest text-[10px]" onClick={resetForm}>
+                  Cancel
+                </Button>
+              )}
             </div>
           )}
 
@@ -158,6 +188,7 @@ export default function CompanyStockPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Damaged</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Balance</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Date Added</TableHead>
+                {!isDirector && <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -170,11 +201,18 @@ export default function CompanyStockPage() {
                   <TableCell className="font-bold">{item.damaged || "-"}</TableCell>
                   <TableCell className="font-bold">{item.balance || "-"}</TableCell>
                   <TableCell className="font-bold text-sm">{new Date(item.createdAt).toLocaleDateString()}</TableCell>
+                  {!isDirector && (
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => startEdit(item)}>
+                        <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {filteredItems.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                  <TableCell colSpan={isDirector ? 7 : 8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                     No company stock items in this category
                   </TableCell>
                 </TableRow>
