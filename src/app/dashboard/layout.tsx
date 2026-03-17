@@ -27,7 +27,7 @@ const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v3";
 const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v4";
-const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v3";
+const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v4";
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
 
@@ -171,6 +171,7 @@ type InventorySeedUpdate = {
   name: string;
   size: string;
   buyingPrice?: number;
+  stock?: number;
   stockDelta?: number;
 };
 
@@ -182,7 +183,7 @@ const BARISTA_PRICE_UPDATES: InventorySeedUpdate[] = [
   { name: "Castle Lite", size: "330ml", buyingPrice: 1650 },
   { name: "Safari Lager", size: "330ml", buyingPrice: 1650 },
   { name: "Kilimanjaro Premium Lager", size: "375ml", buyingPrice: 1650 },
-  { name: "Konyagi", size: "750ml", buyingPrice: 10333, stockDelta: 6 },
+  { name: "Konyagi", size: "750ml", buyingPrice: 10333, stock: 6 },
   { name: "Apothic Red", size: "750ml", stockDelta: 2 },
   { name: "J & B", size: "200ml", stockDelta: 1 },
   { name: "Brutal Fruit", size: "275ml", stockDelta: 6 },
@@ -438,7 +439,12 @@ function applyBusinessCorrections() {
         nextInventoryItems[inventoryIndex] = {
           ...current,
           buyingPrice: typeof update.buyingPrice === "number" ? update.buyingPrice : current.buyingPrice,
-          stock: typeof update.stockDelta === "number" ? current.stock + update.stockDelta : current.stock,
+          stock:
+            typeof update.stock === "number"
+              ? update.stock
+              : typeof update.stockDelta === "number"
+                ? current.stock + update.stockDelta
+                : current.stock,
         };
         inventoryChanged = true;
       }
@@ -454,7 +460,12 @@ function applyBusinessCorrections() {
         nextStoreItems[storeIndex] = {
           ...current,
           buyingPrice: typeof update.buyingPrice === "number" ? update.buyingPrice : current.buyingPrice,
-          stock: typeof update.stockDelta === "number" ? current.stock + update.stockDelta : current.stock,
+          stock:
+            typeof update.stock === "number"
+              ? update.stock
+              : typeof update.stockDelta === "number"
+                ? current.stock + update.stockDelta
+                : current.stock,
         };
         storeChanged = true;
       }
