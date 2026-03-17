@@ -546,6 +546,9 @@ export default function Home() {
             <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/85 md:text-base">
               Elevated stays for business and leisure travelers in Tanzania, with quiet luxury interiors and seamless digital booking.
             </p>
+            <p className="mt-4 inline-flex max-w-2xl rounded-full border border-orange-300/40 bg-orange-500/15 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-orange-100">
+              Grand Opening Promotion: reduced room prices now available for a limited time
+            </p>
             <div className="mt-7 flex flex-wrap gap-3 text-xs uppercase tracking-[0.16em]">
               <span className="rounded-full bg-white/20 px-4 py-2 backdrop-blur">53 Premium Rooms</span>
               <span className="rounded-full bg-orange-500/90 px-4 py-2">Standard + Platinum</span>
@@ -936,6 +939,9 @@ export default function Home() {
           <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Booking Preview</p>
           <h2 className="mt-3 font-headline text-4xl">Your Stay</h2>
           <div className="mt-8 space-y-4 text-sm">
+            <div className="rounded-sm border border-orange-300/25 bg-orange-500/10 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-orange-200">
+              Grand Opening price reduction is active on current website room offers
+            </div>
             <div className="flex items-center justify-between border-b border-white/15 pb-3">
               <span className="text-white/70">Room Type</span>
               <strong className="uppercase">{roomType}</strong>
