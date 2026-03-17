@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { USERS, Role } from "@/app/lib/mock-data";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,11 +12,14 @@ import {
   Phone,
   Plus,
   Search,
+  Trash2,
   Users,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsDirector } from "@/hooks/use-is-director";
+import { readJson, writeJson } from "@/app/lib/storage";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type StaffRoleFilter = "all" | Role;
 
@@ -31,21 +34,24 @@ interface StaffMember {
 }
 
 const ROLE_OPTIONS: Role[] = ["manager", "director", "inventory", "cashier", "kitchen", "barista"];
+const STAFF_STORAGE_KEY = "orange-hotel-staff-members";
 
 function toEmail(name: string) {
   return `${name.toLowerCase().replace(/\s+/g, ".")}@orange.hotel`;
 }
 
+function getDefaultMembers(): StaffMember[] {
+  return USERS.map((user) => ({
+    ...user,
+    phone: `+1 (555) 000-00${user.id.slice(-1)}`,
+    email: toEmail(user.name),
+    shift: user.id === "u4" ? "Night" : "Day",
+  }));
+}
+
 export default function StaffPage() {
   const isDirector = useIsDirector();
-  const [members, setMembers] = useState<StaffMember[]>(
-    USERS.map((user) => ({
-      ...user,
-      phone: `+1 (555) 000-00${user.id.slice(-1)}`,
-      email: toEmail(user.name),
-      shift: user.id === "u4" ? "Night" : "Day",
-    })),
-  );
+  const [members, setMembers] = useState<StaffMember[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<StaffRoleFilter>("all");
@@ -54,6 +60,27 @@ export default function StaffPage() {
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<Role>("cashier");
   const [newShift, setNewShift] = useState<"Day" | "Night">("Day");
+
+  useEffect(() => {
+    const storedMembers = readJson<StaffMember[]>(STAFF_STORAGE_KEY);
+    if (Array.isArray(storedMembers) && storedMembers.length > 0) {
+      setMembers(storedMembers);
+    } else {
+      const defaultMembers = getDefaultMembers();
+      setMembers(defaultMembers);
+      writeJson(STAFF_STORAGE_KEY, defaultMembers);
+    }
+
+    return subscribeToSyncedStorageKey<StaffMember[]>(STAFF_STORAGE_KEY, (value) => {
+      if (Array.isArray(value)) {
+        setMembers(value);
+        return;
+      }
+
+      const defaultMembers = getDefaultMembers();
+      setMembers(defaultMembers);
+    });
+  }, []);
 
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
@@ -79,16 +106,42 @@ export default function StaffPage() {
       shift: newShift,
     };
 
-    setMembers((current) => [member, ...current]);
+    setMembers((current) => {
+      const nextMembers = [member, ...current];
+      writeJson(STAFF_STORAGE_KEY, nextMembers);
+      return nextMembers;
+    });
     setNewName("");
     setNewRole("cashier");
     setNewShift("Day");
     setShowAddForm(false);
   };
 
+  const updateMemberRole = (memberId: string, role: Role) => {
+    if (isDirector) return;
+
+    setMembers((current) => {
+      const nextMembers = current.map((member) =>
+        member.id === memberId ? { ...member, role } : member,
+      );
+      writeJson(STAFF_STORAGE_KEY, nextMembers);
+      return nextMembers;
+    });
+  };
+
+  const deleteMember = (memberId: string) => {
+    if (isDirector) return;
+
+    setMembers((current) => {
+      const nextMembers = current.filter((member) => member.id !== memberId);
+      writeJson(STAFF_STORAGE_KEY, nextMembers);
+      return nextMembers;
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Staff Directory</h1>
           <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Human resources and shift planning</p>
@@ -178,9 +231,29 @@ export default function StaffPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mt-6">
-                <Button size="sm" variant="outline" className="font-bold text-[10px] uppercase tracking-widest" disabled={isDirector}>Profile</Button>
-                <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold text-[10px] uppercase tracking-widest" disabled={isDirector}>Schedule</Button>
+              <div className="mt-6 space-y-2">
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-[10px] font-black uppercase tracking-widest"
+                  value={member.role}
+                  onChange={(event) => updateMemberRole(member.id, event.target.value as Role)}
+                  disabled={isDirector}
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" className="font-bold text-[10px] uppercase tracking-widest" disabled={isDirector}>Profile</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="font-bold text-[10px] uppercase tracking-widest"
+                    disabled={isDirector}
+                    onClick={() => deleteMember(member.id)}
+                  >
+                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
