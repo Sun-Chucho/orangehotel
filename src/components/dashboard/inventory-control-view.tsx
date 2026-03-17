@@ -125,6 +125,7 @@ export function InventoryControlView({
   const isDirector = useIsDirector();
   const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
+  const [baristaView, setBaristaView] = useState<"inventory" | "finance">("inventory");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
@@ -994,9 +995,21 @@ export function InventoryControlView({
 
       {activeTab === "barista-stock" && (
         <div className="space-y-6">
-          {renderStoreCard("barista", "Barista Stock", baristaStore)}
-          {renderInventoryTable("Barista Inventory Records", baristaInventoryItems, "barista")}
-          {canViewBaristaFinance && renderBaristaFinance()}
+          {canViewBaristaFinance && (
+            <Tabs value={baristaView} onValueChange={(value) => setBaristaView(value as "inventory" | "finance")}>
+              <TabsList className="h-11">
+                <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+                <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+          {(!canViewBaristaFinance || baristaView === "inventory") && (
+            <>
+              {renderStoreCard("barista", "Barista Stock", baristaStore)}
+              {renderInventoryTable("Barista Inventory Records", baristaInventoryItems, "barista")}
+            </>
+          )}
+          {canViewBaristaFinance && baristaView === "finance" && renderBaristaFinance()}
         </div>
       )}
 
