@@ -222,6 +222,27 @@ const destinationCards = [
   },
 ];
 
+const CONFERENCE_PACKAGES = [
+  {
+    name: "Full Conference",
+    price: 65000,
+    subtitle: "Complete hosted conference experience",
+    inclusions: ["Hall", "Setup", "Breakfast", "Lunch", "Soft Drinks", "Stationery", "PA System"],
+  },
+  {
+    name: "Business Conference",
+    price: 40000,
+    subtitle: "Streamlined professional meeting package",
+    inclusions: ["Hall", "Setup", "PA System"],
+  },
+  {
+    name: "Essential Hall",
+    price: 30000,
+    subtitle: "Venue-ready package for simple sessions",
+    inclusions: ["Hall", "Setup"],
+  },
+] as const;
+
 const stories: HighlightStory[] = [
   {
     title: "Chef Specials This Week",
@@ -833,6 +854,53 @@ export default function Home() {
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative flex h-full items-center justify-center">
             <h3 className="font-headline text-3xl">Evening Bar Vibes</h3>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 pb-14">
+        <div className="overflow-hidden rounded-sm border border-black/10 bg-[linear-gradient(135deg,#111111_0%,#181818_45%,#2c1a08_100%)] text-white shadow-[0_24px_60px_rgba(0,0,0,0.14)]">
+          <div className="grid gap-8 px-6 py-10 md:grid-cols-[0.9fr_1.1fr] md:px-10 md:py-12">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.24em] text-orange-300">Conference Packages</p>
+              <h2 className="mt-4 font-headline text-4xl leading-tight md:text-5xl">Professional Conference Hosting At Orange Hotel</h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-white/76">
+                From executive meetings to full-day corporate sessions, we offer clear per-person conference packages built around venue comfort, reliable setup, and polished service delivery.
+              </p>
+              <div className="mt-6 space-y-3 text-sm text-white/74">
+                <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                  Well-prepared halls, structured setup, and service tiers that fit both compact meetings and full hosted events.
+                </p>
+                <a
+                  href={WHATSAPP_LINK}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
+                >
+                  Ask About Conference Booking
+                  <ChevronRight className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              {CONFERENCE_PACKAGES.map((pkg) => (
+                <article key={pkg.name} className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-300">{pkg.name}</p>
+                  <p className="mt-3 text-3xl font-black tracking-tight">{formatTzs(pkg.price)}</p>
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Per Person</p>
+                  <p className="mt-4 text-sm leading-6 text-white/74">{pkg.subtitle}</p>
+                  <div className="mt-5 space-y-2">
+                    {pkg.inclusions.map((item) => (
+                      <div key={item} className="flex items-center gap-2 text-sm text-white/86">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-orange-300" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
         </div>
