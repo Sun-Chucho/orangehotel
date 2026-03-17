@@ -35,6 +35,14 @@ function LandingImage(props: ImageProps) {
   return <Image {...props} unoptimized />;
 }
 
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M19.05 4.94A9.82 9.82 0 0 0 12.03 2C6.6 2 2.17 6.42 2.17 11.86c0 1.74.46 3.44 1.33 4.93L2 22l5.36-1.41a9.8 9.8 0 0 0 4.67 1.19h.01c5.43 0 9.86-4.42 9.86-9.86a9.8 9.8 0 0 0-2.85-6.98Zm-7.02 15.17h-.01a8.13 8.13 0 0 1-4.14-1.14l-.3-.18-3.18.84.85-3.1-.2-.32a8.13 8.13 0 0 1-1.25-4.35c0-4.49 3.66-8.15 8.17-8.15 2.18 0 4.22.84 5.76 2.39a8.08 8.08 0 0 1 2.38 5.76c0 4.49-3.66 8.15-8.08 8.15Zm4.47-6.11c-.25-.12-1.46-.72-1.69-.8-.22-.08-.38-.12-.54.13-.16.24-.62.8-.76.96-.14.16-.28.18-.53.06-.25-.12-1.04-.38-1.98-1.22-.73-.65-1.22-1.45-1.36-1.69-.14-.24-.02-.37.1-.49.1-.1.25-.28.37-.41.12-.14.16-.24.25-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.31-.74-1.79-.2-.48-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.57 4.09 3.61.57.25 1.02.4 1.37.51.58.18 1.11.15 1.53.09.47-.07 1.46-.6 1.66-1.18.2-.58.2-1.08.14-1.18-.06-.1-.22-.16-.47-.28Z" />
+    </svg>
+  );
+}
+
 function CrossfadeStoryImage({
   src,
   alt,
@@ -101,6 +109,9 @@ const formatTzs = (value: number) =>
     currency: "TZS",
     maximumFractionDigits: 0,
   }).format(value);
+
+const WHATSAPP_NUMBER = "+255791693901";
+const WHATSAPP_LINK = `https://wa.me/255791693901?text=${encodeURIComponent("Hello Orange Hotel, I would like to ask about booking and room availability.")}`;
 
 const dayDiff = (checkIn: string, checkOut: string) => {
   const inDate = new Date(checkIn);
@@ -981,6 +992,15 @@ export default function Home() {
                 <Instagram className="h-4 w-4 text-orange-300" />
                 <span>Instagram: orangehotelarusha</span>
               </a>
+              <a
+                href={WHATSAPP_LINK}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
+              >
+                <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
+                <span>WhatsApp: {WHATSAPP_NUMBER}</span>
+              </a>
             </div>
           </div>
 
@@ -1017,7 +1037,22 @@ export default function Home() {
         </div>
       </footer>
 
-      <div className="fixed bottom-4 right-4 z-[120] md:bottom-6 md:right-6">
+      <div className="fixed bottom-4 right-4 z-[120] flex flex-col items-end gap-3 md:bottom-6 md:right-6">
+        <a
+          href={WHATSAPP_LINK}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-3 rounded-full border border-white/20 bg-[#25D366] px-5 py-4 text-white shadow-[0_18px_44px_rgba(37,211,102,0.35)] transition hover:scale-105 hover:bg-[#1ebe5b]"
+          aria-label="Open WhatsApp chat"
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
+            <WhatsAppIcon className="h-6 w-6" />
+          </span>
+          <span className="text-left">
+            <span className="block text-[10px] font-black uppercase tracking-[0.22em] text-white/80">Quick Message</span>
+            <span className="block text-sm font-black uppercase tracking-[0.16em]">WhatsApp</span>
+          </span>
+        </a>
         {showChatWidget ? (
           <div className="mb-3 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[26px] border border-black/10 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between bg-black px-5 py-4 text-white">
