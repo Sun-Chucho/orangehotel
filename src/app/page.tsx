@@ -226,19 +226,22 @@ const CONFERENCE_PACKAGES = [
   {
     name: "Full Conference",
     price: 65000,
-    subtitle: "Complete hosted conference experience",
+    subtitle: "Best for full-day hosted corporate sessions",
+    accent: "Most Complete",
     inclusions: ["Hall", "Setup", "Breakfast", "Lunch", "Soft Drinks", "Stationery", "PA System"],
   },
   {
     name: "Business Conference",
     price: 40000,
-    subtitle: "Streamlined professional meeting package",
+    subtitle: "Best for focused business meetings and presentations",
+    accent: "Popular Choice",
     inclusions: ["Hall", "Setup", "PA System"],
   },
   {
     name: "Essential Hall",
     price: 30000,
-    subtitle: "Venue-ready package for simple sessions",
+    subtitle: "Best for simple sessions needing venue readiness only",
+    accent: "Simple Setup",
     inclusions: ["Hall", "Setup"],
   },
 ] as const;
@@ -860,23 +863,22 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-6 pb-14">
-        <div className="overflow-hidden rounded-sm border border-black/10 bg-[linear-gradient(135deg,#111111_0%,#181818_45%,#2c1a08_100%)] text-white shadow-[0_24px_60px_rgba(0,0,0,0.14)]">
-          <div className="grid gap-8 px-6 py-10 md:grid-cols-[0.9fr_1.1fr] md:px-10 md:py-12">
-            <div>
+        <div className="overflow-hidden rounded-sm border border-black/10 bg-[linear-gradient(135deg,#121212_0%,#191919_55%,#2d1b08_100%)] text-white shadow-[0_24px_60px_rgba(0,0,0,0.14)]">
+          <div className="px-6 py-10 md:px-10 md:py-12">
+            <div className="max-w-3xl">
               <p className="text-[11px] font-black uppercase tracking-[0.24em] text-orange-300">Conference Packages</p>
-              <h2 className="mt-4 font-headline text-4xl leading-tight md:text-5xl">Professional Conference Hosting At Orange Hotel</h2>
-              <p className="mt-4 max-w-xl text-sm leading-7 text-white/76">
-                From executive meetings to full-day corporate sessions, we offer clear per-person conference packages built around venue comfort, reliable setup, and polished service delivery.
-              </p>
-              <div className="mt-6 space-y-3 text-sm text-white/74">
-                <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                  Well-prepared halls, structured setup, and service tiers that fit both compact meetings and full hosted events.
-                </p>
+              <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="font-headline text-4xl leading-tight md:text-5xl">Conference Packages Designed For Clear Choices</h2>
+                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/76">
+                    Choose the package that fits your event format, from essential venue setup to a fully catered conference experience.
+                  </p>
+                </div>
                 <a
                   href={WHATSAPP_LINK}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
+                  className="inline-flex items-center gap-2 self-start rounded-full bg-orange-500 px-5 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-orange-400"
                 >
                   Ask About Conference Booking
                   <ChevronRight className="h-4 w-4" />
@@ -884,19 +886,42 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              {CONFERENCE_PACKAGES.map((pkg) => (
-                <article key={pkg.name} className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-300">{pkg.name}</p>
-                  <p className="mt-3 text-3xl font-black tracking-tight">{formatTzs(pkg.price)}</p>
-                  <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Per Person</p>
-                  <p className="mt-4 text-sm leading-6 text-white/74">{pkg.subtitle}</p>
-                  <div className="mt-5 space-y-2">
+            <div className="mt-8 grid gap-5 lg:grid-cols-3">
+              {CONFERENCE_PACKAGES.map((pkg, index) => (
+                <article
+                  key={pkg.name}
+                  className={`rounded-[30px] border p-6 shadow-[0_18px_42px_rgba(0,0,0,0.18)] ${
+                    index === 1
+                      ? "border-orange-300/40 bg-[linear-gradient(180deg,rgba(255,153,51,0.14),rgba(255,255,255,0.06))]"
+                      : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-300">{pkg.accent}</p>
+                      <h3 className="mt-3 font-headline text-3xl leading-none">{pkg.name}</h3>
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">
+                      Package
+                    </span>
+                  </div>
+
+                  <div className="mt-6 rounded-[24px] bg-black/20 px-5 py-4">
+                    <p className="text-4xl font-black tracking-tight">{formatTzs(pkg.price)}</p>
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Per Person</p>
+                  </div>
+
+                  <p className="mt-5 min-h-[48px] text-sm leading-6 text-white/74">{pkg.subtitle}</p>
+
+                  <div className="mt-6 flex flex-wrap gap-2">
                     {pkg.inclusions.map((item) => (
-                      <div key={item} className="flex items-center gap-2 text-sm text-white/86">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-orange-300" />
-                        <span>{item}</span>
-                      </div>
+                      <span
+                        key={item}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold text-white/88"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-orange-300" />
+                        {item}
+                      </span>
                     ))}
                   </div>
                 </article>
