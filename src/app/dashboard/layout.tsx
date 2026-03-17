@@ -27,7 +27,7 @@ const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v3";
 const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v4";
-const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v4";
+const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v5";
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
 
@@ -186,7 +186,7 @@ const BARISTA_PRICE_UPDATES: InventorySeedUpdate[] = [
   { name: "Konyagi", size: "750ml", buyingPrice: 10333, stock: 6 },
   { name: "Apothic Red", size: "750ml", stockDelta: 2 },
   { name: "J & B", size: "200ml", stockDelta: 1 },
-  { name: "Brutal Fruit", size: "275ml", stockDelta: 6 },
+  { name: "Brutal Fruit", size: "275ml", stock: 16 },
 ];
 
 type AdditionalBaristaItem = Partial<InventoryItem> & {
