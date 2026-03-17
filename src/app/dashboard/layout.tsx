@@ -27,16 +27,20 @@ const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v3";
 const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v4";
-const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v2";
+const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v3";
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
+const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
 
 const BARISTA_STOCK_TARGETS = {
-  "Serengeti Lemon|300ml": 0,
   "Serengeti Lager|330ml": 20,
   "Kilimanjaro Premium Lager|375ml": 13,
   "Safari Lager|330ml": 19,
   "Classic Dompo|750ml": 3,
 } as const;
+
+const REMOVED_BARISTA_ITEMS = [
+  { name: "Serengeti Lemon", size: "300ml" },
+] as const;
 
 function resolveBarInventorySellingPrice(
   inventoryItems: InventoryItem[],
@@ -88,6 +92,15 @@ function syncBaristaMenuItemsWithSharedData(
   inventoryItems: InventoryItem[],
   storeItems: MainStoreItem[],
 ) {
+  const filteredMenuItems = menuItems.filter((item) => {
+    const target = normalizeBaristaMenuTarget(item.name);
+    return !REMOVED_BARISTA_ITEMS.some((removedItem) => {
+      const directTarget = normalizeBaristaMenuTarget(`${removedItem.name} ${removedItem.size}`);
+      const fallbackTarget = normalizeBaristaMenuTarget(removedItem.name);
+      return target === directTarget || target === fallbackTarget;
+    });
+  });
+
   const inventoryMenuItems = inventoryItems
     .filter((item) => (item.category ?? "").toLowerCase() !== "kitchen")
     .map((item) => ({
@@ -104,7 +117,7 @@ function syncBaristaMenuItemsWithSharedData(
       barcode: item.barcode || "",
     }));
 
-  const syncedItems = menuItems.map((item) => {
+  const syncedItems = filteredMenuItems.map((item) => {
     const target = normalizeBaristaMenuTarget(item.name);
     const inventoryMatch = inventoryItems.find((entry) => {
       const entryTargets = [
@@ -201,6 +214,7 @@ const SODA_MERGE_GROUPS = [
     names: ["Coca Cola Soda", "Fanta Soda"],
     barcode: "6200100540054",
     minStock: 5,
+    buyingPrice: 604,
     sellingPrice: 2000,
     unit: "Bottle",
   },
@@ -209,6 +223,7 @@ const SODA_MERGE_GROUPS = [
     names: ["Krest Bitter Lemon", "Krest Tonic Water", "Krest Soda Water", "Stoney Soda", "Krest Ginger"],
     barcode: "6200100560056",
     minStock: 5,
+    buyingPrice: 604,
     sellingPrice: 2000,
     unit: "Bottle",
   },
@@ -387,6 +402,31 @@ function applyBusinessCorrections() {
     const nextInventoryItems = [...inventoryItems];
     const nextStoreItems = [...storeItems];
 
+    const removedTargets = REMOVED_BARISTA_ITEMS.map((item) => ({
+      name: normalizeStockName(item.name),
+      size: normalizeStockName(item.size),
+    }));
+
+    const filteredInventoryItems = nextInventoryItems.filter((item) => {
+      const normalizedName = normalizeStockName(item.name);
+      const normalizedSize = normalizeStockName(item.size ?? "");
+      return !removedTargets.some((target) => target.name === normalizedName && target.size === normalizedSize);
+    });
+    if (filteredInventoryItems.length !== nextInventoryItems.length) {
+      nextInventoryItems.splice(0, nextInventoryItems.length, ...filteredInventoryItems);
+      inventoryChanged = true;
+    }
+
+    const filteredStoreItems = nextStoreItems.filter((item) => {
+      const normalizedName = normalizeStockName(item.name);
+      const normalizedSize = normalizeStockName(item.size ?? "");
+      return !removedTargets.some((target) => target.name === normalizedName && target.size === normalizedSize);
+    });
+    if (filteredStoreItems.length !== nextStoreItems.length) {
+      nextStoreItems.splice(0, nextStoreItems.length, ...filteredStoreItems);
+      storeChanged = true;
+    }
+
     for (const update of BARISTA_PRICE_UPDATES) {
       const inventoryIndex = nextInventoryItems.findIndex(
         (item) =>
@@ -528,6 +568,7 @@ function applyBusinessCorrections() {
           subCategory: "Soda",
           size: group.size,
           stock: mergedStock,
+          buyingPrice: group.buyingPrice,
           sellingPrice: group.sellingPrice,
           price: group.sellingPrice,
           minStock: mergedMinStock,
@@ -557,6 +598,7 @@ function applyBusinessCorrections() {
           subCategory: "Soda",
           size: group.size,
           stock: mergedStock,
+          buyingPrice: group.buyingPrice,
           sellingPrice: group.sellingPrice,
           minStock: mergedMinStock,
           unit: group.unit,
@@ -632,6 +674,35 @@ function applyBusinessCorrections() {
     }
 
     localStorage.setItem(BARISTA_SHARED_STATE_FIX_KEY, "1");
+  }
+
+  if (!localStorage.getItem(BARISTA_MENU_REMOVAL_FIX_KEY)) {
+    const baristaSnapshot = readPosState<{ id: string }, { id: string }, { id: string; name: string; price: number; category: string; prepMinutes: number; barcode?: string }>(
+      STORAGE_BARISTA_STATE,
+      "orange-hotel-barista-orders",
+      "orange-hotel-barista-seq",
+      "orange-hotel-barista-payments",
+      "orange-hotel-barista-menu",
+      490,
+    );
+
+    const nextMenuItems = syncBaristaMenuItemsWithSharedData(
+      baristaSnapshot.menuItems,
+      readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [],
+      (readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? []).filter((item) => item.lane === "barista"),
+    );
+
+    if (JSON.stringify(nextMenuItems) !== JSON.stringify(baristaSnapshot.menuItems)) {
+      writePosState(
+        STORAGE_BARISTA_STATE,
+        baristaSnapshot.tickets,
+        baristaSnapshot.ticketSeq,
+        baristaSnapshot.payments,
+        nextMenuItems,
+      );
+    }
+
+    localStorage.setItem(BARISTA_MENU_REMOVAL_FIX_KEY, "1");
   }
 
   if (!localStorage.getItem(COMPANY_STOCK_SHEET_FIX_KEY)) {
