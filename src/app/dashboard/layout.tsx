@@ -6,7 +6,7 @@ import { STORAGE_COMPANY_STOCK } from "@/app/lib/company-stock";
 import { COMPANY_STOCK_SHEET } from "@/app/lib/company-stock-seed";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
-import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeStockName } from "@/app/lib/inventory-transfer";
+import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeBaristaProductTarget, normalizeStockName } from "@/app/lib/inventory-transfer";
 import { getTotLimit } from "@/app/lib/barista-stock";
 import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
@@ -25,8 +25,9 @@ const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kit
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v2";
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
-const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v1";
-const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v2";
+const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v3";
+const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v4";
+const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v2";
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 
 const BARISTA_STOCK_TARGETS = {
@@ -42,15 +43,15 @@ function resolveBarInventorySellingPrice(
   storeItem: Pick<MainStoreItem, "name" | "size">,
 ) {
   const storeTargets = [
-    normalizeStockName(storeItem.name),
-    normalizeStockName(getStoreItemLabel(storeItem)),
+    normalizeBaristaProductTarget(storeItem.name),
+    normalizeBaristaProductTarget(getStoreItemLabel(storeItem)),
   ];
 
   const inventoryMatch = inventoryItems.find((item) => {
     if (item.category !== "Bar") return false;
     const inventoryTargets = [
-      normalizeStockName(item.name),
-      normalizeStockName(item.size ? `${item.name} ${item.size}` : item.name),
+      normalizeBaristaProductTarget(item.name),
+      normalizeBaristaProductTarget(item.size ? `${item.name} ${item.size}` : item.name),
     ];
 
     return storeTargets.some((target) => inventoryTargets.includes(target));
@@ -68,18 +69,18 @@ function resolveBarInventorySellingPrice(
 }
 
 function normalizeBaristaMenuTarget(value: string) {
-  return normalizeStockName(value.replace(/\s+TOTS?$/i, "").trim());
+  return normalizeBaristaProductTarget(value);
 }
 
 function getBaristaInventoryLabel(item: Pick<InventoryItem, "name" | "size">) {
   const rawName = item.name.trim();
-  const isTotItem = /\s+TOTS?$/i.test(rawName);
-  const baseName = rawName.replace(/\s+TOTS?$/i, "").trim();
+  const isTotItem = /\s*\(?TOTS?\)?$/i.test(rawName);
+  const baseName = rawName.replace(/\s*\(?TOTS?\)?$/i, "").trim();
   const size = item.size?.trim() ?? "";
 
-  if (!size) return isTotItem ? `${baseName} TOTS` : baseName;
+  if (!size) return isTotItem ? `${baseName} (TOTS)` : baseName;
   if (rawName.toLowerCase().includes(size.toLowerCase())) return rawName;
-  return isTotItem ? `${baseName} ${size} TOTS`.trim() : `${baseName} ${size}`.trim();
+  return isTotItem ? `${baseName} ${size} (TOTS)`.trim() : `${baseName} ${size}`.trim();
 }
 
 function syncBaristaMenuItemsWithSharedData(
@@ -120,7 +121,7 @@ function syncBaristaMenuItemsWithSharedData(
 
     const nextName = storeMatch
       ? getTotLimit(storeMatch) > 0
-        ? `${getStoreItemLabel(storeMatch)} TOTS`
+        ? `${getStoreItemLabel(storeMatch)} (TOTS)`
         : getStoreItemLabel(storeMatch)
       : inventoryMatch
         ? getBaristaInventoryLabel(inventoryMatch)
@@ -152,6 +153,66 @@ function syncBaristaMenuItemsWithSharedData(
 
   return [...syncedItems, ...missingInventoryMenuItems];
 }
+
+type InventorySeedUpdate = {
+  name: string;
+  size: string;
+  buyingPrice?: number;
+  stockDelta?: number;
+};
+
+const BARISTA_PRICE_UPDATES: InventorySeedUpdate[] = [
+  { name: "Classic Dompo", size: "750ml", buyingPrice: 11000, stockDelta: 3 },
+  { name: "Kilimanjaro Water", size: "1L", buyingPrice: 833 },
+  { name: "Kilimanjaro Water", size: "500ml", buyingPrice: 375 },
+  { name: "Serengeti Lager", size: "330ml", buyingPrice: 1600 },
+  { name: "Castle Lite", size: "330ml", buyingPrice: 1650 },
+  { name: "Safari Lager", size: "330ml", buyingPrice: 1650 },
+  { name: "Kilimanjaro Premium Lager", size: "375ml", buyingPrice: 1650 },
+  { name: "Konyagi", size: "750ml", buyingPrice: 10333, stockDelta: 6 },
+  { name: "Apothic Red", size: "750ml", stockDelta: 2 },
+  { name: "J & B", size: "200ml", stockDelta: 1 },
+  { name: "Brutal Fruit", size: "275ml", stockDelta: 6 },
+];
+
+type AdditionalBaristaItem = Partial<InventoryItem> & {
+  name: string;
+  category: string;
+  size: string;
+  stock: number;
+  buyingPrice: number;
+  sellingPrice: number;
+  minStock: number;
+  unit: string;
+};
+
+const BARISTA_ADDITIONAL_ITEMS: AdditionalBaristaItem[] = [
+  { barcode: "6200100630063", name: "Bacardi Superior White Rum (TOTS)", category: "Spirit", size: "750ml", stock: 1, totPerBottle: 30, buyingPrice: 45000, sellingPrice: 8000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+  { barcode: "6200100640064", name: "Camino Real Blanco (TOTS)", category: "Spirit", size: "750ml", stock: 1, totPerBottle: 30, buyingPrice: 42000, sellingPrice: 8000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+  { barcode: "6200100650065", name: "Captain Morgan Black Rum (TOTS)", category: "Spirit", size: "750ml", stock: 1, totPerBottle: 30, buyingPrice: 30000, sellingPrice: 5000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+  { barcode: "6200100660066", name: "Buttlers Blue Curacao (TOTS)", category: "Liqueur", size: "750ml", stock: 1, totPerBottle: 30, buyingPrice: 35000, sellingPrice: 5000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+  { barcode: "6200100670067", name: "Hennessy VSOP Box", category: "Cognac", size: "700ml", stock: 1, buyingPrice: 160000, sellingPrice: 250000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+  { barcode: "6200100680068", name: "Jack Daniels", category: "Whisky", size: "700ml", stock: 1, buyingPrice: 70000, sellingPrice: 120000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+] as const;
+
+const SODA_MERGE_GROUPS = [
+  {
+    size: "350ml",
+    names: ["Coca Cola Soda", "Fanta Soda"],
+    barcode: "6200100540054",
+    minStock: 5,
+    sellingPrice: 2000,
+    unit: "Bottle",
+  },
+  {
+    size: "300ml",
+    names: ["Krest Bitter Lemon", "Krest Tonic Water", "Krest Soda Water", "Stoney Soda", "Krest Ginger"],
+    barcode: "6200100560056",
+    minStock: 5,
+    sellingPrice: 2000,
+    unit: "Bottle",
+  },
+] as const;
 
 function applyBusinessCorrections() {
   if (typeof window === "undefined") return;
@@ -316,6 +377,209 @@ function applyBusinessCorrections() {
     localStorage.setItem(BARISTA_STOCK_FIX_KEY, "1");
   }
 
+  if (!localStorage.getItem(BARISTA_INVENTORY_CORRECTION_FIX_KEY)) {
+    const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
+    const storeItems = readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+
+    let inventoryChanged = false;
+    let storeChanged = false;
+
+    const nextInventoryItems = [...inventoryItems];
+    const nextStoreItems = [...storeItems];
+
+    for (const update of BARISTA_PRICE_UPDATES) {
+      const inventoryIndex = nextInventoryItems.findIndex(
+        (item) =>
+          normalizeStockName(item.name) === normalizeStockName(update.name) &&
+          normalizeStockName(item.size ?? "") === normalizeStockName(update.size),
+      );
+      if (inventoryIndex >= 0) {
+        const current = nextInventoryItems[inventoryIndex];
+        nextInventoryItems[inventoryIndex] = {
+          ...current,
+          buyingPrice: typeof update.buyingPrice === "number" ? update.buyingPrice : current.buyingPrice,
+          stock: typeof update.stockDelta === "number" ? current.stock + update.stockDelta : current.stock,
+        };
+        inventoryChanged = true;
+      }
+
+      const storeIndex = nextStoreItems.findIndex(
+        (item) =>
+          item.lane === "barista" &&
+          normalizeStockName(item.name) === normalizeStockName(update.name) &&
+          normalizeStockName(item.size ?? "") === normalizeStockName(update.size),
+      );
+      if (storeIndex >= 0) {
+        const current = nextStoreItems[storeIndex];
+        nextStoreItems[storeIndex] = {
+          ...current,
+          buyingPrice: typeof update.buyingPrice === "number" ? update.buyingPrice : current.buyingPrice,
+          stock: typeof update.stockDelta === "number" ? current.stock + update.stockDelta : current.stock,
+        };
+        storeChanged = true;
+      }
+    }
+
+    for (const item of BARISTA_ADDITIONAL_ITEMS) {
+      const inventoryIndex = nextInventoryItems.findIndex(
+        (entry) =>
+          normalizeStockName(entry.name) === normalizeStockName(item.name) &&
+          normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
+      );
+
+      if (inventoryIndex >= 0) {
+        const current = nextInventoryItems[inventoryIndex];
+        nextInventoryItems[inventoryIndex] = {
+          ...current,
+          barcode: item.barcode ?? current.barcode,
+          category: item.category,
+          subCategory: item.category,
+          stock: item.stock,
+          buyingPrice: item.buyingPrice,
+          sellingPrice: item.sellingPrice,
+          price: item.sellingPrice,
+          totPerBottle: item.totPerBottle,
+          totSold: item.totSold ?? current.totSold ?? 0,
+          minStock: item.minStock,
+          unit: item.unit,
+          status: item.status ?? current.status,
+        };
+        inventoryChanged = true;
+      } else {
+        nextInventoryItems.push({
+          id: `inv-${item.barcode || `${item.name}-${item.size}`}`,
+          barcode: item.barcode || "",
+          name: item.name,
+          category: item.category,
+          subCategory: item.category,
+          size: item.size,
+          stock: item.stock,
+          buyingPrice: item.buyingPrice,
+          sellingPrice: item.sellingPrice,
+          price: item.sellingPrice,
+          totPerBottle: item.totPerBottle,
+          totSold: item.totSold ?? 0,
+          minStock: item.minStock,
+          unit: item.unit,
+          status: item.status ?? "ACTIVE",
+        });
+        inventoryChanged = true;
+      }
+
+      const storeIndex = nextStoreItems.findIndex(
+        (entry) =>
+          entry.lane === "barista" &&
+          normalizeStockName(entry.name) === normalizeStockName(item.name) &&
+          normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
+      );
+
+      if (storeIndex >= 0) {
+        nextStoreItems[storeIndex] = {
+          ...nextStoreItems[storeIndex],
+          name: item.name,
+          subCategory: item.category,
+          size: item.size,
+          stock: item.stock,
+          buyingPrice: item.buyingPrice,
+          sellingPrice: item.sellingPrice,
+          minStock: item.minStock,
+          unit: item.unit,
+          lane: "barista",
+          totLimit: item.totPerBottle,
+          totSold: item.totSold ?? nextStoreItems[storeIndex].totSold ?? 0,
+        };
+        storeChanged = true;
+      } else {
+        nextStoreItems.push({
+          id: `s-${item.barcode || `${item.name}-${item.size}`}`,
+          name: item.name,
+          subCategory: item.category,
+          size: item.size,
+          stock: item.stock,
+          unit: item.unit,
+          minStock: item.minStock,
+          lane: "barista",
+          buyingPrice: item.buyingPrice,
+          sellingPrice: item.sellingPrice,
+          totLimit: item.totPerBottle,
+          totSold: item.totSold ?? 0,
+        });
+        storeChanged = true;
+      }
+    }
+
+    SODA_MERGE_GROUPS.forEach((group) => {
+      const inventoryMatches = nextInventoryItems.filter(
+        (item) =>
+          normalizeStockName(item.size ?? "") === normalizeStockName(group.size) &&
+          (group.names.some((name) => normalizeStockName(item.name) === normalizeStockName(name)) ||
+            normalizeStockName(item.name) === "soda"),
+      );
+      if (inventoryMatches.length > 0) {
+        const baseItem = inventoryMatches[0];
+        const removeIds = new Set(inventoryMatches.map((item) => item.id));
+        const mergedStock = inventoryMatches.reduce((sum, item) => sum + (item.stock || 0), 0);
+        const mergedMinStock = Math.max(group.minStock, ...inventoryMatches.map((item) => item.minStock || 0));
+        const mergedInventoryItem: InventoryItem = {
+          ...baseItem,
+          barcode: group.barcode,
+          name: "Soda",
+          category: "Bar",
+          subCategory: "Soda",
+          size: group.size,
+          stock: mergedStock,
+          sellingPrice: group.sellingPrice,
+          price: group.sellingPrice,
+          minStock: mergedMinStock,
+          unit: group.unit,
+        };
+        const filteredInventoryItems = nextInventoryItems.filter((item) => !removeIds.has(item.id));
+        filteredInventoryItems.push(mergedInventoryItem);
+        nextInventoryItems.splice(0, nextInventoryItems.length, ...filteredInventoryItems);
+        inventoryChanged = true;
+      }
+
+      const storeMatches = nextStoreItems.filter(
+        (item) =>
+          item.lane === "barista" &&
+          normalizeStockName(item.size ?? "") === normalizeStockName(group.size) &&
+          (group.names.some((name) => normalizeStockName(item.name) === normalizeStockName(name)) ||
+            normalizeStockName(item.name) === "soda"),
+      );
+      if (storeMatches.length > 0) {
+        const baseItem = storeMatches[0];
+        const removeIds = new Set(storeMatches.map((item) => item.id));
+        const mergedStock = storeMatches.reduce((sum, item) => sum + (item.stock || 0), 0);
+        const mergedMinStock = Math.max(group.minStock, ...storeMatches.map((item) => item.minStock || 0));
+        const mergedStoreItem: MainStoreItem = {
+          ...baseItem,
+          name: "Soda",
+          subCategory: "Soda",
+          size: group.size,
+          stock: mergedStock,
+          sellingPrice: group.sellingPrice,
+          minStock: mergedMinStock,
+          unit: group.unit,
+          lane: "barista",
+        };
+        const filteredStoreItems = nextStoreItems.filter((item) => !removeIds.has(item.id));
+        filteredStoreItems.push(mergedStoreItem);
+        nextStoreItems.splice(0, nextStoreItems.length, ...filteredStoreItems);
+        storeChanged = true;
+      }
+    });
+
+    if (inventoryChanged) {
+      writeJson("orange-hotel-inventory-items", nextInventoryItems);
+    }
+
+    if (storeChanged) {
+      writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    }
+
+    localStorage.setItem(BARISTA_INVENTORY_CORRECTION_FIX_KEY, "1");
+  }
+
   if (!localStorage.getItem(BARISTA_FINANCE_PRICE_FIX_KEY)) {
     const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
     const storeItems = readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
@@ -395,7 +659,7 @@ export default function DashboardLayout({
   const allowedByRole: Record<Role, string[]> = {
     manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/settings', '/dashboard/settings/sync'],
     director: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/fnb-suite', '/dashboard/fnb-pos', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings', '/dashboard/settings/sync'],
-    inventory: ['/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/company-stock'],
+    inventory: ['/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/company-stock'],
     cashier: ['/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/rooms'],
     kitchen: ['/dashboard/fnb-pos', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/payments'],
     barista: ['/dashboard/fnb-pos', '/dashboard/barista', '/dashboard/payments', '/dashboard/cancelled'],

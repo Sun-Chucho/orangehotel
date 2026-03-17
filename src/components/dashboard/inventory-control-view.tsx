@@ -6,6 +6,7 @@ import { InventoryItem } from "@/app/lib/mock-data";
 import {
   getStoreItemLabel,
   MainStoreItem,
+  normalizeBaristaProductTarget,
   normalizeStockName,
   STORAGE_INVENTORY_ITEMS,
   STORAGE_MAIN_STORE_ITEMS,
@@ -42,6 +43,7 @@ interface PosPaymentRecord {
 
 interface PosStateSnapshot {
   payments?: PosPaymentRecord[];
+  menuItems?: Array<{ name: string; price: number }>;
 }
 
 const KITCHEN_CATEGORY_OPTIONS = [
@@ -59,6 +61,7 @@ const KITCHEN_CATEGORY_OPTIONS = [
 const BARISTA_CATEGORY_OPTIONS = [
   "Coffee",
   "Tea",
+  "Soda",
   "Soft Drink",
   "Beer",
   "Wine",
@@ -70,6 +73,8 @@ const BARISTA_CATEGORY_OPTIONS = [
   "Energy Drink",
   "Snacks",
 ] as const;
+
+const BARISTA_CATEGORY_KEYS = new Set(BARISTA_CATEGORY_OPTIONS.map((value) => normalizeStockName(value)));
 
 function getStockLabel(stock: number, minStock: number) {
   if (stock <= 0) return "Out";
@@ -83,7 +88,31 @@ function getLogicLabel(rule: StockLogicRule | undefined) {
 }
 
 function normalizeBaristaFinanceTarget(value: string) {
-  return normalizeStockName(value.replace(/\s+TOTS?$/i, "").trim());
+  return normalizeBaristaProductTarget(value);
+}
+
+function inventoryMatchesStoreItem(entry: InventoryItem, lane: StoreLane, item: Pick<MainStoreItem, "name" | "size" | "subCategory">) {
+  const nameMatches =
+    normalizeStockName(entry.name) === normalizeStockName(item.name) &&
+    normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? "");
+
+  if (!nameMatches) return false;
+
+  if (lane === "kitchen") {
+    return normalizeStockName(entry.category) === "kitchen";
+  }
+
+  const entryCategory = normalizeStockName(entry.category);
+  const entrySubCategory = normalizeStockName(entry.subCategory ?? "");
+  const targetSubCategory = normalizeStockName(item.subCategory ?? "");
+
+  return (
+    entryCategory === "bar" ||
+    entrySubCategory === "bar" ||
+    BARISTA_CATEGORY_KEYS.has(entryCategory) ||
+    BARISTA_CATEGORY_KEYS.has(entrySubCategory) ||
+    (!!targetSubCategory && (entryCategory === targetSubCategory || entrySubCategory === targetSubCategory))
+  );
 }
 
 export function InventoryControlView({
@@ -100,6 +129,7 @@ export function InventoryControlView({
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
+  const [baristaMenuItems, setBaristaMenuItems] = useState<Array<{ name: string; price: number }>>([]);
 
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenSubCategory, setKitchenSubCategory] = useState("");
@@ -136,6 +166,11 @@ export function InventoryControlView({
   } | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const canViewBuyingPrice = role === "inventory";
+  const isInventoryRole = role === "inventory";
+  const effectiveVisibleTabs = useMemo(
+    () => (isInventoryRole ? visibleTabs.filter((tab) => tab !== "barista-stock") : visibleTabs),
+    [isInventoryRole, visibleTabs],
+  );
 
   useEffect(() => {
     setRole(readStoredRole());
@@ -146,10 +181,10 @@ export function InventoryControlView({
   }, [initialTab]);
 
   useEffect(() => {
-    if (!visibleTabs.includes(activeTab)) {
-      setActiveTab(visibleTabs[0] ?? "kitchen-stock");
+    if (!effectiveVisibleTabs.includes(activeTab)) {
+      setActiveTab(effectiveVisibleTabs[0] ?? "kitchen-stock");
     }
-  }, [activeTab, visibleTabs]);
+  }, [activeTab, effectiveVisibleTabs]);
 
   useEffect(() => {
     const applyInventorySnapshot = () => {
@@ -163,6 +198,7 @@ export function InventoryControlView({
       setItems(inv);
       setStoreItems(normalizedStore);
       setBaristaPayments(Array.isArray(baristaState?.payments) ? baristaState.payments : []);
+      setBaristaMenuItems(Array.isArray(baristaState?.menuItems) ? baristaState.menuItems : []);
     };
 
     applyInventorySnapshot();
@@ -215,6 +251,19 @@ export function InventoryControlView({
     return salesMap;
   }, [baristaPayments]);
 
+  const baristaMenuPriceByItem = useMemo(() => {
+    const priceMap = new Map<string, number>();
+
+    baristaMenuItems.forEach((item) => {
+      const key = normalizeBaristaFinanceTarget(item.name);
+      if (typeof item.price === "number" && item.price > 0) {
+        priceMap.set(key, item.price);
+      }
+    });
+
+    return priceMap;
+  }, [baristaMenuItems]);
+
   const baristaFinanceRows = useMemo(
     () =>
       baristaStore.map((item) => {
@@ -226,12 +275,15 @@ export function InventoryControlView({
               ? inventoryMatch.buyingPrice
               : 0;
         const sellingPrice =
-          typeof item.sellingPrice === "number" && item.sellingPrice > 0
+          typeof baristaMenuPriceByItem.get(normalizeBaristaFinanceTarget(getStoreItemLabel(item))) === "number" &&
+          (baristaMenuPriceByItem.get(normalizeBaristaFinanceTarget(getStoreItemLabel(item))) ?? 0) > 0
+            ? (baristaMenuPriceByItem.get(normalizeBaristaFinanceTarget(getStoreItemLabel(item))) ?? 0)
+            : typeof item.sellingPrice === "number" && item.sellingPrice > 0
             ? item.sellingPrice
             : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
               ? inventoryMatch.sellingPrice
               : typeof inventoryMatch?.price === "number" && inventoryMatch.price > 0
-              ? inventoryMatch.price
+                ? inventoryMatch.price
                 : 0;
         const quantitySold = baristaSalesByItem.get(normalizeBaristaFinanceTarget(getStoreItemLabel(item))) ?? 0;
         const capital = item.stock * buyingPrice;
@@ -249,7 +301,7 @@ export function InventoryControlView({
           profitLoss,
         };
       }),
-    [baristaSalesByItem, baristaStore, items],
+    [baristaMenuPriceByItem, baristaSalesByItem, baristaStore, items],
   );
 
   const baristaCapitalTotal = useMemo(
@@ -313,12 +365,7 @@ export function InventoryControlView({
         : item,
     );
     const nextInventoryItems = items.map((item) => {
-      const sameLaneCategory = lane === "kitchen" ? "Kitchen" : "Bar";
-      if (
-        item.category === sameLaneCategory &&
-        normalizeStockName(item.name) === normalizeStockName(matchingStore.name) &&
-        normalizeStockName(item.size ?? "") === normalizeStockName(matchingStore.size ?? "")
-      ) {
+      if (inventoryMatchesStoreItem(item, lane, matchingStore)) {
         return {
           ...item,
           sellingPrice,
@@ -335,13 +382,7 @@ export function InventoryControlView({
   };
 
   const openEditModal = (lane: StoreLane, item: MainStoreItem) => {
-    const category = lane === "kitchen" ? "Kitchen" : "Bar";
-    const inventoryItem = items.find(
-      (entry) =>
-        entry.category === category &&
-        normalizeStockName(entry.name) === normalizeStockName(item.name) &&
-        normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
-    );
+    const inventoryItem = items.find((entry) => inventoryMatchesStoreItem(entry, lane, item));
     const resolvedSellingPrice =
       typeof item.sellingPrice === "number" && item.sellingPrice > 0
         ? item.sellingPrice
@@ -507,14 +548,8 @@ export function InventoryControlView({
         : item,
     );
     const nextInventoryItems = items.map((item) => {
-      const sameLaneCategory = editModal.lane === "kitchen" ? "Kitchen" : "Bar";
       const matchingStore = storeItems.find((entry) => entry.id === editModal.itemId);
-      if (
-        item.category === sameLaneCategory &&
-        matchingStore &&
-        normalizeStockName(item.name) === normalizeStockName(matchingStore.name) &&
-        normalizeStockName(item.size ?? "") === normalizeStockName(matchingStore.size ?? "")
-      ) {
+      if (matchingStore && inventoryMatchesStoreItem(item, editModal.lane, matchingStore)) {
         return {
           ...item,
           name: editModal.name.trim(),
@@ -574,9 +609,14 @@ export function InventoryControlView({
     <Card className="shadow-sm">
       <CardHeader className="border-b">
         <CardTitle className="text-lg uppercase font-black">{title}</CardTitle>
-        <CardDescription>Add or edit stock with the same core fields shown in the table.</CardDescription>
+        <CardDescription>
+          {lane === "kitchen" && isInventoryRole
+            ? "Inventory manager can adjust existing kitchen stock and record damages."
+            : "Add or edit stock with the same core fields shown in the table."}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
+        {!(lane === "kitchen" && isInventoryRole) && (
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-2">
           <Input
             value={lane === "kitchen" ? kitchenName : baristaName}
@@ -666,6 +706,7 @@ export function InventoryControlView({
             <Trash2 className="w-4 h-4 mr-2" /> Clear
           </Button>
         </div>
+        )}
 
         <Table>
           <TableHeader>
@@ -692,12 +733,7 @@ export function InventoryControlView({
           </TableHeader>
           <TableBody>
             {list.map((item: any) => {
-              const inventoryMatch = items.find(
-                (entry) =>
-                  entry.category === (lane === "kitchen" ? "Kitchen" : "Bar") &&
-                  normalizeStockName(entry.name) === normalizeStockName(item.name) &&
-                  normalizeStockName(entry.size ?? "") === normalizeStockName(item.size ?? ""),
-              );
+              const inventoryMatch = items.find((entry) => inventoryMatchesStoreItem(entry, lane, item));
               const displaySellingPrice =
                 typeof item.sellingPrice === "number" && item.sellingPrice > 0
                   ? item.sellingPrice
@@ -937,13 +973,13 @@ export function InventoryControlView({
         </Card>
       )}
 
-      {visibleTabs.length > 1 && (
+      {effectiveVisibleTabs.length > 1 && (
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
           <TabsList className="h-11">
-            {visibleTabs.includes("kitchen-stock") && (
+            {effectiveVisibleTabs.includes("kitchen-stock") && (
               <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
             )}
-            {visibleTabs.includes("barista-stock") && (
+            {effectiveVisibleTabs.includes("barista-stock") && (
               <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">Barista Stock</TabsTrigger>
             )}
           </TabsList>
@@ -992,7 +1028,12 @@ export function InventoryControlView({
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Item Name</p>
-                <Input value={editModal.name} onChange={(event) => setEditModal({ ...editModal, name: event.target.value })} placeholder="Item name" />
+                <Input
+                  value={editModal.name}
+                  onChange={(event) => setEditModal({ ...editModal, name: event.target.value })}
+                  placeholder="Item name"
+                  disabled={isInventoryRole && editModal.lane === "kitchen"}
+                />
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</p>
@@ -1000,6 +1041,7 @@ export function InventoryControlView({
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={editModal.category}
                   onChange={(event) => setEditModal({ ...editModal, category: event.target.value })}
+                  disabled={isInventoryRole && editModal.lane === "kitchen"}
                 >
                   <option value="">Select category</option>
                   {(editModal.lane === "kitchen" ? KITCHEN_CATEGORY_OPTIONS : BARISTA_CATEGORY_OPTIONS).map((option) => (
@@ -1009,7 +1051,12 @@ export function InventoryControlView({
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Size</p>
-                <Input value={editModal.size} onChange={(event) => setEditModal({ ...editModal, size: event.target.value })} placeholder="Size" />
+                <Input
+                  value={editModal.size}
+                  onChange={(event) => setEditModal({ ...editModal, size: event.target.value })}
+                  placeholder="Size"
+                  disabled={isInventoryRole && editModal.lane === "kitchen"}
+                />
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Qty</p>
@@ -1038,21 +1085,25 @@ export function InventoryControlView({
                   </div>
                 </>
               )}
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Low Threshold</p>
-                <Input type="number" min="0" value={editModal.lowThreshold} onChange={(event) => setEditModal({ ...editModal, lowThreshold: event.target.value })} placeholder="Low threshold" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</p>
-                <select
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={editModal.status}
-                  onChange={(event) => setEditModal({ ...editModal, status: event.target.value as "ACTIVE" | "INACTIVE" })}
-                >
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="INACTIVE">INACTIVE</option>
-                </select>
-              </div>
+              {!(isInventoryRole && editModal.lane === "kitchen") && (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Low Threshold</p>
+                    <Input type="number" min="0" value={editModal.lowThreshold} onChange={(event) => setEditModal({ ...editModal, lowThreshold: event.target.value })} placeholder="Low threshold" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</p>
+                    <select
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={editModal.status}
+                      onChange={(event) => setEditModal({ ...editModal, status: event.target.value as "ACTIVE" | "INACTIVE" })}
+                    >
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="INACTIVE">INACTIVE</option>
+                    </select>
+                  </div>
+                </>
+              )}
               <div className="md:col-span-2 flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditModal(null)}>Cancel</Button>
                 <Button onClick={saveEditedItem}>Save</Button>

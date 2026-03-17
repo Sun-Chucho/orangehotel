@@ -7,6 +7,7 @@ import {
   adjustInventoryQuantity,
   MainStoreItem,
   getStoreItemLabel,
+  normalizeBaristaProductTarget,
   normalizeStockName,
   STORAGE_MAIN_STORE_ITEMS,
   STORAGE_INVENTORY_ITEMS,
@@ -103,7 +104,7 @@ const normalizeCategory = (value: string, itemName = ""): Exclude<BaristaCategor
     return normalizedValue;
   }
 
-  if (normalizedValue === "soft drink" || normalizedValue === "energy drink" || normalizedValue === "water" || normalizedValue === "beer" || normalizedValue === "wine" || normalizedValue === "cider" || normalizedValue === "spirit" || normalizedValue === "sparkling" || normalizedValue === "whisky" || normalizedValue === "gin" || normalizedValue === "liqueur" || normalizedValue === "cognac" || normalizedValue === "aperitif" || normalizedValue === "malt" || normalizedValue === "bar") {
+  if (normalizedValue === "soft drink" || normalizedValue === "soda" || normalizedValue === "energy drink" || normalizedValue === "water" || normalizedValue === "beer" || normalizedValue === "wine" || normalizedValue === "cider" || normalizedValue === "spirit" || normalizedValue === "sparkling" || normalizedValue === "whisky" || normalizedValue === "gin" || normalizedValue === "liqueur" || normalizedValue === "cognac" || normalizedValue === "aperitif" || normalizedValue === "malt" || normalizedValue === "bar") {
     return "cold";
   }
 
@@ -171,7 +172,7 @@ function syncBaristaMenuItemsWithSharedInventory(
 
     const nextName = storeMatch
       ? getTotLimit(storeMatch) > 0
-        ? `${getStoreItemLabel(storeMatch)} TOTS`
+        ? `${getStoreItemLabel(storeMatch)} (TOTS)`
         : getStoreItemLabel(storeMatch)
       : inventoryMatch
         ? getBaristaInventoryLabel(inventoryMatch)
@@ -205,22 +206,22 @@ function syncBaristaMenuItemsWithSharedInventory(
 }
 
 function normalizeBaristaTarget(name: string) {
-  return name.replace(/\s+TOTS?$/i, "").trim().toLowerCase();
+  return normalizeBaristaProductTarget(name);
 }
 
 function getBaristaInventoryLabel(item: Pick<InventoryItem, "name" | "size">) {
   const rawName = item.name.trim();
-  const isTotItem = /\s+TOTS?$/i.test(rawName);
-  const baseName = rawName.replace(/\s+TOTS?$/i, "").trim();
+  const isTotItem = /\s*\(?TOTS?\)?$/i.test(rawName);
+  const baseName = rawName.replace(/\s*\(?TOTS?\)?$/i, "").trim();
   const size = item.size?.trim() ?? "";
 
-  if (!size) return isTotItem ? `${baseName} TOTS` : baseName;
+  if (!size) return isTotItem ? `${baseName} (TOTS)` : baseName;
   if (rawName.toLowerCase().includes(size.toLowerCase())) return rawName;
-  return isTotItem ? `${baseName} ${size} TOTS`.trim() : `${baseName} ${size}`.trim();
+  return isTotItem ? `${baseName} ${size} (TOTS)`.trim() : `${baseName} ${size}`.trim();
 }
 
 function isTotInventoryItem(item: Pick<InventoryItem, "name" | "totPerBottle">) {
-  return (typeof item.totPerBottle === "number" && item.totPerBottle > 0) || /\s+TOTS?$/i.test(item.name);
+  return (typeof item.totPerBottle === "number" && item.totPerBottle > 0) || /\s*\(?TOTS?\)?$/i.test(item.name);
 }
 
 export default function BaristaPage() {
@@ -610,7 +611,10 @@ export default function BaristaPage() {
               ? inventoryMatch.buyingPrice
               : 0;
         const sellingPrice =
-          typeof item.sellingPrice === "number" && item.sellingPrice > 0
+          typeof baristaMenuPriceByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) === "number" &&
+          (baristaMenuPriceByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) ?? 0) > 0
+            ? (baristaMenuPriceByItem.get(normalizeBaristaTarget(getStoreItemLabel(item))) ?? 0)
+            : typeof item.sellingPrice === "number" && item.sellingPrice > 0
             ? item.sellingPrice
             : typeof inventoryMatch?.sellingPrice === "number" && inventoryMatch.sellingPrice > 0
               ? inventoryMatch.sellingPrice

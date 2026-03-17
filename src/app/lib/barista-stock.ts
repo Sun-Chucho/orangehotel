@@ -16,6 +16,10 @@ const TOT_LIMITS_BY_LABEL: Record<string, number> = {
   "Johnnie Walker Black Label 750ml": 30,
   "Johnnie Walker Red Label 750ml": 30,
   "Ballantines 750ml": 30,
+  "Bacardi Superior White Rum 750ml": 30,
+  "Camino Real Blanco 750ml": 30,
+  "Captain Morgan Black Rum 750ml": 30,
+  "Buttlers Blue Curacao 750ml": 30,
 };
 
 export function getBaristaStoreLabel(item: Pick<MainStoreItem, "name" | "size">): string {
@@ -23,16 +27,16 @@ export function getBaristaStoreLabel(item: Pick<MainStoreItem, "name" | "size">)
 }
 
 export function getMenuBaseLabel(menuName: string): string {
-  return menuName.replace(/\s+TOTS?$/i, "").trim();
+  return menuName.replace(/\s*\(?TOTS?\)?$/i, "").trim();
 }
 
 export function getTotLimit(item: Pick<MainStoreItem, "name" | "size" | "totLimit">): number {
   if (typeof item.totLimit === "number" && item.totLimit > 0) return item.totLimit;
-  return TOT_LIMITS_BY_LABEL[getBaristaStoreLabel(item)] ?? 0;
+  return TOT_LIMITS_BY_LABEL[getMenuBaseLabel(getBaristaStoreLabel(item))] ?? 0;
 }
 
 export function isTotTrackedMenuItem(menuName: string): boolean {
-  return /\s+TOTS?$/i.test(menuName);
+  return /\s*\(?TOTS?\)?$/i.test(menuName);
 }
 
 export function getRemainingTots(item: Pick<MainStoreItem, "name" | "size" | "stock" | "totLimit" | "totSold">): number {
@@ -54,7 +58,7 @@ export function findStoreItemForMenuName(items: MainStoreItem[], menuName: strin
 }
 
 function normalizeBaristaTarget(name: string) {
-  return name.replace(/\s+TOTS?$/i, "").trim().toLowerCase();
+  return name.replace(/\s*\(?TOTS?\)?$/i, "").trim().toLowerCase();
 }
 
 export function normalizeBaristaMenuItems<
@@ -77,7 +81,7 @@ export function normalizeBaristaMenuItems<
     }
 
     const expectedName = getTotLimit(matchedStoreItem) > 0
-      ? `${getBaristaStoreLabel(matchedStoreItem)} TOTS`
+      ? `${getBaristaStoreLabel(matchedStoreItem)} (TOTS)`
       : getBaristaStoreLabel(matchedStoreItem);
 
     if (item.name === expectedName) return item;

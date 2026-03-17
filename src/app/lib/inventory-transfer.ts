@@ -66,6 +66,34 @@ export function normalizeStockName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+const SODA_SIZE_RULES = [
+  { pattern: /coca cola soda/, size: "350ml" },
+  { pattern: /fanta soda/, size: "350ml" },
+  { pattern: /krest bitter lemon/, size: "300ml" },
+  { pattern: /krest tonic water/, size: "300ml" },
+  { pattern: /krest soda water/, size: "300ml" },
+  { pattern: /stoney soda/, size: "300ml" },
+  { pattern: /krest ginger/, size: "300ml" },
+] as const;
+
+export function normalizeBaristaProductTarget(value: string) {
+  const normalized = normalizeStockName(value.replace(/\s*\(?TOTS?\)?$/i, "").trim());
+
+  if (normalized === "soda" || normalized.startsWith("soda ")) {
+    if (normalized.includes("350ml")) return "soda 350ml";
+    if (normalized.includes("300ml")) return "soda 300ml";
+    return "soda";
+  }
+
+  for (const rule of SODA_SIZE_RULES) {
+    if (rule.pattern.test(normalized)) {
+      return `soda ${rule.size}`;
+    }
+  }
+
+  return normalized;
+}
+
 export function adjustInventoryQuantity<
   T extends {
     name: string;
