@@ -17,8 +17,8 @@ import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 const INVENTORY = {
   total: 53,
-  standard: { count: 20, price: 70000 },
-  platinum: { count: 33, price: 100000 },
+  standard: { count: 20, price: 70000, regularPrice: 100000 },
+  platinum: { count: 33, price: 100000, regularPrice: 120000 },
 } as const;
 
 type RoomType = "standard" | "platinum";
@@ -743,8 +743,12 @@ export default function Home() {
                 className={`rounded-2xl border px-5 py-5 text-left transition ${roomType === "standard" ? "border-orange-400 bg-orange-500/15" : "border-white/10 bg-white/5 hover:border-white/30"}`}
               >
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-200">Standard</p>
+                <p className="mt-2 inline-flex rounded-full border border-orange-300/40 bg-orange-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-orange-100">
+                  Grand Opening Offer
+                </p>
                 <p className="mt-2 text-sm text-white/75">Comfortable stay option for business and leisure guests.</p>
-                <p className="mt-4 font-black">{formatTzs(INVENTORY.standard.price)} / night</p>
+                <p className="mt-4 text-xs font-black uppercase tracking-[0.18em] text-white/45 line-through">{formatTzs(INVENTORY.standard.regularPrice)} regular rate</p>
+                <p className="mt-1 font-black">{formatTzs(INVENTORY.standard.price)} / night</p>
               </button>
               <button
                 type="button"
@@ -752,8 +756,12 @@ export default function Home() {
                 className={`rounded-2xl border px-5 py-5 text-left transition ${roomType === "platinum" ? "border-orange-400 bg-orange-500/15" : "border-white/10 bg-white/5 hover:border-white/30"}`}
               >
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-200">Platinum</p>
+                <p className="mt-2 inline-flex rounded-full border border-orange-300/40 bg-orange-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-orange-100">
+                  Grand Opening Offer
+                </p>
                 <p className="mt-2 text-sm text-white/75">A more elevated stay with premium room experience and privacy.</p>
-                <p className="mt-4 font-black">{formatTzs(INVENTORY.platinum.price)} / night</p>
+                <p className="mt-4 text-xs font-black uppercase tracking-[0.18em] text-white/45 line-through">{formatTzs(INVENTORY.platinum.regularPrice)} regular rate</p>
+                <p className="mt-1 font-black">{formatTzs(INVENTORY.platinum.price)} / night</p>
               </button>
             </div>
 
@@ -830,7 +838,10 @@ export default function Home() {
             </div>
             <div className="flex items-center justify-between border-b border-white/15 pb-3">
               <span className="text-white/70">Rate / night</span>
-              <strong>{formatTzs(pricePerNight)}</strong>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">Grand Opening</p>
+                <strong>{formatTzs(pricePerNight)}</strong>
+              </div>
             </div>
             <div className="flex items-center justify-between border-b border-white/15 pb-3">
               <span className="text-white/70">Nights</span>

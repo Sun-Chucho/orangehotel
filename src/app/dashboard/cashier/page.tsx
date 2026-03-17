@@ -57,8 +57,8 @@ interface BookingRecord {
 }
 
 const ROOM_RATE: Record<RoomType, number> = {
-  standard: 70000,
-  platinum: 100000,
+  standard: 100000,
+  platinum: 120000,
 };
 
 const SPECIAL_PACKAGES: Record<

@@ -23,8 +23,8 @@ export interface Room {
   price: number;
 }
 
-const STANDARD_ROOM_PRICE = 70000;
-const PLATINUM_ROOM_PRICE = 100000;
+const STANDARD_ROOM_PRICE = 100000;
+const PLATINUM_ROOM_PRICE = 120000;
 
 const PLATINUM_ROOM_NUMBERS = [
   "1001",
