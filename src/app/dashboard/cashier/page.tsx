@@ -85,6 +85,8 @@ const SPECIAL_PACKAGES: Record<
   },
 };
 
+const USD_TO_TSH_RATE = 2500;
+
 const STORAGE_TX = "orange-hotel-cashier-transactions";
 const STORAGE_SEQ = "orange-hotel-cashier-seq";
 
@@ -108,6 +110,14 @@ function isOverstay(record: BookingRecord): boolean {
   if (record.status === "checked-out") return false;
   const checkoutAt = new Date(`${record.checkOutDate}T${record.checkOutTime || "00:00"}:00`);
   return Date.now() > checkoutAt.getTime();
+}
+
+function toAccountingCurrency(currency: BookingCurrency): BookingCurrency {
+  return currency === "$" ? "TSh" : currency;
+}
+
+function toAccountingRate(rate: number, currency: BookingCurrency) {
+  return currency === "$" ? rate * USD_TO_TSH_RATE : rate;
 }
 
 export default function BookingPage() {
@@ -204,7 +214,9 @@ export default function BookingPage() {
     : ROOM_RATE[roomType];
   const rate = Number.isFinite(selectedRate) && selectedRate > 0 ? selectedRate : 0;
   const bookingCurrency: BookingCurrency = packageConfig?.currency ?? "TSh";
-  const total = nights * rate;
+  const accountingCurrency = toAccountingCurrency(bookingCurrency);
+  const accountingRate = toAccountingRate(rate, bookingCurrency);
+  const total = nights * accountingRate;
   const canSubmitBooking =
     guestName.trim().length > 0 &&
     phone.trim().length >= 7 &&
@@ -398,8 +410,8 @@ export default function BookingPage() {
               roomType,
               roomNumber: selectedRoomNumber,
               specialPackage: selectedPackage === "none" ? undefined : selectedPackage,
-              currency: bookingCurrency,
-              ratePerNight: rate,
+              currency: accountingCurrency,
+              ratePerNight: accountingRate,
               payment: paymentMethod,
               checkInDate,
               checkInTime,
@@ -437,8 +449,8 @@ export default function BookingPage() {
       roomType,
       roomNumber: selectedRoomNumber,
       specialPackage: selectedPackage === "none" ? undefined : selectedPackage,
-      currency: bookingCurrency,
-      ratePerNight: rate,
+      currency: accountingCurrency,
+      ratePerNight: accountingRate,
       payment: paymentMethod,
       checkInDate,
       checkInTime,
@@ -669,6 +681,7 @@ export default function BookingPage() {
                 />
                 <div className="rounded-md border px-3 py-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
                   {roomType === "standard" ? "Standard" : "Platinum"} package rate: {packageConfig.currency} {rate.toLocaleString()}
+                  {packageConfig.currency === "$" ? ` | TSh ${accountingRate.toLocaleString()} accounting` : ""}
                 </div>
               </div>
             )}
@@ -705,7 +718,7 @@ export default function BookingPage() {
           <div className="space-y-2 border-t pt-4">
             <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
               <span>Rate / Night</span>
-              <span>{bookingCurrency} {rate.toLocaleString()}</span>
+              <span>{accountingCurrency} {accountingRate.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-xs font-black uppercase tracking-widest opacity-60">
               <span>Days</span>
@@ -713,7 +726,7 @@ export default function BookingPage() {
             </div>
             <div className="flex justify-between text-lg font-black pt-2">
               <span>Total</span>
-              <span className="text-primary">{bookingCurrency} {total.toLocaleString()}</span>
+              <span className="text-primary">{accountingCurrency} {total.toLocaleString()}</span>
             </div>
             {bookingBlockerMessage && (
               <p className="pt-2 text-xs font-bold text-amber-700">{bookingBlockerMessage}</p>
