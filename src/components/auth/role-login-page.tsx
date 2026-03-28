@@ -148,21 +148,14 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     const nextProfiles: LoginProfiles = {
       ...profiles,
-      [role]:
-        role === "barista"
-          ? {
-              ...upsertProfileUser(currentProfile, username.trim(), {
-                password: expectedPassword,
-                updatedAt: Date.now(),
-              }),
-              updatedAt: Date.now(),
-            }
-          : {
-              username: username.trim(),
-              password: currentProfile?.password || expectedPassword,
-              ...(role === "cashier" ? { shift } : {}),
-              updatedAt: Date.now(),
-            },
+      [role]: {
+        ...upsertProfileUser(currentProfile, username.trim(), {
+          password: expectedPassword,
+          updatedAt: Date.now(),
+        }),
+        ...(role === "cashier" ? { shift } : {}),
+        updatedAt: Date.now(),
+      },
     };
 
     writeLocalLoginProfiles(nextProfiles);

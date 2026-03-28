@@ -50,7 +50,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['director'] },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager', 'director'] },
+  { label: 'Settings', href: '/dashboard/settings/password', icon: Settings, roles: ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'] },
+  { label: 'System Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager', 'director'] },
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
@@ -73,6 +74,7 @@ export function SidebarNav({ role }: { role: Role }) {
   const filteredNav = useMemo(() => {
     const visible = NAV_ITEMS
       .filter(item => item.roles.includes(role))
+      .filter((item) => !(role === "inventory" && item.href === "/dashboard/inventory/barista-stock"))
       .map((item) => {
         if (item.href !== "/dashboard/fnb-pos") return item;
         if (role === "kitchen") return { ...item, label: "Kitchen POS", href: "/dashboard/kitchen" };
