@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { readRoomsState } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 
 interface CashierTransaction {
   total: number;
@@ -185,6 +186,18 @@ export default function OverviewPage() {
             <pre className="text-xs whitespace-pre-wrap font-semibold text-muted-foreground">{reportText}</pre>
           </CardContent>
         </Card>
+      )}
+
+      {!isDirector && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight uppercase">Daily Entries</h2>
+            <p className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider">
+              Open and close shift sheets from the manager dashboard. Changes sync with inventory records automatically.
+            </p>
+          </div>
+          <KitchenSessionManager isDirector={false} />
+        </section>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

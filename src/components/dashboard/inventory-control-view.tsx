@@ -29,6 +29,7 @@ import { Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 
 export type InventoryTab =
   | "kitchen-stock"
@@ -988,8 +989,7 @@ export function InventoryControlView({
 
       {activeTab === "kitchen-stock" && (
         <div className="space-y-6">
-          {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
-          {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems, "kitchen")}
+          <KitchenSessionManager isDirector={isDirector} />
         </div>
       )}
 
