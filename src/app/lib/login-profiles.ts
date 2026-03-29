@@ -3,6 +3,8 @@
 import { Role } from "@/app/lib/mock-data";
 
 export const STORAGE_LOGIN_PROFILES = "orange-hotel-login-profiles";
+export const STORAGE_ACTIVE_USERNAME = "orange-hotel-username";
+export const SESSION_IDENTITY_EVENT = "orange-hotel-session-identity-updated";
 
 export interface LoginUserAccount {
   username: string;
@@ -26,6 +28,10 @@ function dispatchLoginProfilesUpdated() {
   window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key: STORAGE_LOGIN_PROFILES } }));
 }
 
+function dispatchSessionIdentityUpdated() {
+  window.dispatchEvent(new CustomEvent(SESSION_IDENTITY_EVENT));
+}
+
 export function readLocalLoginProfiles() {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(STORAGE_LOGIN_PROFILES);
@@ -42,6 +48,38 @@ export function writeLocalLoginProfiles(profiles: LoginProfiles) {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_LOGIN_PROFILES, JSON.stringify(profiles));
   dispatchLoginProfilesUpdated();
+}
+
+export function readActiveSessionUsername(fallback = "") {
+  if (typeof window === "undefined") return fallback;
+  return localStorage.getItem(STORAGE_ACTIVE_USERNAME) ?? fallback;
+}
+
+export function writeActiveSessionUsername(username: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_ACTIVE_USERNAME, username.trim());
+  dispatchSessionIdentityUpdated();
+}
+
+export function subscribeToSessionIdentity(onChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handleCustomEvent = () => onChange();
+  const handleStorageEvent = (event: StorageEvent) => {
+    if (event.key === STORAGE_ACTIVE_USERNAME) {
+      onChange();
+    }
+  };
+
+  window.addEventListener(SESSION_IDENTITY_EVENT, handleCustomEvent);
+  window.addEventListener("storage", handleStorageEvent);
+
+  return () => {
+    window.removeEventListener(SESSION_IDENTITY_EVENT, handleCustomEvent);
+    window.removeEventListener("storage", handleStorageEvent);
+  };
 }
 
 export async function hydrateLoginProfilesFromServer() {

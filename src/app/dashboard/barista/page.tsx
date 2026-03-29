@@ -31,7 +31,7 @@ import { CheckCircle2, Coffee, Lock, Minus, Plus, Receipt, Search, Trash2, User,
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
-import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, readLocalLoginProfiles, saveLoginProfileToServer, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
+import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, readActiveSessionUsername, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, subscribeToSessionIdentity, upsertProfileUser } from "@/app/lib/login-profiles";
 
 type BaristaCategory = "all" | "espresso" | "coffee" | "tea" | "cold" | "snacks";
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -270,8 +270,30 @@ export default function BaristaPage() {
     const savedRole = readStoredRole();
     setRole(savedRole);
     if (typeof window !== "undefined") {
-      setActiveUsername(localStorage.getItem("orange-hotel-username") ?? "");
+      setActiveUsername(readActiveSessionUsername(""));
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applySessionIdentity = () => {
+      setActiveUsername(readActiveSessionUsername(""));
+    };
+
+    const handleProfilesUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key !== STORAGE_LOGIN_PROFILES) return;
+      applySessionIdentity();
+    };
+
+    const unsubscribeSession = subscribeToSessionIdentity(applySessionIdentity);
+    window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+
+    return () => {
+      unsubscribeSession();
+      window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -753,19 +775,18 @@ export default function BaristaPage() {
       password: nextPassword,
       updatedAt: Date.now(),
     });
-    const nextProfiles = {
-      ...profiles,
-      barista: nextEntry,
-    };
-
-    writeLocalLoginProfiles(nextProfiles);
     const saved = await saveLoginProfileToServer("barista", nextEntry);
+    if (!saved) {
+      setPasswordFeedback({ type: "error", message: "Password was not saved to the backend. No local change was applied." });
+      return;
+    }
+
     setCurrentPasswordInput("");
     setNewPasswordInput("");
     setConfirmPasswordInput("");
     setPasswordFeedback({
-      type: saved ? "success" : "error",
-      message: saved ? `Password updated for ${normalizedUsername}.` : "Password changed locally, but sync to server failed.",
+      type: "success",
+      message: `Password updated for ${normalizedUsername}.`,
     });
   };
 

@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
-import { readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
+import { readActiveSessionUsername, readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeActiveSessionUsername } from "@/app/lib/login-profiles";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v2";
@@ -737,6 +737,7 @@ export default function DashboardLayout({
   const [usernameDialogOpen, setUsernameDialogOpen] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState("");
   const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameFeedback, setUsernameFeedback] = useState<string | null>(null);
 
   const allowedByRole: Record<Role, string[]> = {
     manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
@@ -768,7 +769,7 @@ export default function DashboardLayout({
       }
 
       localStorage.setItem("orange-hotel-role", savedRole);
-      setActiveUsername(localStorage.getItem("orange-hotel-username") ?? savedRole);
+      setActiveUsername(readActiveSessionUsername(savedRole));
       setRole(savedRole);
       if (savedShift) setShift(savedShift);
 
@@ -814,6 +815,7 @@ export default function DashboardLayout({
     if (!nextUsername || !previousUsername) return;
 
     setUsernameSaving(true);
+    setUsernameFeedback(null);
     try {
       const profiles = readLocalLoginProfiles() ?? {};
       const currentProfile = profiles[role] ?? {
@@ -822,16 +824,15 @@ export default function DashboardLayout({
         users: [],
       };
       const nextProfile = renameProfileUser(currentProfile, previousUsername, nextUsername);
-      const nextProfiles = {
-        ...profiles,
-        [role]: nextProfile,
-      };
+      const saved = await saveLoginProfileToServer(role, nextProfile);
+      if (!saved) {
+        setUsernameFeedback("Username was not saved to the backend. No local change was applied.");
+        return;
+      }
 
-      writeLocalLoginProfiles(nextProfiles);
-      localStorage.setItem("orange-hotel-username", nextUsername);
+      writeActiveSessionUsername(nextUsername);
       setActiveUsername(nextUsername);
       setUsernameDialogOpen(false);
-      await saveLoginProfileToServer(role, nextProfile);
     } finally {
       setUsernameSaving(false);
     }
@@ -946,6 +947,11 @@ export default function DashboardLayout({
             placeholder="Enter new username"
             className="h-11"
           />
+          {usernameFeedback && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-700">
+              {usernameFeedback}
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setUsernameDialogOpen(false)} disabled={usernameSaving}>
               Cancel

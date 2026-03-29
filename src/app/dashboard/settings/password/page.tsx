@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, User } from "lucide-react";
 import { normalizeRole } from "@/app/lib/auth";
 import { Role } from "@/app/lib/mock-data";
 import {
   DEFAULT_LOGIN_PASSWORD,
   getProfilePassword,
+  LoginProfileEntry,
   readLocalLoginProfiles,
+  readActiveSessionUsername,
   saveLoginProfileToServer,
+  STORAGE_LOGIN_PROFILES,
+  subscribeToSessionIdentity,
   upsertProfileUser,
-  writeLocalLoginProfiles,
 } from "@/app/lib/login-profiles";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,17 +25,34 @@ export default function PasswordSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [activeProfile, setActiveProfile] = useState<LoginProfileEntry | null>(null);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const storedRole = normalizeRole(localStorage.getItem("orange-hotel-role")) ?? "manager";
-    setRole(storedRole);
-    setUsername(localStorage.getItem("orange-hotel-username") ?? storedRole);
-  }, []);
+    const applySession = () => {
+      const storedRole = normalizeRole(localStorage.getItem("orange-hotel-role")) ?? "manager";
+      setRole(storedRole);
+      setUsername(readActiveSessionUsername(storedRole));
+      setActiveProfile(readLocalLoginProfiles()?.[storedRole] ?? null);
+    };
 
-  const activeProfile = useMemo(() => readLocalLoginProfiles()?.[role] ?? null, [role, username]);
+    const handleProfilesUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key !== STORAGE_LOGIN_PROFILES) return;
+      applySession();
+    };
+
+    applySession();
+    const unsubscribeSession = subscribeToSessionIdentity(applySession);
+    window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+
+    return () => {
+      unsubscribeSession();
+      window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+    };
+  }, []);
 
   const updatePassword = async () => {
     const normalizedUsername = username.trim();
@@ -65,21 +85,19 @@ export default function PasswordSettingsPage() {
         password: nextPassword,
         updatedAt: Date.now(),
       });
-      const nextProfiles = {
-        ...profiles,
-        [role]: nextEntry,
-      };
-
-      writeLocalLoginProfiles(nextProfiles);
       const saved = await saveLoginProfileToServer(role, nextEntry);
+      if (!saved) {
+        setFeedback({ type: "error", message: "Password was not saved to the backend. No local change was applied." });
+        return;
+      }
+
+      setActiveProfile(nextEntry);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setFeedback({
-        type: saved ? "success" : "error",
-        message: saved
-          ? `Password updated for ${normalizedUsername}.`
-          : "Password changed locally, but sync to server failed.",
+        type: "success",
+        message: `Password updated for ${normalizedUsername}.`,
       });
     } finally {
       setSaving(false);
