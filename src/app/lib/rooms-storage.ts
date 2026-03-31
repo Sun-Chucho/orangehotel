@@ -31,6 +31,28 @@ export function writeRoomsState(rooms: Room[]) {
   writeJson(STORAGE_ROOMS, rooms);
 }
 
+function readBaseRooms(baseRooms?: Room[]) {
+  return Array.isArray(baseRooms) && baseRooms.length > 0
+    ? baseRooms
+    : hasSavedRoomsState()
+      ? readRoomsState()
+      : getDefaultRooms();
+}
+
+function reconcileRooms(rooms: Room[], occupiedRooms: Set<string>): Room[] {
+  return rooms.map((room) => {
+    if (occupiedRooms.has(room.number)) {
+      return room.status === "occupied" ? room : { ...room, status: "occupied" as Room["status"] };
+    }
+
+    if (room.status === "occupied") {
+      return { ...room, status: "available" as Room["status"] };
+    }
+
+    return room;
+  });
+}
+
 export function updateRoomStatusByNumber(roomNumber: string, status: Room["status"]): Room[] {
   const nextRooms = readRoomsState().map((room) =>
     room.number === roomNumber ? { ...room, status } : room,
@@ -63,23 +85,15 @@ export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseR
       .map((booking) => booking.roomNumber),
   );
 
-  const currentRooms =
-    Array.isArray(baseRooms) && baseRooms.length > 0
-      ? baseRooms
-      : hasSavedRoomsState()
-        ? readRoomsState()
-        : getDefaultRooms();
-
-  const nextRooms: Room[] = currentRooms.map((room) =>
-    occupiedRooms.has(room.number)
-      ? { ...room, status: "occupied" as Room["status"] }
-      : room.status === "occupied"
-        ? { ...room, status: "available" as Room["status"] }
-        : room,
-  );
+  const currentRooms = readBaseRooms(baseRooms);
+  const nextRooms = reconcileRooms(currentRooms, occupiedRooms);
 
   if (JSON.stringify(currentRooms) !== JSON.stringify(nextRooms)) {
     writeRoomsState(nextRooms);
   }
   return nextRooms;
+}
+
+export function syncRoomsStateFromBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]) {
+  return syncRoomsWithActiveBookings(bookings, baseRooms);
 }

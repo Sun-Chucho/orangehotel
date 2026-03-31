@@ -7,6 +7,7 @@ import { CheckCircle2, ChevronRight, Instagram, LoaderCircle, Mail, MapPin, Mess
 import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 import {
   appendLiveChatMessage,
+  STORAGE_LIVE_CHAT,
   createLiveChatThread,
   getLandingChatThreadId,
   markThreadSeenByGuest,
@@ -354,9 +355,9 @@ export default function Home() {
   }, [activeStory]);
 
   useEffect(() => {
-    const applyChatSnapshot = () => {
+    const applyChatSnapshot = (incomingThreads?: LiveChatThread[] | null) => {
       const threadId = getLandingChatThreadId();
-      const threads = readLiveChatThreads();
+      const threads = Array.isArray(incomingThreads) ? incomingThreads : readLiveChatThreads();
       const nextThread = threadId ? threads.find((entry) => entry.id === threadId) ?? null : null;
       setChatThread(nextThread);
       if (nextThread?.unreadByGuest) {
@@ -365,7 +366,7 @@ export default function Home() {
     };
 
     applyChatSnapshot();
-    const unsubscribe = subscribeToSyncedStorageKey("orange-hotel-live-chat", applyChatSnapshot);
+    const unsubscribe = subscribeToSyncedStorageKey<LiveChatThread[]>(STORAGE_LIVE_CHAT, applyChatSnapshot);
     return () => unsubscribe();
   }, []);
 

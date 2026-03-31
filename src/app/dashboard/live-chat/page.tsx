@@ -27,6 +27,17 @@ export default function LiveChatPage() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (liveChats.length === 0) {
+      setActiveChatId(null);
+      return;
+    }
+
+    if (!activeChatId || !liveChats.some((thread) => thread.id === activeChatId)) {
+      setActiveChatId(liveChats[0].id);
+    }
+  }, [activeChatId, liveChats]);
+
   const unreadLiveChats = useMemo(
     () => liveChats.filter((thread) => thread.unreadByReception > 0 && thread.status === "open"),
     [liveChats],
@@ -45,6 +56,7 @@ export default function LiveChatPage() {
     if (!activeLiveChat || !receptionReply.trim()) return;
     appendLiveChatMessage(activeLiveChat.id, "reception", receptionReply);
     markThreadSeenByReception(activeLiveChat.id);
+    setActiveChatId(activeLiveChat.id);
     setReceptionReply("");
   };
 

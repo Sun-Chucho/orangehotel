@@ -21,7 +21,7 @@ import { Clock, Phone, Receipt, User } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { toast } from "@/hooks/use-toast";
-import { isBookingStillActive, readRoomsState, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
+import { isBookingStillActive, readRoomsState, syncRoomsStateFromBookings, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
@@ -152,16 +152,16 @@ export default function BookingPage() {
   const [receiptSeq, setReceiptSeq] = useState(84920);
 
   useEffect(() => {
-    const applyCashierSnapshot = () => {
+    const applyCashierSnapshot = (incomingRooms?: Room[]) => {
       const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
-      setTransactions(
-        snapshot.transactions.map((tx) => ({
+      const normalizedTransactions = snapshot.transactions.map((tx) => ({
           ...tx,
           status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
           checkedBy: tx.checkedBy || (tx.id.startsWith("hist-") ? tx.checkedBy : "Default"),
-        })),
-      );
+        }));
+      setTransactions(normalizedTransactions);
       setReceiptSeq(snapshot.receiptSeq);
+      setRooms(syncRoomsStateFromBookings(normalizedTransactions, incomingRooms));
 
       // Historical Recovery Logic
       const existingIds = new Set(snapshot.transactions.map((t) => t.id));
@@ -173,6 +173,7 @@ export default function BookingPage() {
         );
         setTransactions(recoveredTransactions);
         writeCashierState(recoveredTransactions, snapshot.receiptSeq);
+        setRooms(syncRoomsStateFromBookings(recoveredTransactions, incomingRooms));
         toast({
           title: "Bookings Recovered",
           description: `Successfully restored ${missingBookings.length} historical records.`,
@@ -181,13 +182,12 @@ export default function BookingPage() {
     };
 
     applyCashierSnapshot();
-    setRooms(readRoomsState());
 
     const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
       applyCashierSnapshot();
     });
     const unsubscribeRooms = subscribeToSyncedStorageKey<Room[]>("orange-hotel-rooms-state", (value) => {
-      setRooms(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
+      applyCashierSnapshot(Array.isArray(value) && value.length > 0 ? value : readRoomsState());
     });
 
     return () => {

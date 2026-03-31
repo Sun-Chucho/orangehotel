@@ -30,6 +30,24 @@ function getDayKey(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+function createId(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function sortThreadsByRecentActivity(threads: LiveChatThread[]) {
+  return [...threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
+
+function updateLiveChatThreads(updater: (threads: LiveChatThread[]) => LiveChatThread[]) {
+  const currentThreads = readLiveChatThreads();
+  const nextThreads = sortThreadsByRecentActivity(updater(currentThreads));
+  writeLiveChatThreads(nextThreads);
+  return nextThreads;
+}
+
 export function readLiveChatThreads() {
   const value = readJson<LiveChatThread[]>(STORAGE_LIVE_CHAT);
   return Array.isArray(value) ? value : [];
@@ -65,7 +83,7 @@ export function createLiveChatThread(guestName: string, guestContact: string, op
   const now = new Date().toISOString();
   const dayKey = getDayKey(new Date(now));
   const thread: LiveChatThread = {
-    id: `chat-${Date.now()}`,
+    id: createId("chat"),
     guestName: guestName.trim() || "Website Guest",
     guestContact: guestContact.trim(),
     dayKey,
@@ -76,7 +94,7 @@ export function createLiveChatThread(guestName: string, guestContact: string, op
     unreadByReception: 1,
     messages: [
       {
-        id: `msg-${Date.now()}`,
+        id: createId("msg"),
         sender: "guest",
         text: openingMessage.trim(),
         createdAt: now,
@@ -84,7 +102,7 @@ export function createLiveChatThread(guestName: string, guestContact: string, op
     ],
   };
 
-  writeLiveChatThreads([thread, ...readLiveChatThreads()]);
+  updateLiveChatThreads((threads) => [thread, ...threads]);
   setLandingChatThreadId(thread.id);
   return thread;
 }
@@ -94,42 +112,41 @@ export function appendLiveChatMessage(threadId: string, sender: LiveChatSender, 
   if (!nextText) return readLiveChatThreads();
 
   const now = new Date().toISOString();
-  const nextThreads = readLiveChatThreads().map((thread) => {
-    if (thread.id !== threadId) return thread;
+  return updateLiveChatThreads((threads) =>
+    threads.map((thread) => {
+      if (thread.id !== threadId) return thread;
 
-    return {
-      ...thread,
-      updatedAt: now,
-      unreadByGuest: sender === "reception" ? thread.unreadByGuest + 1 : 0,
-      unreadByReception: sender === "guest" ? thread.unreadByReception + 1 : 0,
-      messages: [
-        ...thread.messages,
-        {
-          id: `msg-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-          sender,
-          text: nextText,
-          createdAt: now,
-        },
-      ],
-    };
-  });
-
-  writeLiveChatThreads(nextThreads);
-  return nextThreads;
+      return {
+        ...thread,
+        updatedAt: now,
+        unreadByGuest: sender === "reception" ? thread.unreadByGuest + 1 : 0,
+        unreadByReception: sender === "guest" ? thread.unreadByReception + 1 : 0,
+        messages: [
+          ...thread.messages,
+          {
+            id: createId("msg"),
+            sender,
+            text: nextText,
+            createdAt: now,
+          },
+        ],
+      };
+    }),
+  );
 }
 
 export function markThreadSeenByGuest(threadId: string) {
-  const nextThreads = readLiveChatThreads().map((thread) =>
-    thread.id === threadId ? { ...thread, unreadByGuest: 0 } : thread,
+  return updateLiveChatThreads((threads) =>
+    threads.map((thread) =>
+      thread.id === threadId ? { ...thread, unreadByGuest: 0 } : thread,
+    ),
   );
-  writeLiveChatThreads(nextThreads);
-  return nextThreads;
 }
 
 export function markThreadSeenByReception(threadId: string) {
-  const nextThreads = readLiveChatThreads().map((thread) =>
-    thread.id === threadId ? { ...thread, unreadByReception: 0 } : thread,
+  return updateLiveChatThreads((threads) =>
+    threads.map((thread) =>
+      thread.id === threadId ? { ...thread, unreadByReception: 0 } : thread,
+    ),
   );
-  writeLiveChatThreads(nextThreads);
-  return nextThreads;
 }
