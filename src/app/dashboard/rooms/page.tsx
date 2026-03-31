@@ -20,9 +20,10 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { readRoomsState, syncRoomsWithActiveBookings, updateRoomStatusById } from "@/app/lib/rooms-storage";
+import { isBookingStillActive, readRoomsState, syncRoomsStateFromBookings, updateRoomStatusById } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
+import { toast } from "@/hooks/use-toast";
 
 type StatusFilter = "all" | Room["status"];
 type TypeFilter = "all" | Room["type"];
@@ -54,7 +55,7 @@ export default function RoomsPage() {
         "orange-hotel-cashier-seq",
         84920,
       );
-      const nextRooms = syncRoomsWithActiveBookings(cashierSnapshot.transactions, baseRooms);
+      const nextRooms = syncRoomsStateFromBookings(cashierSnapshot.transactions, baseRooms);
       setRooms(nextRooms);
     };
 
@@ -92,6 +93,18 @@ export default function RoomsPage() {
     [rooms],
   );
 
+  const hasActiveBookingForRoom = (roomNumber: string) => {
+    const cashierSnapshot = readCashierState<BookingRoomRecord>(
+      "orange-hotel-cashier-transactions",
+      "orange-hotel-cashier-seq",
+      84920,
+    );
+
+    return cashierSnapshot.transactions.some(
+      (booking) => booking.roomNumber === roomNumber && isBookingStillActive(booking),
+    );
+  };
+
   const setRoomStatus = (roomId: string, roomNumber: string, status: Room["status"]) => {
     if (status !== "occupied") {
       const cashierSnapshot = readCashierState<BookingRoomRecord>(
@@ -100,7 +113,7 @@ export default function RoomsPage() {
         84920,
       );
       const activeBooking = [...cashierSnapshot.transactions]
-        .filter((booking) => booking.roomNumber === roomNumber && booking.status !== "checked-out")
+        .filter((booking) => booking.roomNumber === roomNumber && isBookingStillActive(booking))
         .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
 
       if (activeBooking) {
@@ -119,6 +132,14 @@ export default function RoomsPage() {
 
   const confirmAndSetRoomStatus = async (roomId: string, roomNumber: string, status: Room["status"]) => {
     if (isDirector) return;
+    if (status === "occupied" && !hasActiveBookingForRoom(roomNumber)) {
+      toast({
+        title: "Active booking required",
+        description: `Room ${roomNumber} can only be marked occupied from an active booking.`,
+        variant: "destructive",
+      });
+      return false;
+    }
     const labels: Record<Room["status"], string> = {
       available: "available",
       occupied: "occupied",
@@ -384,6 +405,7 @@ export default function RoomsPage() {
                     <Button
                       variant={selectedRoom.status === "occupied" ? "default" : "outline"}
                       className="font-black uppercase text-[10px] tracking-widest"
+                      disabled={!hasActiveBookingForRoom(selectedRoom.number)}
                       onClick={() => void handleRoomStatusUpdate(selectedRoom, "occupied")}
                     >
                       Occ

@@ -39,6 +39,14 @@ function readBaseRooms(baseRooms?: Room[]) {
       : getDefaultRooms();
 }
 
+export function getActiveBookedRoomNumbers(bookings: ActiveBookingRoom[]) {
+  return new Set(
+    bookings
+      .filter((booking) => isBookingStillActive(booking))
+      .map((booking) => booking.roomNumber),
+  );
+}
+
 function reconcileRooms(rooms: Room[], occupiedRooms: Set<string>): Room[] {
   return rooms.map((room) => {
     if (occupiedRooms.has(room.number)) {
@@ -78,22 +86,16 @@ export function isBookingStillActive(booking: ActiveBookingRoom) {
   return Date.now() <= checkoutAt.getTime();
 }
 
-export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {
-  const occupiedRooms = new Set(
-    bookings
-      .filter((booking) => isBookingStillActive(booking))
-      .map((booking) => booking.roomNumber),
-  );
-
+export function deriveRoomsStateFromBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {
+  const occupiedRooms = getActiveBookedRoomNumbers(bookings);
   const currentRooms = readBaseRooms(baseRooms);
-  const nextRooms = reconcileRooms(currentRooms, occupiedRooms);
-
-  if (JSON.stringify(currentRooms) !== JSON.stringify(nextRooms)) {
-    writeRoomsState(nextRooms);
-  }
-  return nextRooms;
+  return reconcileRooms(currentRooms, occupiedRooms);
 }
 
 export function syncRoomsStateFromBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]) {
-  return syncRoomsWithActiveBookings(bookings, baseRooms);
+  return deriveRoomsStateFromBookings(bookings, baseRooms);
+}
+
+export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]) {
+  return deriveRoomsStateFromBookings(bookings, baseRooms);
 }

@@ -18,13 +18,16 @@ import {
   ArrowDownRight,
   FileText,
 } from "lucide-react";
-import { readRoomsState } from "@/app/lib/rooms-storage";
+import { deriveRoomsStateFromBookings, readRoomsState } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 
 interface CashierTransaction {
+  roomNumber?: string;
   total: number;
   status?: "completed" | "checked-out" | "credit";
+  checkOutDate?: string;
+  checkOutTime?: string;
 }
 
 interface QueueTicket {
@@ -73,7 +76,7 @@ export default function OverviewPage() {
       const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
       const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
       const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
-      setRooms(readRoomsState());
+      setRooms(deriveRoomsStateFromBookings(cashierSnapshot.transactions, readRoomsState()));
 
       if (savedRole) setRole(savedRole);
       if (savedShift) setShift(savedShift);
