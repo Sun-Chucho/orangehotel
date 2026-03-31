@@ -260,24 +260,25 @@ export default function PaymentsPage() {
 
     if (selectedCredit.source === "booking") {
       const mappedMethod: PaymentMethod = method === "mobile" ? "mobile-money" : method;
-      const nextTransactions = bookingTransactions.map((tx) =>
+      const snapshot = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920);
+      const nextTransactions = snapshot.transactions.map((tx) =>
         tx.id === selectedCredit.id ? { ...tx, status: "completed" as const, payment: mappedMethod } : tx,
       );
       setBookingTransactions(nextTransactions);
-      writeCashierState(nextTransactions, readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920).receiptSeq);
+      writeCashierState(nextTransactions, snapshot.receiptSeq);
     } else if (selectedCredit.source === "kitchen") {
-      const nextPayments = kitchenPayments.map((tx) =>
+      const kitchenSnapshot = readPosState<unknown, KitchenPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", STORAGE_KITCHEN_PAYMENTS, "orange-hotel-kitchen-menu", 300);
+      const nextPayments = kitchenSnapshot.payments.map((tx) =>
         tx.id === selectedCredit.id ? { ...tx, status: "completed" as const, method } : tx,
       );
       setKitchenPayments(nextPayments);
-      const kitchenSnapshot = readPosState<unknown, KitchenPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", STORAGE_KITCHEN_PAYMENTS, "orange-hotel-kitchen-menu", 300);
       writePosState(STORAGE_KITCHEN_STATE, kitchenSnapshot.tickets, kitchenSnapshot.ticketSeq, nextPayments, kitchenSnapshot.menuItems);
     } else {
-      const nextPayments = baristaPayments.map((tx) =>
+      const baristaSnapshot = readPosState<unknown, BaristaPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", STORAGE_BARISTA_PAYMENTS, "orange-hotel-barista-menu", 490);
+      const nextPayments = baristaSnapshot.payments.map((tx) =>
         tx.id === selectedCredit.id ? { ...tx, status: "completed" as const, method } : tx,
       );
       setBaristaPayments(nextPayments);
-      const baristaSnapshot = readPosState<unknown, BaristaPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", STORAGE_BARISTA_PAYMENTS, "orange-hotel-barista-menu", 490);
       writePosState(STORAGE_BARISTA_STATE, baristaSnapshot.tickets, baristaSnapshot.ticketSeq, nextPayments, baristaSnapshot.menuItems);
     }
 
@@ -471,7 +472,14 @@ export default function PaymentsPage() {
               <Button onClick={() => applyPaidMethod("mobile")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
                 Mobile
               </Button>
-              <Button variant="outline" onClick={() => setShowMethodPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowMethodPopup(false);
+                  setSelectedCredit(null);
+                }}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
                 Close
               </Button>
             </CardContent>

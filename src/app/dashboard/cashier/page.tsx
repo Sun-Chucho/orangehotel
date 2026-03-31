@@ -54,6 +54,9 @@ interface BookingRecord {
   total: number;
   status: TransactionStatus;
   checkedBy?: string;
+  extensionPaymentMethod?: PaymentMethod;
+  extensionAmount?: number;
+  lastExtendedAt?: number;
 }
 
 const ROOM_RATE: Record<RoomType, number> = {
@@ -146,6 +149,7 @@ export default function BookingPage() {
   const [selectedExtendBookingId, setSelectedExtendBookingId] = useState<string | null>(null);
   const [extendCheckOutDate, setExtendCheckOutDate] = useState("");
   const [extendCheckOutTime, setExtendCheckOutTime] = useState("12:00");
+  const [showExtendPaymentPopup, setShowExtendPaymentPopup] = useState(false);
 
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
@@ -477,6 +481,7 @@ export default function BookingPage() {
   const openSettlementPopup = () => {
     if (isDirector) return;
     if (!canSubmitBooking) return;
+    setShowPayNowPopup(false);
     setShowSettlementPopup(true);
   };
 
@@ -515,9 +520,17 @@ export default function BookingPage() {
     setSelectedExtendBookingId(booking.id);
     setExtendCheckOutDate(booking.checkOutDate);
     setExtendCheckOutTime(booking.checkOutTime || "12:00");
+    setShowExtendPaymentPopup(false);
   };
 
-  const applyExtendStay = async () => {
+  const closeExtendStayDialog = () => {
+    setSelectedExtendBookingId(null);
+    setExtendCheckOutDate("");
+    setExtendCheckOutTime("12:00");
+    setShowExtendPaymentPopup(false);
+  };
+
+  const openExtendPaymentDialog = async () => {
     if (isDirector || !selectedExtendBookingId || !extendCheckOutDate || !extendCheckOutTime) return;
 
     const booking = selectedExtendBooking;
@@ -533,6 +546,25 @@ export default function BookingPage() {
     });
     if (!approved) return;
 
+    setShowExtendPaymentPopup(true);
+  };
+
+  const applyExtendStay = (paymentMethod: PaymentMethod) => {
+    if (!selectedExtendBookingId || !extendCheckOutDate || !extendCheckOutTime) return;
+
+    const booking = selectedExtendBooking;
+    if (!booking) return;
+
+    const nextNights = extendNights;
+    if (nextNights < 1) return;
+
+    const nextStatus: TransactionStatus =
+      paymentMethod === "credit"
+        ? "credit"
+        : booking.status === "credit"
+          ? "credit"
+          : "completed";
+
     const nextTransactions = transactions.map((entry) =>
       entry.id === selectedExtendBookingId
         ? {
@@ -541,15 +573,18 @@ export default function BookingPage() {
             checkOutTime: extendCheckOutTime,
             nights: nextNights,
             total: extendTotal,
+            status: nextStatus,
+            extensionPaymentMethod: paymentMethod,
+            extensionAmount: extendIncrement,
+            lastExtendedAt: Date.now(),
           }
         : entry,
     );
 
     setTransactions(nextTransactions);
     writeCashierState(nextTransactions, receiptSeq);
-    setSelectedExtendBookingId(null);
-    setExtendCheckOutDate("");
-    setExtendCheckOutTime("12:00");
+    setTransactionTab(nextStatus === "credit" ? "credit" : "completed");
+    closeExtendStayDialog();
   };
 
   const checkoutBooking = async (booking: BookingRecord) => {
@@ -962,18 +997,60 @@ export default function BookingPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setSelectedExtendBookingId(null);
-                    setExtendCheckOutDate("");
-                    setExtendCheckOutTime("12:00");
+                    closeExtendStayDialog();
                   }}
                   className="h-11 font-black uppercase text-[10px] tracking-widest"
                 >
                   Close
                 </Button>
-                <Button onClick={applyExtendStay} disabled={extendNights < 1} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                <Button onClick={() => void openExtendPaymentDialog()} disabled={extendNights < 1} className="h-11 font-black uppercase text-[10px] tracking-widest">
                   Save Extension
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {!isDirector && showExtendPaymentPopup && selectedExtendBooking && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">Extended Night Pay Method</CardTitle>
+              <CardDescription>
+                Choose how the added amount for room {selectedExtendBooking.roomNumber} will be settled.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  <span>Added Nights</span>
+                  <span>{Math.max(0, extendNights - selectedExtendBooking.nights)}</span>
+                </div>
+                <div className="mt-2 flex justify-between text-sm font-black uppercase tracking-widest">
+                  <span>Added Amount</span>
+                  <span>{selectedExtendBooking.currency ?? "TSh"} {extendIncrement.toLocaleString()}</span>
+                </div>
+              </div>
+              <Button onClick={() => applyExtendStay("cash")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Cash
+              </Button>
+              <Button onClick={() => applyExtendStay("card")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Card
+              </Button>
+              <Button onClick={() => applyExtendStay("mobile-money")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
+                Mobile Money
+              </Button>
+              <Button onClick={() => applyExtendStay("credit")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
+                Credit
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowExtendPaymentPopup(false)}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
+                Back
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1002,7 +1079,14 @@ export default function BookingPage() {
               >
                 Credit
               </Button>
-              <Button variant="outline" onClick={() => setShowSettlementPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSettlementPopup(false);
+                  setShowPayNowPopup(false);
+                }}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
                 Close
               </Button>
             </CardContent>
@@ -1027,16 +1111,16 @@ export default function BookingPage() {
               <Button onClick={() => completePaidBooking("mobile-money")} className="w-full h-11 font-black uppercase text-[10px] tracking-widest">
                 Mobile
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowPayNowPopup(false);
-                  setShowSettlementPopup(true);
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPayNowPopup(false);
+                    setShowSettlementPopup(true);
                 }}
-                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
-              >
-                Back
-              </Button>
+                  className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+                >
+                  Back
+                </Button>
             </CardContent>
           </Card>
         </div>
