@@ -101,6 +101,13 @@ function formatDate(value: string): string {
   });
 }
 
+function getBookingPaymentLabel(tx: BookingRecord) {
+  if (tx.payment === "credit") {
+    return tx.status === "credit" ? "pending" : "unassigned";
+  }
+  return tx.payment;
+}
+
 export default function PaymentsPage() {
   const isDirector = useIsDirector();
   const [role, setRole] = useState<Role>("manager");
@@ -175,7 +182,7 @@ export default function PaymentsPage() {
         context: `Room ${tx.roomNumber}`,
         dateLabel: `${formatDate(tx.checkInDate)} - ${formatDate(tx.checkOutDate)}`,
         dateDetail: `${tx.nights} night${tx.nights === 1 ? "" : "s"}`,
-        method: tx.payment,
+        method: getBookingPaymentLabel(tx),
         amount: tx.total,
         createdAt: tx.createdAt,
         status: tx.status === "credit" ? "credit" : "completed",
