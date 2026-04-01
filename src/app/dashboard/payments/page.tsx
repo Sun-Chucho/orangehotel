@@ -82,6 +82,12 @@ interface PaymentRow {
 const STORAGE_BOOKING_TX = "orange-hotel-cashier-transactions";
 const STORAGE_KITCHEN_PAYMENTS = "orange-hotel-kitchen-payments";
 const STORAGE_BARISTA_PAYMENTS = "orange-hotel-barista-payments";
+const RECEPTION_METHOD_FIXES = new Map<string, PaymentMethod>([
+  ["#2", "cash"],
+  ["#4", "cash"],
+  ["#5", "cash"],
+  ["#7", "cash"],
+]);
 
 function formatAgo(timestamp: number): string {
   const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
@@ -99,6 +105,14 @@ function formatDate(value: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+function normalizeReceiptNo(value: string) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  const match = trimmed.match(/^#0*(\d+)$/);
+  if (!match) return trimmed;
+  return `#${match[1]}`;
 }
 
 function getBookingPaymentLabel(tx: BookingRecord) {
@@ -149,12 +163,19 @@ export default function PaymentsPage() {
         490,
       );
 
-      setBookingTransactions(
-        cashierSnapshot.transactions.map((tx) => ({
+      const correctedBookingTransactions = cashierSnapshot.transactions.map((tx) => {
+        const forcedMethod = RECEPTION_METHOD_FIXES.get(normalizeReceiptNo(tx.receiptNo));
+        return {
           ...tx,
+          payment: forcedMethod ?? tx.payment,
           status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
-        })),
-      );
+        };
+      });
+
+      setBookingTransactions(correctedBookingTransactions);
+      if (JSON.stringify(cashierSnapshot.transactions) !== JSON.stringify(correctedBookingTransactions)) {
+        writeCashierState(correctedBookingTransactions, cashierSnapshot.receiptSeq);
+      }
       setKitchenPayments(kitchenSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
       setBaristaPayments(baristaSnapshot.payments.map((tx) => ({ ...tx, status: tx.status === "credit" ? "credit" : "completed" })));
     };
