@@ -165,9 +165,11 @@ export default function PaymentsPage() {
 
       const correctedBookingTransactions = cashierSnapshot.transactions.map((tx) => {
         const forcedMethod = RECEPTION_METHOD_FIXES.get(normalizeReceiptNo(tx.receiptNo));
+        const fallbackMethod =
+          tx.status !== "credit" && (!tx.payment || tx.payment === "credit") ? "cash" : tx.payment;
         return {
           ...tx,
-          payment: forcedMethod ?? tx.payment,
+          payment: forcedMethod ?? fallbackMethod,
           status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
         };
       });
