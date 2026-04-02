@@ -15,6 +15,10 @@ import {
   STORAGE_KITCHEN_DAILY_STOCK_SESSION,
   STORAGE_KITCHEN_PURCHASE_HISTORY,
   STORAGE_KITCHEN_PURCHASE_SESSION,
+  STORAGE_BARISTA_DAILY_STOCK_HISTORY,
+  STORAGE_BARISTA_DAILY_STOCK_SESSION,
+  STORAGE_BARISTA_PURCHASE_HISTORY,
+  STORAGE_BARISTA_PURCHASE_SESSION,
 } from "@/app/lib/kitchen-session-storage";
 import { readJson, writeJson } from "@/app/lib/storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -30,6 +34,7 @@ import { toast } from "@/hooks/use-toast";
 
 type KitchenWorkflowTab = "purchase" | "daily-stock";
 type CloseTarget = "purchase" | "daily-stock" | null;
+type SessionDepartment = "kitchen" | "barista";
 
 const DEFAULT_SIGNOFF: KitchenSessionSignoff = {
   preparedBy: "",
@@ -83,44 +88,73 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString();
 }
 
-function getWorkflowCopy(tab: KitchenWorkflowTab) {
+function getDateInputValue(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString().slice(0, 10);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function getTimeInputValue(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return new Date().toTimeString().slice(0, 5);
+  return parsed.toTimeString().slice(0, 5);
+}
+
+function combineDateAndTime(dateValue: string, timeValue: string) {
+  const safeDate = dateValue || new Date().toISOString().slice(0, 10);
+  const safeTime = timeValue || "23:59";
+  const combined = new Date(`${safeDate}T${safeTime}:00`);
+  if (Number.isNaN(combined.getTime())) {
+    return new Date().toISOString();
+  }
+  return combined.toISOString();
+}
+
+function getWorkflowCopy(tab: KitchenWorkflowTab, department: SessionDepartment) {
+  const departmentLabel = department === "kitchen" ? "Kitchen" : "Barista";
   if (tab === "purchase") {
     return {
       tabLabel: "Daily Purchases",
-      title: "Daily Purchase Entries",
+      title: `${departmentLabel} Daily Purchase Entries`,
       empty: "Open shift to begin entering daily purchase rows.",
-      success: "Purchase entries saved",
+      success: `${departmentLabel} purchase entries saved`,
       active: "Shift Open Since",
       inactive: "Shift Closed",
       openButton: "Open Shift",
       closeButton: "Close Shift",
-      dialogTitle: "Close Purchase Shift",
+      dialogTitle: `Close ${departmentLabel} Purchase Shift`,
     };
   }
 
   return {
     tabLabel: "Daily Entries",
-    title: "Daily Stock Entries",
+    title: `${departmentLabel} Daily Stock Entries`,
     empty: "Open shift to begin entering the day's stock movement.",
-    success: "Daily entries saved",
+    success: `${departmentLabel} daily entries saved`,
     active: "Shift Open Since",
     inactive: "Shift Closed",
     openButton: "Open Shift",
     closeButton: "Close Shift",
-    dialogTitle: "Close Daily Entries Shift",
+    dialogTitle: `Close ${departmentLabel} Daily Entries Shift`,
   };
 }
 
 function getInventoryMatch(inventoryItems: InventoryItem[], storeItem: MainStoreItem) {
   return inventoryItems.find(
     (entry) =>
-      entry.category === "Kitchen" &&
+      entry.category === (storeItem.lane === "barista" ? "Bar" : "Kitchen") &&
       entry.name === storeItem.name &&
       (entry.size ?? "") === (storeItem.size ?? ""),
   );
 }
 
-export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
+export function KitchenSessionManager({
+  isDirector,
+  department = "kitchen",
+}: {
+  isDirector: boolean;
+  department?: SessionDepartment;
+}) {
   const [activeTab, setActiveTab] = useState<KitchenWorkflowTab>("purchase");
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
@@ -130,34 +164,46 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
   const [dailyHistory, setDailyHistory] = useState<KitchenDailyStockHistoryEntry[]>([]);
   const [closeTarget, setCloseTarget] = useState<CloseTarget>(null);
   const [closeNotes, setCloseNotes] = useState(DEFAULT_SIGNOFF);
-  const purchaseCopy = getWorkflowCopy("purchase");
-  const dailyCopy = getWorkflowCopy("daily-stock");
+  const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [closeTime, setCloseTime] = useState(new Date().toTimeString().slice(0, 5));
+  const purchaseCopy = getWorkflowCopy("purchase", department);
+  const dailyCopy = getWorkflowCopy("daily-stock", department);
+  const departmentLabel = department === "kitchen" ? "Kitchen" : "Barista";
+  const departmentCategory = department === "kitchen" ? "Kitchen" : "Bar";
+  const purchaseSessionKey =
+    department === "kitchen" ? STORAGE_KITCHEN_PURCHASE_SESSION : STORAGE_BARISTA_PURCHASE_SESSION;
+  const purchaseHistoryKey =
+    department === "kitchen" ? STORAGE_KITCHEN_PURCHASE_HISTORY : STORAGE_BARISTA_PURCHASE_HISTORY;
+  const dailySessionKey =
+    department === "kitchen" ? STORAGE_KITCHEN_DAILY_STOCK_SESSION : STORAGE_BARISTA_DAILY_STOCK_SESSION;
+  const dailyHistoryKey =
+    department === "kitchen" ? STORAGE_KITCHEN_DAILY_STOCK_HISTORY : STORAGE_BARISTA_DAILY_STOCK_HISTORY;
 
   useEffect(() => {
     const applySnapshot = () => {
       const allStore = readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
-      setStoreItems(allStore.filter((item) => item.lane === "kitchen"));
+      setStoreItems(allStore.filter((item) => item.lane === department));
       setInventoryItems(readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? []);
-      setPurchaseSession(readJson<KitchenPurchaseSession>(STORAGE_KITCHEN_PURCHASE_SESSION));
-      setDailySession(readJson<KitchenDailyStockSession>(STORAGE_KITCHEN_DAILY_STOCK_SESSION));
-      setPurchaseHistory(readJson<KitchenPurchaseHistoryEntry[]>(STORAGE_KITCHEN_PURCHASE_HISTORY) ?? []);
-      setDailyHistory(readJson<KitchenDailyStockHistoryEntry[]>(STORAGE_KITCHEN_DAILY_STOCK_HISTORY) ?? []);
+      setPurchaseSession(readJson<KitchenPurchaseSession>(purchaseSessionKey));
+      setDailySession(readJson<KitchenDailyStockSession>(dailySessionKey));
+      setPurchaseHistory(readJson<KitchenPurchaseHistoryEntry[]>(purchaseHistoryKey) ?? []);
+      setDailyHistory(readJson<KitchenDailyStockHistoryEntry[]>(dailyHistoryKey) ?? []);
     };
 
     applySnapshot();
     const unsubscribers = [
       subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applySnapshot),
       subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applySnapshot),
-      subscribeToSyncedStorageKey(STORAGE_KITCHEN_PURCHASE_SESSION, applySnapshot),
-      subscribeToSyncedStorageKey(STORAGE_KITCHEN_PURCHASE_HISTORY, applySnapshot),
-      subscribeToSyncedStorageKey(STORAGE_KITCHEN_DAILY_STOCK_SESSION, applySnapshot),
-      subscribeToSyncedStorageKey(STORAGE_KITCHEN_DAILY_STOCK_HISTORY, applySnapshot),
+      subscribeToSyncedStorageKey(purchaseSessionKey, applySnapshot),
+      subscribeToSyncedStorageKey(purchaseHistoryKey, applySnapshot),
+      subscribeToSyncedStorageKey(dailySessionKey, applySnapshot),
+      subscribeToSyncedStorageKey(dailyHistoryKey, applySnapshot),
     ];
 
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, []);
+  }, [dailyHistoryKey, dailySessionKey, department, purchaseHistoryKey, purchaseSessionKey]);
 
   const purchaseTotalAmount = useMemo(
     () =>
@@ -182,12 +228,12 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
 
   const persistPurchaseSession = (next: KitchenPurchaseSession | null) => {
     setPurchaseSession(next);
-    writeJson(STORAGE_KITCHEN_PURCHASE_SESSION, next);
+    writeJson(purchaseSessionKey, next);
   };
 
   const persistDailySession = (next: KitchenDailyStockSession | null) => {
     setDailySession(next);
-    writeJson(STORAGE_KITCHEN_DAILY_STOCK_SESSION, next);
+    writeJson(dailySessionKey, next);
   };
 
   const startPurchaseSession = () => {
@@ -198,7 +244,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
       lines: storeItems.map((item) => createPurchaseLine(item)),
     };
     persistPurchaseSession(next);
-    toast({ title: "Purchase session started" });
+    toast({ title: `${departmentLabel} purchase session started` });
   };
 
   const startDailySession = () => {
@@ -209,7 +255,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
       lines: storeItems.map((item) => createDailyLine(item)),
     };
     persistDailySession(next);
-    toast({ title: "Daily stock sheet started" });
+    toast({ title: `${departmentLabel} daily stock sheet started` });
   };
 
   const updatePurchaseLine = (lineId: string, field: keyof KitchenPurchaseLine, value: string) => {
@@ -270,19 +316,23 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
 
   const openCloseDialog = (target: Exclude<CloseTarget, null>) => {
     if (isDirector) return;
+    const sourceTimestamp = target === "purchase" ? purchaseSession?.startedAt : dailySession?.startedAt;
     setCloseNotes(DEFAULT_SIGNOFF);
+    setCloseDate(getDateInputValue(sourceTimestamp ?? new Date().toISOString()));
+    setCloseTime(getTimeInputValue(new Date().toISOString()));
     setCloseTarget(target);
   };
 
   const applyStoreAndInventoryChanges = (nextKitchenStore: MainStoreItem[], nextInventory: InventoryItem[]) => {
     const allStore = readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
-    const nonKitchenStore = allStore.filter((item) => item.lane !== "kitchen");
-    writeJson(STORAGE_MAIN_STORE_ITEMS, [...nonKitchenStore, ...nextKitchenStore]);
+    const otherDepartmentStore = allStore.filter((item) => item.lane !== department);
+    writeJson(STORAGE_MAIN_STORE_ITEMS, [...otherDepartmentStore, ...nextKitchenStore]);
     writeJson(STORAGE_INVENTORY_ITEMS, nextInventory);
   };
 
   const closePurchaseSession = () => {
     if (!purchaseSession) return;
+    const closedAt = combineDateAndTime(closeDate, closeTime);
 
     const validLines = purchaseSession.lines.filter((line) => line.itemName.trim().length > 0);
     if (validLines.length === 0) {
@@ -335,7 +385,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
               id: `inv-kitchen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
               barcode: "",
               name: refreshedStore.name,
-              category: "Kitchen",
+              category: departmentCategory,
               subCategory: refreshedStore.subCategory ?? "",
               size: refreshedStore.size ?? "",
               stock: totalBalance,
@@ -354,16 +404,16 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
         }
       } else {
         const newStore: MainStoreItem = {
-          id: `kitchen-store-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          name: line.itemName.trim(),
-          subCategory: line.category.trim(),
-          stock: totalBalance,
-          unit: line.unit.trim() || "kg",
-          minStock: 1,
-          lane: "kitchen",
-          buyingPrice: line.pricePerUnit,
-          receivedStock: line.addedQty,
-          damages: 0,
+            id: `kitchen-store-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: line.itemName.trim(),
+            subCategory: line.category.trim(),
+            stock: totalBalance,
+            unit: line.unit.trim() || "kg",
+            minStock: 1,
+            lane: department,
+            buyingPrice: line.pricePerUnit,
+            receivedStock: line.addedQty,
+            damages: 0,
         };
 
         nextKitchenStore = [newStore, ...nextKitchenStore];
@@ -372,7 +422,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
             id: `inv-kitchen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             barcode: "",
             name: newStore.name,
-            category: "Kitchen",
+            category: departmentCategory,
             subCategory: newStore.subCategory ?? "",
             size: "",
             stock: totalBalance,
@@ -393,11 +443,11 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
 
     applyStoreAndInventoryChanges(nextKitchenStore, nextInventory);
 
-    writeJson(STORAGE_KITCHEN_PURCHASE_HISTORY, [
+    writeJson(purchaseHistoryKey, [
       {
         ...purchaseSession,
         lines: validLines,
-        closedAt: new Date().toISOString(),
+        closedAt,
         signoff: closeNotes,
       },
       ...purchaseHistory,
@@ -409,6 +459,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
 
   const closeDailySession = () => {
     if (!dailySession) return;
+    const closedAt = combineDateAndTime(closeDate, closeTime);
 
     const validLines = dailySession.lines.filter((line) => line.itemName.trim().length > 0);
     if (validLines.length === 0) {
@@ -461,7 +512,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
               id: `inv-kitchen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
               barcode: "",
               name: refreshedStore.name,
-              category: "Kitchen",
+              category: departmentCategory,
               subCategory: refreshedStore.subCategory ?? "",
               size: refreshedStore.size ?? "",
               stock: closingStock,
@@ -486,7 +537,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
           stock: closingStock,
           unit: line.unit.trim() || "kg",
           minStock: 1,
-          lane: "kitchen",
+          lane: department,
           buyingPrice: 0,
           receivedStock: line.received,
           damages: line.wastage,
@@ -498,7 +549,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
             id: `inv-kitchen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             barcode: "",
             name: newStore.name,
-            category: "Kitchen",
+            category: departmentCategory,
             subCategory: newStore.subCategory ?? "",
             size: "",
             stock: closingStock,
@@ -519,11 +570,11 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
 
     applyStoreAndInventoryChanges(nextKitchenStore, nextInventory);
 
-    writeJson(STORAGE_KITCHEN_DAILY_STOCK_HISTORY, [
+    writeJson(dailyHistoryKey, [
       {
         ...dailySession,
         lines: validLines,
-        closedAt: new Date().toISOString(),
+        closedAt,
         signoff: closeNotes,
       },
       ...dailyHistory,
@@ -575,7 +626,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
                 <div>
                   <CardTitle className="text-lg font-black uppercase">{purchaseCopy.title}</CardTitle>
                   <CardDescription>
-                    Start a purchase sheet, enter added stock for the day, then close it to save history and update kitchen inventory.
+                    {`Start a purchase sheet, enter added stock for the day, then close it to save history and update ${departmentLabel.toLowerCase()} inventory.`}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -666,7 +717,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
           <Card className="shadow-sm">
             <CardHeader className="border-b">
               <CardTitle className="text-lg font-black uppercase">Saved Purchase History</CardTitle>
-              <CardDescription>Closed purchase sessions are stored here for daily reference.</CardDescription>
+              <CardDescription>{`Closed ${departmentLabel.toLowerCase()} purchase sessions are stored here for daily reference.`}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -713,7 +764,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
                 <div>
                   <CardTitle className="text-lg font-black uppercase">{dailyCopy.title}</CardTitle>
                   <CardDescription>
-                    Start a daily stock session, record opening, received, used, wastage, and close it to save the day and update inventory.
+                    {`Start a daily stock session, record opening, received, used, wastage, and close it to save the day and update ${departmentLabel.toLowerCase()} inventory.`}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -822,7 +873,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
           <Card className="shadow-sm">
             <CardHeader className="border-b">
               <CardTitle className="text-lg font-black uppercase">Saved Daily Stock History</CardTitle>
-              <CardDescription>Closed daily stock sheets are stored here for review.</CardDescription>
+              <CardDescription>{`Closed ${departmentLabel.toLowerCase()} daily stock sheets are stored here for review.`}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -866,7 +917,7 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
               {closeTarget === "purchase" ? purchaseCopy.dialogTitle : dailyCopy.dialogTitle}
             </DialogTitle>
             <DialogDescription>
-              Fill the signoff details before saving the session and updating inventory.
+              Fill the signoff details, then pick the exact close date and time to save the session and update inventory.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 md:grid-cols-2">
@@ -874,11 +925,13 @@ export function KitchenSessionManager({ isDirector }: { isDirector: boolean }) {
             <Input placeholder="Checked by" value={closeNotes.checkedBy} onChange={(event) => setCloseNotes((current) => ({ ...current, checkedBy: event.target.value }))} />
             <Input placeholder="Approved by" value={closeNotes.approvedBy} onChange={(event) => setCloseNotes((current) => ({ ...current, approvedBy: event.target.value }))} />
             <Input placeholder="Cashier" value={closeNotes.cashier} onChange={(event) => setCloseNotes((current) => ({ ...current, cashier: event.target.value }))} />
+            <Input type="date" value={closeDate} onChange={(event) => setCloseDate(event.target.value)} />
+            <Input type="time" value={closeTime} onChange={(event) => setCloseTime(event.target.value)} />
           </div>
-          <Textarea value={`Prepared by: ${closeNotes.preparedBy}\nChecked by: ${closeNotes.checkedBy}\nApproved by: ${closeNotes.approvedBy}\nCashier: ${closeNotes.cashier}`} readOnly className="min-h-[110px]" />
+          <Textarea value={`Prepared by: ${closeNotes.preparedBy}\nChecked by: ${closeNotes.checkedBy}\nApproved by: ${closeNotes.approvedBy}\nCashier: ${closeNotes.cashier}\nClose date: ${closeDate}\nClose time: ${closeTime}`} readOnly className="min-h-[130px]" />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseTarget(null)}>Cancel</Button>
-            <Button onClick={submitCloseDialog}>Save Session</Button>
+            <Button onClick={submitCloseDialog}>Close Shift</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

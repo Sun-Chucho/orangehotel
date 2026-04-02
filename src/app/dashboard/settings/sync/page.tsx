@@ -53,6 +53,14 @@ const FRIENDLY_NAMES: Record<string, string> = {
   "orange-hotel-hardware-settings": "Hardware Settings",
   "orange-hotel-website-bookings": "Website Bookings",
   "orange-hotel-login-profiles": "Login Profiles",
+  "orange-hotel-kitchen-purchase-session": "Kitchen Purchase Session",
+  "orange-hotel-kitchen-purchase-history": "Kitchen Purchase History",
+  "orange-hotel-kitchen-daily-stock-session": "Kitchen Daily Stock Session",
+  "orange-hotel-kitchen-daily-stock-history": "Kitchen Daily Stock History",
+  "orange-hotel-barista-purchase-session": "Barista Purchase Session",
+  "orange-hotel-barista-purchase-history": "Barista Purchase History",
+  "orange-hotel-barista-daily-stock-session": "Barista Daily Stock Session",
+  "orange-hotel-barista-daily-stock-history": "Barista Daily Stock History",
 };
 
 export default function SyncVerificationPage() {
@@ -301,7 +309,11 @@ export default function SyncVerificationPage() {
                     "orange-hotel-stock-logic", "orange-hotel-store-movements", "orange-hotel-store-usage",
                     "orange-hotel-cancelled-tickets", "orange-hotel-rooms-state", "orange-hotel-fnb-beverage-cost",
                     "orange-hotel-fnb-recipe-cost", "orange-hotel-fnb-stock-sales", "orange-hotel-settings",
-                    "orange-hotel-hardware-settings", "orange-hotel-website-bookings", "orange-hotel-login-profiles"
+                    "orange-hotel-hardware-settings", "orange-hotel-website-bookings", "orange-hotel-login-profiles",
+                    "orange-hotel-kitchen-purchase-session", "orange-hotel-kitchen-purchase-history",
+                    "orange-hotel-kitchen-daily-stock-session", "orange-hotel-kitchen-daily-stock-history",
+                    "orange-hotel-barista-purchase-session", "orange-hotel-barista-purchase-history",
+                    "orange-hotel-barista-daily-stock-session", "orange-hotel-barista-daily-stock-history"
                   ],
                   "FULL DATABASE WIPE",
                   "DANGER: This will delete ALL data including inventory, configuration, and settings. The system will be completely reset to factory defaults."

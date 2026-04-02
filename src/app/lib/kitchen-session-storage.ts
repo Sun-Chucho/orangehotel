@@ -2,6 +2,10 @@ export const STORAGE_KITCHEN_PURCHASE_SESSION = "orange-hotel-kitchen-purchase-s
 export const STORAGE_KITCHEN_PURCHASE_HISTORY = "orange-hotel-kitchen-purchase-history";
 export const STORAGE_KITCHEN_DAILY_STOCK_SESSION = "orange-hotel-kitchen-daily-stock-session";
 export const STORAGE_KITCHEN_DAILY_STOCK_HISTORY = "orange-hotel-kitchen-daily-stock-history";
+export const STORAGE_BARISTA_PURCHASE_SESSION = "orange-hotel-barista-purchase-session";
+export const STORAGE_BARISTA_PURCHASE_HISTORY = "orange-hotel-barista-purchase-history";
+export const STORAGE_BARISTA_DAILY_STOCK_SESSION = "orange-hotel-barista-daily-stock-session";
+export const STORAGE_BARISTA_DAILY_STOCK_HISTORY = "orange-hotel-barista-daily-stock-history";
 
 export interface KitchenSessionSignoff {
   preparedBy: string;

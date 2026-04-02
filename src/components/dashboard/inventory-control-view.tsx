@@ -995,6 +995,7 @@ export function InventoryControlView({
 
       {activeTab === "barista-stock" && (
         <div className="space-y-6">
+          <KitchenSessionManager isDirector={isDirector} department="barista" />
           {canViewBaristaFinance && (
             <Tabs value={baristaView} onValueChange={(value) => setBaristaView(value as "inventory" | "finance")}>
               <TabsList className="h-11">

@@ -121,6 +121,14 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-website-bookings",
   "orange-hotel-live-chat",
   "orange-hotel-login-profiles",
+  "orange-hotel-kitchen-purchase-session",
+  "orange-hotel-kitchen-purchase-history",
+  "orange-hotel-kitchen-daily-stock-session",
+  "orange-hotel-kitchen-daily-stock-history",
+  "orange-hotel-barista-purchase-session",
+  "orange-hotel-barista-purchase-history",
+  "orange-hotel-barista-daily-stock-session",
+  "orange-hotel-barista-daily-stock-history",
 ] as const;
 
 export const LEGACY_DEMO_KEYS = [
@@ -288,7 +296,16 @@ function getCanonicalDefaultValue(key: string) {
     case "orange-hotel-fnb-stock-sales":
     case "orange-hotel-website-bookings":
     case "orange-hotel-live-chat":
+    case "orange-hotel-kitchen-purchase-history":
+    case "orange-hotel-kitchen-daily-stock-history":
+    case "orange-hotel-barista-purchase-history":
+    case "orange-hotel-barista-daily-stock-history":
       return [];
+    case "orange-hotel-kitchen-purchase-session":
+    case "orange-hotel-kitchen-daily-stock-session":
+    case "orange-hotel-barista-purchase-session":
+    case "orange-hotel-barista-daily-stock-session":
+      return null;
     case "orange-hotel-rooms-state":
       return ROOMS;
     case "orange-hotel-settings":
