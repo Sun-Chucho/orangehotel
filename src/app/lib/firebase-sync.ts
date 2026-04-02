@@ -11,6 +11,11 @@ let _firebaseRealtimeConnected = false;
 const _connectionListeners = new Set<(connected: boolean) => void>();
 const _lastSyncedAt: Record<string, number> = {};
 
+function dispatchStorageUpdated(key: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
+}
+
 function hasRecentSyncSuccess() {
   const latestSync = Math.max(0, ...Object.values(_lastSyncedAt));
   return latestSync > 0 && Date.now() - latestSync < 120000;
@@ -393,11 +398,13 @@ function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value:
   if (typeof window === "undefined") return;
   if (rawValue === null) {
     localStorage.removeItem(key);
+    dispatchStorageUpdated(key);
     onChange(null);
     return;
   }
 
   localStorage.setItem(key, JSON.stringify(rawValue));
+  dispatchStorageUpdated(key);
   onChange(rawValue);
 }
 
@@ -450,6 +457,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     const sanitizedPreferredValue = sanitizeForStorage(preferredValue);
     localStorage.setItem(key, JSON.stringify(sanitizedPreferredValue));
     mirrorCanonicalStateToLegacyLocal(key, sanitizedPreferredValue);
+    dispatchStorageUpdated(key);
 
     if (!areSnapshotsEqual(remoteValue, sanitizedPreferredValue)) {
       await set(ref(firebaseDatabase, toStoragePath(key)), sanitizedPreferredValue);
@@ -463,6 +471,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
       if (remoteValue !== null) {
         localStorage.setItem(key, JSON.stringify(remoteValue));
         mirrorCanonicalStateToLegacyLocal(key, remoteValue);
+        dispatchStorageUpdated(key);
       }
       markSyncHealthy(key);
     } catch (serverError) {
@@ -524,6 +533,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
               localStorage.setItem(key, JSON.stringify(fallbackValue));
               mirrorCanonicalStateToLegacyLocal(key, fallbackValue);
               void set(ref(firebaseDatabase, toStoragePath(key)), fallbackValue).catch(() => undefined);
+              dispatchStorageUpdated(key);
               onChange(fallbackValue);
               markSyncHealthy(key);
               return;
@@ -555,6 +565,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
       if (!areSnapshotsEqual(currentValue, remoteValue)) {
         localStorage.setItem(key, JSON.stringify(remoteValue));
         mirrorCanonicalStateToLegacyLocal(key, remoteValue);
+        dispatchStorageUpdated(key);
         onChange(remoteValue);
       }
       markSyncHealthy(key);
@@ -711,5 +722,5 @@ export async function wipeStorageCategory(key: string) {
   }
 
   // Trigger local state updates
-  window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key } }));
+  dispatchStorageUpdated(key);
 }

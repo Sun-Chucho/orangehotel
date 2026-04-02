@@ -1,6 +1,7 @@
 "use client";
 
 import { Role } from "@/app/lib/mock-data";
+import { readJson, writeJson } from "@/app/lib/storage";
 
 export const STORAGE_LOGIN_PROFILES = "orange-hotel-login-profiles";
 export const STORAGE_ACTIVE_USERNAME = "orange-hotel-username";
@@ -34,19 +35,12 @@ function dispatchSessionIdentityUpdated() {
 
 export function readLocalLoginProfiles() {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(STORAGE_LOGIN_PROFILES);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as LoginProfiles;
-  } catch {
-    return null;
-  }
+  return readJson<LoginProfiles>(STORAGE_LOGIN_PROFILES);
 }
 
 export function writeLocalLoginProfiles(profiles: LoginProfiles) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_LOGIN_PROFILES, JSON.stringify(profiles));
+  writeJson(STORAGE_LOGIN_PROFILES, profiles);
   dispatchLoginProfilesUpdated();
 }
 
