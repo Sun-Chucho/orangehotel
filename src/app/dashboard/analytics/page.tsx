@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SALES_HISTORY } from "@/app/lib/mock-data";
 import {
   BeverageCostRow,
   RecipeCostRow,
@@ -11,7 +10,8 @@ import {
   STORAGE_STOCK_SALES,
   StockSalesRow,
 } from "@/app/lib/fnb-control";
-import { readJson } from "@/app/lib/storage";
+import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import {
   Area,
   AreaChart,
@@ -37,73 +37,254 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type RangeKey = "7d" | "14d" | "30d";
 
-const COLORS = ["#F57C00", "#000000", "#FFB74D", "#333333"];
+type BookingTransaction = {
+  createdAt?: number;
+  total?: number;
+  guestName?: string;
+  status?: "completed" | "checked-out" | "credit";
+};
+
+type PosPaymentRecord = {
+  createdAt?: number;
+  total?: number;
+  status?: "completed" | "credit";
+};
+
+type RevenueHistoryRow = {
+  date: string;
+  label: string;
+  totalRevenue: number;
+  roomRevenue: number;
+  kitchenRevenue: number;
+  baristaRevenue: number;
+};
+
+const COLORS = ["#F57C00", "#000000", "#FFB74D", "#757575"];
 
 function formatShortDate(dateText: string) {
-  return new Date(dateText).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  return new Date(`${dateText}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+}
+
+function toDayKey(timestamp: number) {
+  const value = new Date(timestamp);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createDayKeys(range: RangeKey) {
+  const days = range === "7d" ? 7 : range === "14d" ? 14 : 30;
+  const keys: string[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const next = new Date(today);
+    next.setDate(today.getDate() - index);
+    keys.push(toDayKey(next.getTime()));
+  }
+
+  return keys;
+}
+
+function calculateGrowth(current: number, previous: number) {
+  if (current === 0 && previous === 0) return "0%";
+  if (previous === 0) return "+100%";
+  const delta = ((current - previous) / previous) * 100;
+  const rounded = Math.round(delta);
+  return `${rounded >= 0 ? "+" : ""}${rounded}%`;
 }
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<RangeKey>("7d");
+  const [bookings, setBookings] = useState<BookingTransaction[]>([]);
+  const [kitchenPayments, setKitchenPayments] = useState<PosPaymentRecord[]>([]);
+  const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
   const [beverageRows, setBeverageRows] = useState<BeverageCostRow[]>([]);
   const [recipeRows, setRecipeRows] = useState<RecipeCostRow[]>([]);
   const [stockSalesRows, setStockSalesRows] = useState<StockSalesRow[]>([]);
 
   useEffect(() => {
-    const bev = readJson<BeverageCostRow[]>(STORAGE_BEVERAGE_COST);
-    const rec = readJson<RecipeCostRow[]>(STORAGE_RECIPE_COST);
-    const ss = readJson<StockSalesRow[]>(STORAGE_STOCK_SALES);
-    if (Array.isArray(bev)) setBeverageRows(bev);
-    if (Array.isArray(rec)) setRecipeRows(rec);
-    if (Array.isArray(ss)) setStockSalesRows(ss);
+    const applyAnalyticsSnapshot = () => {
+      const cashierSnapshot = readCashierState<BookingTransaction>(
+        "orange-hotel-cashier-transactions",
+        "orange-hotel-cashier-seq",
+        84920,
+      );
+      const kitchenSnapshot = readPosState<unknown, PosPaymentRecord, unknown>(
+        STORAGE_KITCHEN_STATE,
+        "orange-hotel-kitchen-tickets",
+        "orange-hotel-kitchen-seq",
+        "orange-hotel-kitchen-payments",
+        "orange-hotel-kitchen-menu",
+        300,
+      );
+      const baristaSnapshot = readPosState<unknown, PosPaymentRecord, unknown>(
+        STORAGE_BARISTA_STATE,
+        "orange-hotel-barista-orders",
+        "orange-hotel-barista-seq",
+        "orange-hotel-barista-payments",
+        "orange-hotel-barista-menu",
+        490,
+      );
+
+      setBookings(cashierSnapshot.transactions);
+      setKitchenPayments(kitchenSnapshot.payments);
+      setBaristaPayments(baristaSnapshot.payments);
+      setBeverageRows(readJson<BeverageCostRow[]>(STORAGE_BEVERAGE_COST) ?? []);
+      setRecipeRows(readJson<RecipeCostRow[]>(STORAGE_RECIPE_COST) ?? []);
+      setStockSalesRows(readJson<StockSalesRow[]>(STORAGE_STOCK_SALES) ?? []);
+    };
+
+    applyAnalyticsSnapshot();
+
+    const unsubscribers = [
+      subscribeToSyncedStorageKey("orange-hotel-cashier-state", applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_BEVERAGE_COST, applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_RECIPE_COST, applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_STOCK_SALES, applyAnalyticsSnapshot),
+    ];
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }, []);
 
-  const history = useMemo(() => {
-    if (range === "7d") return SALES_HISTORY;
+  const history = useMemo<RevenueHistoryRow[]>(() => {
+    const keys = createDayKeys(range);
+    const rows = new Map<string, RevenueHistoryRow>(
+      keys.map((key) => [
+        key,
+        {
+          date: key,
+          label: key,
+          totalRevenue: 0,
+          roomRevenue: 0,
+          kitchenRevenue: 0,
+          baristaRevenue: 0,
+        },
+      ]),
+    );
 
-    if (range === "14d") {
-      const clone = [...SALES_HISTORY, ...SALES_HISTORY].slice(-14);
-      return clone.map((item, index) => ({ ...item, date: `2024-06-${String(index + 1).padStart(2, "0")}` }));
-    }
+    bookings.forEach((booking) => {
+      if (booking.status === "credit") return;
+      if (!booking.createdAt || !booking.total) return;
+      const key = toDayKey(booking.createdAt);
+      const row = rows.get(key);
+      if (!row) return;
+      row.roomRevenue += booking.total;
+      row.totalRevenue += booking.total;
+    });
 
-    const triple = [...SALES_HISTORY, ...SALES_HISTORY, ...SALES_HISTORY, ...SALES_HISTORY, ...SALES_HISTORY].slice(-30);
-    return triple.map((item, index) => ({ ...item, date: `2024-07-${String(index + 1).padStart(2, "0")}` }));
-  }, [range]);
+    kitchenPayments.forEach((payment) => {
+      if (payment.status === "credit") return;
+      if (!payment.createdAt || !payment.total) return;
+      const key = toDayKey(payment.createdAt);
+      const row = rows.get(key);
+      if (!row) return;
+      row.kitchenRevenue += payment.total;
+      row.totalRevenue += payment.total;
+    });
+
+    baristaPayments.forEach((payment) => {
+      if (payment.status === "credit") return;
+      if (!payment.createdAt || !payment.total) return;
+      const key = toDayKey(payment.createdAt);
+      const row = rows.get(key);
+      if (!row) return;
+      row.baristaRevenue += payment.total;
+      row.totalRevenue += payment.total;
+    });
+
+    return keys.map((key) => rows.get(key)!);
+  }, [baristaPayments, bookings, kitchenPayments, range]);
 
   const totals = useMemo(() => {
     const totalRevenue = history.reduce((sum, day) => sum + day.totalRevenue, 0);
-    const avgDaily = history.length === 0 ? 0 : Math.round(totalRevenue / history.length);
     const roomRevenue = history.reduce((sum, day) => sum + day.roomRevenue, 0);
-    const foodRevenue = history.reduce((sum, day) => sum + day.foodAndDrinksRevenue, 0);
+    const kitchenRevenue = history.reduce((sum, day) => sum + day.kitchenRevenue, 0);
+    const baristaRevenue = history.reduce((sum, day) => sum + day.baristaRevenue, 0);
+    const avgDaily = history.length === 0 ? 0 : Math.round(totalRevenue / history.length);
+    const totalGuests = bookings.filter((booking) => {
+      if (booking.status === "credit") return false;
+      if (!booking.createdAt) return false;
+      return history.some((row) => row.date === toDayKey(booking.createdAt));
+    }).length;
+    const bookingFreq = history.length === 0 ? 0 : Number((totalGuests / history.length).toFixed(1));
 
     return {
       totalRevenue,
-      avgDaily,
       roomRevenue,
-      foodRevenue,
-      serviceRevenue: Math.max(0, Math.round(totalRevenue * 0.12)),
-      otherRevenue: Math.max(0, Math.round(totalRevenue * 0.08)),
+      kitchenRevenue,
+      baristaRevenue,
+      avgDaily,
+      totalGuests,
+      bookingFreq,
     };
-  }, [history]);
+  }, [bookings, history]);
+
+  const growth = useMemo(() => {
+    const split = history.length;
+    const previousKeys = createDayKeys(range).map((key) => key);
+    const oldest = new Date(`${previousKeys[0]}T00:00:00`);
+    const previousRows = previousKeys.map((_, index) => {
+      const date = new Date(oldest);
+      date.setDate(oldest.getDate() - split + index);
+      return toDayKey(date.getTime());
+    });
+
+    const currentTotal = history.reduce((sum, row) => sum + row.totalRevenue, 0);
+    let previousTotal = 0;
+
+    bookings.forEach((booking) => {
+      if (booking.status === "credit" || !booking.createdAt || !booking.total) return;
+      if (previousRows.includes(toDayKey(booking.createdAt))) {
+        previousTotal += booking.total;
+      }
+    });
+    kitchenPayments.forEach((payment) => {
+      if (payment.status === "credit" || !payment.createdAt || !payment.total) return;
+      if (previousRows.includes(toDayKey(payment.createdAt))) {
+        previousTotal += payment.total;
+      }
+    });
+    baristaPayments.forEach((payment) => {
+      if (payment.status === "credit" || !payment.createdAt || !payment.total) return;
+      if (previousRows.includes(toDayKey(payment.createdAt))) {
+        previousTotal += payment.total;
+      }
+    });
+
+    return calculateGrowth(currentTotal, previousTotal);
+  }, [baristaPayments, bookings, history, kitchenPayments, range]);
 
   const pieData = useMemo(
     () => [
       { name: "Room Revenue", value: totals.roomRevenue },
-      { name: "Food and Drinks", value: totals.foodRevenue },
-      { name: "Services", value: totals.serviceRevenue },
-      { name: "Other", value: totals.otherRevenue },
+      { name: "Kitchen Revenue", value: totals.kitchenRevenue },
+      { name: "Barista Revenue", value: totals.baristaRevenue },
+      {
+        name: "Credit Exposure",
+        value:
+          bookings.filter((booking) => booking.status === "credit").reduce((sum, booking) => sum + (booking.total ?? 0), 0) +
+          kitchenPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + (payment.total ?? 0), 0) +
+          baristaPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + (payment.total ?? 0), 0),
+      },
     ],
-    [totals],
+    [baristaPayments, bookings, kitchenPayments, totals.baristaRevenue, totals.kitchenRevenue, totals.roomRevenue],
   );
 
   const stats = useMemo(
     () => [
-      { label: "Avg Daily Revenue", value: `TSh ${totals.avgDaily.toLocaleString()}`, trend: history.length > 0 ? "Live" : "No Data", icon: DollarSign },
-      { label: "Weekly Growth", value: history.length > 0 ? "Pending" : "0%", trend: history.length > 0 ? "Live" : "No Data", icon: TrendingUp },
-      { label: "Total Guests", value: "0", trend: "Live", icon: Users },
-      { label: "Booking Freq", value: "0/day", trend: history.length > 0 ? "Live" : "No Data", icon: Calendar },
+      { label: "Avg Daily Revenue", value: `TSh ${totals.avgDaily.toLocaleString()}`, trend: `${range.toUpperCase()} Live`, icon: DollarSign },
+      { label: "Period Growth", value: growth, trend: "Vs previous period", icon: TrendingUp },
+      { label: "Total Guests", value: totals.totalGuests.toLocaleString(), trend: `${range.toUpperCase()} bookings`, icon: Users },
+      { label: "Booking Freq", value: `${totals.bookingFreq}/day`, trend: "Live average", icon: Calendar },
     ],
-    [history.length, totals.avgDaily],
+    [growth, range, totals.avgDaily, totals.bookingFreq, totals.totalGuests],
   );
 
   const fnbControlMetrics = useMemo(() => {
@@ -119,7 +300,7 @@ export default function AnalyticsPage() {
       recipeRows.length === 0
         ? 0
         : recipeRows.reduce((sum, row) => {
-            const costPerPortion = row.batchCost / row.yieldPortions;
+            const costPerPortion = row.yieldPortions > 0 ? row.batchCost / row.yieldPortions : 0;
             const pct = row.sellingPricePerPortion > 0 ? (costPerPortion / row.sellingPricePerPortion) * 100 : 0;
             return sum + pct;
           }, 0) / recipeRows.length;
@@ -142,6 +323,8 @@ export default function AnalyticsPage() {
       range,
       totals,
       history,
+      pieData,
+      fnbControlMetrics,
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -162,7 +345,7 @@ export default function AnalyticsPage() {
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-tight uppercase">Performance Analytics</h1>
-            <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Business intelligence and trends</p>
+            <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Live business intelligence and trends</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -187,7 +370,7 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-lg bg-muted/50 text-primary">
                   <stat.icon className="w-5 h-5" />
                 </div>
-                <span className={`text-xs font-black ${stat.trend.startsWith("+") ? "text-green-500" : "text-destructive"}`}>{stat.trend}</span>
+                <span className="text-xs font-black text-muted-foreground">{stat.trend}</span>
               </div>
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
               <h4 className="text-xl font-black mt-1 tracking-tight">{stat.value}</h4>
@@ -229,7 +412,7 @@ export default function AnalyticsPage() {
         <Card className="lg:col-span-2 shadow-sm border-none bg-white">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Trend</CardTitle>
-            <CardDescription>Financial performance for selected range ({range})</CardDescription>
+            <CardDescription>Actual room, kitchen, and barista revenue for the selected range</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
             <div className="h-[350px] w-full">
@@ -247,6 +430,7 @@ export default function AnalyticsPage() {
                   <Tooltip
                     contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.1)", fontWeight: "bold" }}
                     formatter={(value: number) => [`TSh ${value.toLocaleString()}`, "Revenue"]}
+                    labelFormatter={(value) => new Date(`${value}T00:00:00`).toLocaleDateString()}
                   />
                   <Area type="monotone" dataKey="totalRevenue" stroke="#F57C00" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
                 </AreaChart>
@@ -258,7 +442,7 @@ export default function AnalyticsPage() {
         <Card className="shadow-sm border-none bg-white">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Mix</CardTitle>
-            <CardDescription>Income distribution by department</CardDescription>
+            <CardDescription>Current distribution across live departments and credit exposure</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
             <div className="h-[280px] w-full">

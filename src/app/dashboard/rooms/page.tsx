@@ -126,7 +126,7 @@ export default function RoomsPage() {
       }
     }
 
-    const nextRooms = updateRoomStatusById(roomId, status);
+    const nextRooms = updateRoomStatusById(roomId, status, rooms);
     setRooms(nextRooms);
   };
 

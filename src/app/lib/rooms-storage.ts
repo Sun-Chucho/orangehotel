@@ -61,16 +61,16 @@ function reconcileRooms(rooms: Room[], occupiedRooms: Set<string>): Room[] {
   });
 }
 
-export function updateRoomStatusByNumber(roomNumber: string, status: Room["status"]): Room[] {
-  const nextRooms = readRoomsState().map((room) =>
+export function updateRoomStatusByNumber(roomNumber: string, status: Room["status"], baseRooms?: Room[]): Room[] {
+  const nextRooms = readBaseRooms(baseRooms).map((room) =>
     room.number === roomNumber ? { ...room, status } : room,
   );
   writeRoomsState(nextRooms);
   return nextRooms;
 }
 
-export function updateRoomStatusById(roomId: string, status: Room["status"]): Room[] {
-  const nextRooms = readRoomsState().map((room) =>
+export function updateRoomStatusById(roomId: string, status: Room["status"], baseRooms?: Room[]): Room[] {
+  const nextRooms = readBaseRooms(baseRooms).map((room) =>
     room.id === roomId ? { ...room, status } : room,
   );
   writeRoomsState(nextRooms);
@@ -93,9 +93,13 @@ export function deriveRoomsStateFromBookings(bookings: ActiveBookingRoom[], base
 }
 
 export function syncRoomsStateFromBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]) {
-  return deriveRoomsStateFromBookings(bookings, baseRooms);
+  const nextRooms = deriveRoomsStateFromBookings(bookings, baseRooms);
+  writeRoomsState(nextRooms);
+  return nextRooms;
 }
 
 export function syncRoomsWithActiveBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]) {
-  return deriveRoomsStateFromBookings(bookings, baseRooms);
+  const nextRooms = deriveRoomsStateFromBookings(bookings, baseRooms);
+  writeRoomsState(nextRooms);
+  return nextRooms;
 }

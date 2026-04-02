@@ -393,7 +393,7 @@ export default function BookingPage() {
   };
 
   const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
-    const nextRooms = updateRoomStatusByNumber(roomNumber, status);
+    const nextRooms = updateRoomStatusByNumber(roomNumber, status, rooms);
     setRooms(nextRooms);
   };
 
