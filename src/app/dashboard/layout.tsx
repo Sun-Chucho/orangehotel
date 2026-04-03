@@ -5,6 +5,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { STORAGE_COMPANY_STOCK } from "@/app/lib/company-stock";
 import { COMPANY_STOCK_SHEET } from "@/app/lib/company-stock-seed";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
+import { mergeKitchenMenuItems } from "@/app/lib/kitchen-menu";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
 import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeBaristaProductTarget, normalizeStockName } from "@/app/lib/inventory-transfer";
 import { getTotLimit } from "@/app/lib/barista-stock";
@@ -22,7 +23,7 @@ import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import { readActiveSessionUsername, readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeActiveSessionUsername } from "@/app/lib/login-profiles";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
-const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v2";
+const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v3";
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v3";
@@ -242,7 +243,10 @@ function applyBusinessCorrections() {
       "orange-hotel-kitchen-menu",
       300,
     );
-    writePosState(STORAGE_KITCHEN_STATE, [], kitchenSnapshot.ticketSeq, [], kitchenSnapshot.menuItems);
+    const cleanedKitchenMenu = mergeKitchenMenuItems(kitchenSnapshot.menuItems as Parameters<typeof mergeKitchenMenuItems>[0], {
+      stripDefaultMenu: true,
+    });
+    writePosState(STORAGE_KITCHEN_STATE, [], kitchenSnapshot.ticketSeq, [], cleanedKitchenMenu);
     localStorage.setItem(KITCHEN_TRANSACTIONS_RESET_KEY, "1");
   }
 

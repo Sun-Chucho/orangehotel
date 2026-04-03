@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { readStoredRole } from "@/app/lib/auth";
 import {
-  DEFAULT_KITCHEN_MENU,
   KITCHEN_CATEGORY_LABELS,
   KITCHEN_CATEGORY_OPTIONS,
   KitchenMenuCategory,
@@ -78,8 +77,6 @@ interface PendingOrder {
   total: number;
 }
 
-const KITCHEN_MENU: KitchenMenuItem[] = DEFAULT_KITCHEN_MENU;
-
 const STORAGE_TICKETS = "orange-hotel-kitchen-tickets";
 const STORAGE_SEQ = "orange-hotel-kitchen-seq";
 const STORAGE_MENU = "orange-hotel-kitchen-menu";
@@ -101,7 +98,7 @@ export default function KitchenPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [ticketSeq, setTicketSeq] = useState(300);
-  const [menuItems, setMenuItems] = useState<KitchenMenuItem[]>(KITCHEN_MENU);
+  const [menuItems, setMenuItems] = useState<KitchenMenuItem[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
   const [kitchenStoreItems, setKitchenStoreItems] = useState<MainStoreItem[]>([]);
@@ -138,7 +135,7 @@ export default function KitchenPage() {
       setTickets(snapshot.tickets);
       setTicketSeq(snapshot.ticketSeq);
       setKitchenPayments(snapshot.payments);
-      const nextMenuItems = mergeKitchenMenuItems(snapshot.menuItems);
+      const nextMenuItems = mergeKitchenMenuItems(snapshot.menuItems, { stripDefaultMenu: true });
       setMenuItems(nextMenuItems);
       if (JSON.stringify(nextMenuItems) !== JSON.stringify(snapshot.menuItems)) {
         writePosState(STORAGE_KITCHEN_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, nextMenuItems);
@@ -311,14 +308,15 @@ export default function KitchenPage() {
       return;
     }
 
-    setPendingOrder({
-      mode: serviceMode,
-      destination,
-      lines: cart.map((line) => ({ name: line.item.name, qty: line.qty })),
-      total: subtotal,
-    });
-    setShowSettlementPopup(true);
-  };
+      setPendingOrder({
+        mode: serviceMode,
+        destination,
+        lines: cart.map((line) => ({ name: line.item.name, qty: line.qty })),
+        total: subtotal,
+      });
+      setShowPayNowPopup(false);
+      setShowSettlementPopup(true);
+    };
 
   const finalizeOrder = async (status: KitchenPaymentStatus, method: KitchenPaymentMethod) => {
     if (isDirector) return;
@@ -740,7 +738,8 @@ export default function KitchenPage() {
 
                 {filteredMenu.length === 0 && (
                   <div className="col-span-full text-center py-10 opacity-50">
-                    <p className="font-black uppercase tracking-widest text-xs">No dishes found</p>
+                    <p className="font-black uppercase tracking-widest text-xs">No kitchen items ready for sale</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Add menu items in Menu Create to start taking kitchen orders.</p>
                   </div>
                 )}
               </div>
@@ -1031,7 +1030,14 @@ export default function KitchenPage() {
               >
                 Credit
               </Button>
-              <Button variant="outline" onClick={() => setShowSettlementPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSettlementPopup(false);
+                  setShowPayNowPopup(false);
+                }}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
                 Close
               </Button>
             </CardContent>

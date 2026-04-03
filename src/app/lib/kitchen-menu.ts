@@ -92,17 +92,60 @@ export const DEFAULT_KITCHEN_MENU: KitchenMenuItem[] = [
   { id: "km-drink-3", name: "Milkshake", price: tsh(3), category: "drinks", prepMinutes: 6 },
 ];
 
-export function mergeKitchenMenuItems(menuItems: KitchenMenuItem[]): KitchenMenuItem[] {
-  if (menuItems.length === 0) return DEFAULT_KITCHEN_MENU;
+function isKitchenMenuCategory(value: unknown): value is KitchenMenuCategory {
+  return KITCHEN_CATEGORY_OPTIONS.some((option) => option.value === value);
+}
+
+function isValidKitchenMenuItem(item: unknown): item is KitchenMenuItem {
+  if (!item || typeof item !== "object") return false;
+
+  const candidate = item as Partial<KitchenMenuItem>;
+  return (
+    typeof candidate.id === "string" &&
+    candidate.id.trim().length > 0 &&
+    typeof candidate.name === "string" &&
+    candidate.name.trim().length > 0 &&
+    typeof candidate.price === "number" &&
+    Number.isFinite(candidate.price) &&
+    candidate.price > 0 &&
+    isKitchenMenuCategory(candidate.category) &&
+    typeof candidate.prepMinutes === "number" &&
+    Number.isFinite(candidate.prepMinutes) &&
+    candidate.prepMinutes > 0
+  );
+}
+
+function buildKitchenMenuSignature(item: KitchenMenuItem) {
+  return `${item.name}|${item.price}|${item.category}|${item.prepMinutes}`;
+}
+
+const DEFAULT_KITCHEN_MENU_SIGNATURES = new Map(
+  DEFAULT_KITCHEN_MENU.map((item) => [item.id, buildKitchenMenuSignature(item)]),
+);
+
+export function isDefaultKitchenMenuItem(item: KitchenMenuItem): boolean {
+  return DEFAULT_KITCHEN_MENU_SIGNATURES.get(item.id) === buildKitchenMenuSignature(item);
+}
+
+export function mergeKitchenMenuItems(
+  menuItems: KitchenMenuItem[],
+  options?: { includeDefaultMenu?: boolean; stripDefaultMenu?: boolean },
+): KitchenMenuItem[] {
+  const includeDefaultMenu = options?.includeDefaultMenu ?? false;
+  const stripDefaultMenu = options?.stripDefaultMenu ?? false;
 
   const merged = new Map<string, KitchenMenuItem>();
 
   for (const item of menuItems) {
+    if (!isValidKitchenMenuItem(item)) continue;
+    if (stripDefaultMenu && isDefaultKitchenMenuItem(item)) continue;
     merged.set(item.id, item);
   }
 
-  for (const item of DEFAULT_KITCHEN_MENU) {
-    merged.set(item.id, item);
+  if (includeDefaultMenu) {
+    for (const item of DEFAULT_KITCHEN_MENU) {
+      merged.set(item.id, item);
+    }
   }
 
   return Array.from(merged.values());

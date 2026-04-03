@@ -10,7 +10,7 @@ import {
   STORAGE_STORE_MOVEMENTS,
   STORAGE_STORE_USAGE,
 } from "@/app/lib/inventory-transfer";
-import { DEFAULT_KITCHEN_MENU } from "@/app/lib/kitchen-menu";
+import { KitchenMenuItem, mergeKitchenMenuItems } from "@/app/lib/kitchen-menu";
 import { STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writePosState } from "@/app/lib/storage";
 
 const STORAGE_CASHIER_TX = "orange-hotel-cashier-transactions";
@@ -101,22 +101,24 @@ export function seedDemoDataIfNeeded() {
   if (!localStorage.getItem(STORAGE_KITCHEN_SALES_CLEANUP)) {
     const rawKitchenState = localStorage.getItem(STORAGE_KITCHEN_STATE);
     let ticketSeq = 301;
-    let menuItems = DEFAULT_KITCHEN_MENU;
+    let menuItems: KitchenMenuItem[] = [];
 
     if (rawKitchenState) {
       try {
         const parsed = JSON.parse(rawKitchenState) as { ticketSeq?: number; menuItems?: unknown[] };
         ticketSeq = Number.isFinite(parsed.ticketSeq) ? Number(parsed.ticketSeq) : 301;
-        menuItems = Array.isArray(parsed.menuItems) && parsed.menuItems.length > 0 ? parsed.menuItems as typeof DEFAULT_KITCHEN_MENU : DEFAULT_KITCHEN_MENU;
+        menuItems = Array.isArray(parsed.menuItems)
+          ? mergeKitchenMenuItems(parsed.menuItems as KitchenMenuItem[], { stripDefaultMenu: true })
+          : [];
       } catch {
         ticketSeq = 301;
-        menuItems = DEFAULT_KITCHEN_MENU;
+        menuItems = [];
       }
     }
 
     localStorage.setItem(STORAGE_KITCHEN_TICKETS, JSON.stringify([]));
     localStorage.setItem(STORAGE_KITCHEN_PAYMENTS, JSON.stringify([]));
-    writePosState(STORAGE_KITCHEN_STATE, [], ticketSeq, [], menuItems as typeof DEFAULT_KITCHEN_MENU);
+    writePosState(STORAGE_KITCHEN_STATE, [], ticketSeq, [], menuItems);
     localStorage.setItem(STORAGE_KITCHEN_SALES_CLEANUP, "1");
   }
 
@@ -142,7 +144,7 @@ export function seedDemoDataIfNeeded() {
     localStorage.setItem(STORAGE_BARISTA_SALES_CLEANUP, "1");
   }
 
-  setArrayIfEmpty(STORAGE_KITCHEN_MENU, DEFAULT_KITCHEN_MENU);
+  setArrayIfEmpty(STORAGE_KITCHEN_MENU, []);
   setArrayIfEmpty(STORAGE_KITCHEN_TICKETS, []);
   setArrayIfEmpty(STORAGE_KITCHEN_PAYMENTS, []);
   setValueIfMissing(STORAGE_KITCHEN_SEQ, "301");

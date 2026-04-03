@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writePosState } from "@/app/lib/storage";
 import {
-  DEFAULT_KITCHEN_MENU,
   KITCHEN_CATEGORY_LABELS,
   KITCHEN_CATEGORY_OPTIONS,
   KitchenMenuCategory,
@@ -87,7 +86,7 @@ export function MenuCreateView() {
     setKitchenTickets(kitchenSnapshot.tickets);
     setKitchenPayments(kitchenSnapshot.payments);
     setKitchenSeq(kitchenSnapshot.ticketSeq);
-    const nextKitchenMenuItems = mergeKitchenMenuItems(kitchenSnapshot.menuItems);
+    const nextKitchenMenuItems = mergeKitchenMenuItems(kitchenSnapshot.menuItems, { stripDefaultMenu: true });
     setKitchenMenuItems(nextKitchenMenuItems);
     if (JSON.stringify(nextKitchenMenuItems) !== JSON.stringify(kitchenSnapshot.menuItems)) {
       writePosState(
