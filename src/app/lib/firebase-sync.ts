@@ -1,6 +1,7 @@
 import { get, onValue, ref, remove, set } from "firebase/database";
 import { ensureFirebaseAuthReady, firebaseDatabase } from "@/app/lib/firebase";
 import { getStoreItemLabel, type MainStoreItem } from "@/app/lib/inventory-transfer";
+import { mergeKitchenMenuItems, type KitchenMenuItem } from "@/app/lib/kitchen-menu";
 import { ROOMS, type InventoryItem } from "@/app/lib/mock-data";
 import { DEFAULT_HARDWARE_SETTINGS } from "@/app/lib/hardware-settings";
 import { sanitizeForStorage } from "@/app/lib/storage-sanitize";
@@ -167,6 +168,29 @@ function readParsedLocalValue<T>(key: string) {
   }
 }
 
+function sanitizeSyncedValue<T>(key: string, value: T): T {
+  if (key !== "orange-hotel-kitchen-state" || value === null || value === undefined || typeof value !== "object") {
+    return value;
+  }
+
+  const snapshot = value as {
+    tickets?: unknown[];
+    ticketSeq?: number;
+    payments?: unknown[];
+    menuItems?: unknown[];
+  };
+
+  return {
+    tickets: Array.isArray(snapshot.tickets) ? snapshot.tickets : [],
+    ticketSeq: Number.isFinite(snapshot.ticketSeq) ? Number(snapshot.ticketSeq) : 300,
+    payments: Array.isArray(snapshot.payments) ? snapshot.payments : [],
+    menuItems: mergeKitchenMenuItems(
+      (Array.isArray(snapshot.menuItems) ? snapshot.menuItems : []) as KitchenMenuItem[],
+      { stripDefaultMenu: true },
+    ),
+  } as T;
+}
+
 function mirrorCanonicalStateToLegacyLocal(key: string, value: unknown) {
   if (typeof window === "undefined" || value === null || value === undefined) return;
 
@@ -179,7 +203,7 @@ function mirrorCanonicalStateToLegacyLocal(key: string, value: unknown) {
   }
 
   if (key === "orange-hotel-kitchen-state") {
-    const snapshot = value as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+    const snapshot = sanitizeSyncedValue(key, value) as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
     localStorage.setItem("orange-hotel-kitchen-tickets", JSON.stringify(Array.isArray(snapshot.tickets) ? snapshot.tickets : []));
     localStorage.setItem("orange-hotel-kitchen-seq", String(Number.isFinite(snapshot.ticketSeq) ? snapshot.ticketSeq : 300));
     localStorage.setItem("orange-hotel-kitchen-payments", JSON.stringify(Array.isArray(snapshot.payments) ? snapshot.payments : []));
@@ -356,7 +380,10 @@ function getLocalFallbackForSync(key: string) {
   if (key === "orange-hotel-kitchen-state") {
     const tickets = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-tickets") ?? [];
     const payments = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-payments") ?? [];
-    const menuItems = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-menu") ?? [];
+    const menuItems = mergeKitchenMenuItems(
+      ((readParsedLocalValue<unknown[]>("orange-hotel-kitchen-menu") ?? []) as KitchenMenuItem[]),
+      { stripDefaultMenu: true },
+    );
     const ticketSeq = Number(localStorage.getItem("orange-hotel-kitchen-seq"));
     if (tickets.length === 0 && payments.length === 0 && menuItems.length === 0 && !Number.isFinite(ticketSeq)) {
       return null;
@@ -434,9 +461,9 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
   try {
     await ensureFirebaseAuthReady();
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
-    const remoteValue = snapshot.exists() ? sanitizeForStorage(snapshot.val()) : null;
+    const remoteValue = snapshot.exists() ? sanitizeForStorage(sanitizeSyncedValue(key, snapshot.val())) : null;
     const fallbackValue = getLocalFallbackForSync(key);
-    const localValue = sanitizeForStorage(fallbackValue ?? readParsedLocalValue(key) ?? null);
+    const localValue = sanitizeForStorage(sanitizeSyncedValue(key, fallbackValue ?? readParsedLocalValue(key) ?? null));
 
     const canonicalValue = sanitizeForStorage(getCanonicalDefaultValue(key));
     if (remoteValue === null && localValue === null && canonicalValue === null) return;
@@ -454,7 +481,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
     if (preferredValue === null) return;
 
-    const sanitizedPreferredValue = sanitizeForStorage(preferredValue);
+    const sanitizedPreferredValue = sanitizeForStorage(sanitizeSyncedValue(key, preferredValue));
     localStorage.setItem(key, JSON.stringify(sanitizedPreferredValue));
     mirrorCanonicalStateToLegacyLocal(key, sanitizedPreferredValue);
     dispatchStorageUpdated(key);
@@ -467,7 +494,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
   } catch (error) {
     console.error(`Firebase hydrate failed for ${key}`, error);
     try {
-      const remoteValue = sanitizeForStorage(await fetchServerSyncedStorageValue(key));
+      const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue(key)));
       if (remoteValue !== null) {
         localStorage.setItem(key, JSON.stringify(remoteValue));
         mirrorCanonicalStateToLegacyLocal(key, remoteValue);
@@ -541,7 +568,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
             readSnapshotValue<T>(key, null, onChange);
             return;
           }
-          const nextValue = sanitizeForStorage(snapshot.val() as T);
+          const nextValue = sanitizeForStorage(sanitizeSyncedValue(key, snapshot.val() as T));
           mirrorCanonicalStateToLegacyLocal(key, nextValue);
           readSnapshotValue<T>(key, nextValue, onChange);
           markSyncHealthy(key);
@@ -559,7 +586,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
 
   pollTimer = window.setInterval(async () => {
     try {
-      const remoteValue = sanitizeForStorage(await fetchServerSyncedStorageValue<T>(key));
+      const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue<T>(key)));
       if (remoteValue === null) return;
       const currentValue = sanitizeForStorage(readParsedLocalValue<T>(key));
       if (!areSnapshotsEqual(currentValue, remoteValue)) {
