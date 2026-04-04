@@ -4,17 +4,6 @@ import Image, { type ImageProps } from "next/image";
 import Link from "next/link";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, Instagram, LoaderCircle, Mail, MapPin, MessageCircle, Phone, Send, ShieldCheck, Star } from "lucide-react";
-import { appendWebsiteBooking, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
-import {
-  appendLiveChatMessage,
-  STORAGE_LIVE_CHAT,
-  createLiveChatThread,
-  getLandingChatThreadId,
-  markThreadSeenByGuest,
-  readLiveChatThreads,
-  type LiveChatThread,
-} from "@/app/lib/live-chat";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 const INVENTORY = {
   total: 53,
@@ -30,6 +19,12 @@ type HighlightStory = {
   images: readonly string[];
   eyebrow: string;
   description: string;
+};
+
+type DummyChatMessage = {
+  id: string;
+  sender: "guest" | "support";
+  text: string;
 };
 
 function LandingImage(props: ImageProps) {
@@ -288,7 +283,7 @@ export default function Home() {
   const [chatGuestName, setChatGuestName] = useState("");
   const [chatGuestContact, setChatGuestContact] = useState("");
   const [chatMessage, setChatMessage] = useState("");
-  const [chatThread, setChatThread] = useState<LiveChatThread | null>(null);
+  const [chatMessages, setChatMessages] = useState<DummyChatMessage[]>([]);
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -301,6 +296,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successRef, setSuccessRef] = useState("");
+  const [successNote, setSuccessNote] = useState("");
   const [highlightCycle, setHighlightCycle] = useState(0);
 
   const nights = useMemo(() => {
@@ -354,22 +350,6 @@ export default function Home() {
     return () => window.clearInterval(interval);
   }, [activeStory]);
 
-  useEffect(() => {
-    const applyChatSnapshot = (incomingThreads?: LiveChatThread[] | null) => {
-      const threadId = getLandingChatThreadId();
-      const threads = Array.isArray(incomingThreads) ? incomingThreads : readLiveChatThreads();
-      const nextThread = threadId ? threads.find((entry) => entry.id === threadId) ?? null : null;
-      setChatThread(nextThread);
-      if (nextThread?.unreadByGuest) {
-        markThreadSeenByGuest(nextThread.id);
-      }
-    };
-
-    applyChatSnapshot();
-    const unsubscribe = subscribeToSyncedStorageKey<LiveChatThread[]>(STORAGE_LIVE_CHAT, applyChatSnapshot);
-    return () => unsubscribe();
-  }, []);
-
   const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
   const experienceImages = [MAIN_ROOM_IMAGE, RESTAURANT_IMAGES[1], LUNCH_IMAGES[4], BAR_IMAGES[1]];
 
@@ -377,6 +357,7 @@ export default function Home() {
     event.preventDefault();
     setError("");
     setSuccessRef("");
+    setSuccessNote("");
 
     if (nights < 1) {
       setError("Please select a valid check-in and check-out date.");
@@ -407,34 +388,8 @@ export default function Home() {
         return;
       }
 
-      const websiteBooking: WebsiteBookingRecord = {
-        id: `web-${Date.now()}`,
-        bookingReference: result.bookingReference ?? `OH-${Date.now()}`,
-        fullName,
-        email,
-        phone,
-        roomType,
-        checkIn,
-        checkOut,
-        guests: Number(guests),
-        nights: result.nights ?? nights,
-        pricePerNight: result.pricePerNight ?? pricePerNight,
-        totalAmount: result.totalAmount ?? total,
-        currency: "TZS",
-        specialRequest,
-        source: "website",
-        status: "new",
-        createdAt: result.createdAt ?? new Date().toISOString(),
-        receptionistSeenAt: null,
-      };
-
-      try {
-        await appendWebsiteBooking(websiteBooking);
-      } catch {
-        setError("Booking was received, but receptionist live sync failed. Please notify reception with your reference.");
-      }
-
       setSuccessRef(result.bookingReference ?? "REQUEST-RECEIVED");
+      setSuccessNote(result.warning ?? "Your booking was received and sent to reception.");
       setFullName("");
       setEmail("");
       setPhone("");
@@ -466,20 +421,28 @@ export default function Home() {
     const nextMessage = chatMessage.trim();
     if (!nextMessage) return;
 
-    if (!chatThread) {
-      const nextThread = createLiveChatThread(
-        chatGuestName || fullName || "Website Guest",
-        chatGuestContact || phone || email,
-        nextMessage,
-      );
-      setChatThread(nextThread);
-      setChatMessage("");
-      setShowChatWidget(true);
-      return;
-    }
+    const guestName = chatGuestName.trim() || fullName.trim() || "Website Guest";
+    const guestContact = chatGuestContact.trim() || phone.trim() || email.trim();
+    const supportReply =
+      "Thanks for your message. This website chat is currently in demo mode. Please use WhatsApp or call reception for an immediate response.";
 
-    appendLiveChatMessage(chatThread.id, "guest", nextMessage);
+    setChatMessages((current) => [
+      ...current,
+      {
+        id: `guest-${Date.now()}`,
+        sender: "guest",
+        text: nextMessage,
+      },
+      {
+        id: `support-${Date.now() + 1}`,
+        sender: "support",
+        text: guestContact
+          ? `${supportReply} We can reach you on ${guestContact}, ${guestName}.`
+          : `${supportReply} Thank you, ${guestName}.`,
+      },
+    ]);
     setChatMessage("");
+    setShowChatWidget(true);
   };
 
   return (
@@ -1041,7 +1004,7 @@ export default function Home() {
           {error ? <p className="mt-5 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
           {successRef ? (
             <p className="mt-5 flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <CheckCircle2 className="h-4 w-4" /> Booking received. Reference: <strong>{successRef}</strong>
+              <CheckCircle2 className="h-4 w-4" /> Booking received. Reference: <strong>{successRef}</strong>{successNote ? ` ${successNote}` : ""}
             </p>
           ) : null}
 
@@ -1170,13 +1133,8 @@ export default function Home() {
             </div>
 
             <div className="max-h-[320px] space-y-3 overflow-y-auto bg-[#f8f6f3] px-4 py-4">
-              {chatThread ? (
-                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-black/40">
-                  Conversation Date: {new Date(chatThread.createdAt).toLocaleDateString()}
-                </div>
-              ) : null}
-              {chatThread?.messages.length ? (
-                chatThread.messages.map((message) => (
+              {chatMessages.length ? (
+                chatMessages.map((message) => (
                   <div key={message.id} className={`flex ${message.sender === "guest" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.sender === "guest" ? "bg-orange-500 text-white" : "bg-white text-black shadow-sm"}`}>
                       {message.text}
@@ -1185,12 +1143,12 @@ export default function Home() {
                 ))
               ) : (
                 <div className="rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-black shadow-sm">
-                  Start a conversation and reception will reply from the dashboard.
+                  Ask a question here to preview the chat interface. For real support, use WhatsApp or call reception directly.
                 </div>
               )}
             </div>
 
-            {!chatThread ? (
+            {chatMessages.length === 0 ? (
               <div className="grid gap-3 border-t px-4 py-4">
                 <input
                   value={chatGuestName}
