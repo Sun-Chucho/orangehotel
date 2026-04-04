@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { appendWebsiteBookingServer } from "@/app/lib/website-bookings-server";
+import { type WebsiteBookingBackendSyncStatus, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
 
 export const runtime = "nodejs";
 
@@ -9,8 +11,23 @@ const ROOM_PRICES = {
 } as const;
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX_REQUESTS = 6;
+const RATE_LIMIT_MAX_REQUESTS = 3;
+const MIN_FORM_FILL_TIME_MS = 4_000;
 const ipRequestStore = new Map<string, { count: number; resetAt: number }>();
+const BLOCKED_UA_PATTERNS = [
+  /bot/i,
+  /crawl/i,
+  /spider/i,
+  /slurp/i,
+  /wget/i,
+  /curl/i,
+  /python/i,
+  /axios/i,
+  /httpclient/i,
+  /headless/i,
+  /postman/i,
+  /insomnia/i,
+] as const;
 
 const bookingSchema = z.object({
   fullName: z.string().trim().min(2).max(80).regex(/^[a-zA-Z\s.'-]+$/, "Name contains invalid characters"),
@@ -22,6 +39,7 @@ const bookingSchema = z.object({
   guests: z.number().int().min(1).max(4),
   specialRequest: z.string().trim().max(400).optional().default(""),
   website: z.string().optional(),
+  formStartedAt: z.number().int().nonnegative().optional(),
 });
 
 const getClientIp = (request: NextRequest) => {
@@ -48,10 +66,65 @@ const isRateLimited = (ip: string) => {
 };
 
 const asUtcDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const createBookingReference = () => `OH-${Date.now()}`;
+
+function getHost(request: NextRequest) {
+  return request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
+}
+
+function hasTrustedNavigationSource(request: NextRequest) {
+  const host = getHost(request);
+  if (!host) return false;
+
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+
+  const matchesHost = (value: string) => {
+    try {
+      return new URL(value).host === host;
+    } catch {
+      return false;
+    }
+  };
+
+  return (origin ? matchesHost(origin) : false) || (referer ? matchesHost(referer) : false);
+}
+
+function isBlockedUserAgent(userAgent: string) {
+  return BLOCKED_UA_PATTERNS.some((pattern) => pattern.test(userAgent));
+}
+
+async function readUpstreamBody(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { raw: text };
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
+    const userAgent = request.headers.get("user-agent") ?? "";
+    const contentType = request.headers.get("content-type") ?? "";
+
+    if (!contentType.toLowerCase().includes("application/json")) {
+      return NextResponse.json({ error: "Unsupported request format." }, { status: 415 });
+    }
+
+    if (!hasTrustedNavigationSource(request)) {
+      console.warn("Blocked booking request with untrusted source", { ip, userAgent });
+      return NextResponse.json({ error: "Invalid booking source." }, { status: 403 });
+    }
+
+    if (isBlockedUserAgent(userAgent)) {
+      console.warn("Blocked booking bot request", { ip, userAgent });
+      return NextResponse.json({ error: "Invalid booking source." }, { status: 403 });
+    }
+
     if (isRateLimited(ip)) {
       return NextResponse.json({ error: "Too many booking attempts. Please wait and try again." }, { status: 429 });
     }
@@ -67,6 +140,10 @@ export async function POST(request: NextRequest) {
 
     if ((data.website ?? "").trim().length > 0) {
       return NextResponse.json({ error: "Invalid submission." }, { status: 400 });
+    }
+
+    if (!data.formStartedAt || Date.now() - data.formStartedAt < MIN_FORM_FILL_TIME_MS) {
+      return NextResponse.json({ error: "Booking request could not be verified." }, { status: 400 });
     }
 
     const checkInDate = asUtcDate(data.checkIn);
@@ -89,14 +166,12 @@ export async function POST(request: NextRequest) {
 
     const pricePerNight = ROOM_PRICES[data.roomType];
     const totalAmount = nights * pricePerNight;
-
-    const backendUrl = process.env.BOOKING_BACKEND_URL;
-    if (!backendUrl) {
-      return NextResponse.json({ error: "Booking backend is not configured." }, { status: 500 });
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    const createdAt = new Date().toISOString();
+    const backendUrl = process.env.BOOKING_BACKEND_URL?.trim();
+    let backendSyncStatus: WebsiteBookingBackendSyncStatus = backendUrl ? "pending" : "failed";
+    let backendSyncError: string | null = backendUrl ? null : "Booking backend is not configured.";
+    let bookingReference = createBookingReference();
+    let warning: string | null = backendUrl ? null : "Booking saved for reception follow-up, but backend sync is not configured.";
 
     const payload = {
       fullName: data.fullName,
@@ -112,55 +187,90 @@ export async function POST(request: NextRequest) {
       currency: "TZS",
       specialRequest: data.specialRequest,
       source: "orange-hotel-web",
-      createdAt: new Date().toISOString(),
+      createdAt,
+    };
+    if (backendUrl) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (process.env.BOOKING_BACKEND_API_KEY) {
+        headers.Authorization = `Bearer ${process.env.BOOKING_BACKEND_API_KEY}`;
+      }
+
+      try {
+        const upstream = await fetch(backendUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const upstreamJson = await readUpstreamBody(upstream);
+
+        if (upstream.ok) {
+          bookingReference =
+            typeof upstreamJson.bookingReference === "string" && upstreamJson.bookingReference.trim().length > 0
+              ? upstreamJson.bookingReference
+              : bookingReference;
+          backendSyncStatus = "synced";
+          backendSyncError = null;
+        } else {
+          backendSyncStatus = "failed";
+          backendSyncError =
+            typeof upstreamJson.error === "string" && upstreamJson.error.trim().length > 0
+              ? upstreamJson.error
+              : "Booking service rejected the request.";
+          warning = "Booking saved for reception follow-up, but backend sync failed.";
+        }
+      } catch {
+        backendSyncStatus = "failed";
+        backendSyncError = "Could not reach booking service.";
+        warning = "Booking saved for reception follow-up, but backend sync failed.";
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    const websiteBooking: WebsiteBookingRecord = {
+      id: `web-${Date.now()}`,
+      bookingReference,
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      roomType: data.roomType,
+      checkIn: data.checkIn,
+      checkOut: data.checkOut,
+      guests: data.guests,
+      nights,
+      pricePerNight,
+      totalAmount,
+      currency: "TZS",
+      specialRequest: data.specialRequest,
+      source: "website",
+      status: "new",
+      backendSyncStatus,
+      backendSyncError,
+      createdAt,
+      receptionistSeenAt: null,
     };
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (process.env.BOOKING_BACKEND_API_KEY) {
-      headers.Authorization = `Bearer ${process.env.BOOKING_BACKEND_API_KEY}`;
-    }
-
-    let upstream: Response;
-    try {
-      upstream = await fetch(backendUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        cache: "no-store",
-        signal: controller.signal,
-      });
-    } catch {
-      return NextResponse.json({ error: "Could not reach booking service." }, { status: 502 });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    const upstreamJson = await upstream.json().catch(() => ({}));
-
-    if (!upstream.ok) {
-      return NextResponse.json(
-        {
-          error: upstreamJson?.error ?? "Booking service rejected the request.",
-        },
-        { status: 502 }
-      );
-    }
-
-    const bookingReference = upstreamJson?.bookingReference ?? `OH-${Date.now()}`;
+    await appendWebsiteBookingServer(websiteBooking);
 
     return NextResponse.json(
       {
         ok: true,
         bookingReference,
-        createdAt: payload.createdAt,
+        backendSyncStatus,
+        warning,
+        createdAt,
         nights,
         pricePerNight,
         totalAmount,
       },
-      { status: 200, headers: { "Cache-Control": "no-store" } }
+      { status: backendSyncStatus === "synced" ? 200 : 202, headers: { "Cache-Control": "no-store" } }
     );
   } catch {
     return NextResponse.json({ error: "Unexpected server error." }, { status: 500 });

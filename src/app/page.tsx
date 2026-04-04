@@ -298,6 +298,7 @@ export default function Home() {
   const [successRef, setSuccessRef] = useState("");
   const [successNote, setSuccessNote] = useState("");
   const [highlightCycle, setHighlightCycle] = useState(0);
+  const [formStartedAt, setFormStartedAt] = useState(() => Date.now());
 
   const nights = useMemo(() => {
     if (!checkIn || !checkOut) return 0;
@@ -379,6 +380,7 @@ export default function Home() {
           guests: Number(guests),
           specialRequest,
           website,
+          formStartedAt,
         }),
       });
 
@@ -399,6 +401,7 @@ export default function Home() {
       setCheckOut("");
       setWebsite("");
       setRoomType("standard");
+      setFormStartedAt(Date.now());
     } catch {
       setError("We could not reach the booking server. Please try again.");
     } finally {
@@ -999,6 +1002,7 @@ export default function Home() {
               Website
               <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
             </label>
+            <input type="hidden" value={String(formStartedAt)} readOnly />
           </div>
 
           {error ? <p className="mt-5 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
