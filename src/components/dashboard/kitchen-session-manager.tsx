@@ -31,10 +31,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { Download, Eye } from "lucide-react";
 
 type KitchenWorkflowTab = "purchase" | "daily-stock";
 type CloseTarget = "purchase" | "daily-stock" | null;
 type SessionDepartment = "kitchen" | "barista";
+type HistoryPreviewState =
+  | { kind: "purchase"; entry: KitchenPurchaseHistoryEntry }
+  | { kind: "daily-stock"; entry: KitchenDailyStockHistoryEntry }
+  | null;
 
 const DEFAULT_SIGNOFF: KitchenSessionSignoff = {
   preparedBy: "",
@@ -148,6 +153,59 @@ function getInventoryMatch(inventoryItems: InventoryItem[], storeItem: MainStore
   );
 }
 
+function getPurchaseLineTotalBalance(line: KitchenPurchaseLine) {
+  return roundStock(line.previousBalance + line.addedQty);
+}
+
+function getPurchaseEntryAmount(entry: KitchenPurchaseHistoryEntry) {
+  return roundStock(entry.lines.reduce((sum, line) => sum + line.addedQty * line.pricePerUnit, 0));
+}
+
+function getDailyLineClosingStock(line: KitchenDailyStockLine) {
+  return roundStock(line.openingStock + line.received - line.used - line.wastage);
+}
+
+function getDailyEntryTotals(entry: KitchenDailyStockHistoryEntry) {
+  return entry.lines.reduce(
+    (acc, line) => {
+      acc.received += roundStock(line.received);
+      acc.used += roundStock(line.used);
+      acc.wastage += roundStock(line.wastage);
+      return acc;
+    },
+    { received: 0, used: 0, wastage: 0 },
+  );
+}
+
+function escapeCsvValue(value: string | number | null | undefined) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function getHistoryFileDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "record";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function downloadCsvFile(filename: string, rows: Array<Array<string | number | null | undefined>>) {
+  if (typeof window === "undefined") return;
+
+  const csvContent = rows.map((row) => row.map((value) => escapeCsvValue(value)).join(",")).join("\n");
+  const blob = new Blob(["\ufeff", csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 export function KitchenSessionManager({
   isDirector,
   department = "kitchen",
@@ -163,6 +221,7 @@ export function KitchenSessionManager({
   const [purchaseHistory, setPurchaseHistory] = useState<KitchenPurchaseHistoryEntry[]>([]);
   const [dailyHistory, setDailyHistory] = useState<KitchenDailyStockHistoryEntry[]>([]);
   const [closeTarget, setCloseTarget] = useState<CloseTarget>(null);
+  const [historyPreview, setHistoryPreview] = useState<HistoryPreviewState>(null);
   const [closeNotes, setCloseNotes] = useState(DEFAULT_SIGNOFF);
   const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10));
   const [closeTime, setCloseTime] = useState(new Date().toTimeString().slice(0, 5));
@@ -605,6 +664,233 @@ export function KitchenSessionManager({
     }
   };
 
+  const downloadPurchaseHistoryEntry = (entry: KitchenPurchaseHistoryEntry) => {
+    downloadCsvFile(`${department}-purchase-${getHistoryFileDate(entry.closedAt)}.csv`, [
+      ["Department", departmentLabel],
+      ["Record Type", "Daily Purchases"],
+      ["Started At", formatDateTime(entry.startedAt)],
+      ["Closed At", formatDateTime(entry.closedAt)],
+      ["Prepared By", entry.signoff.preparedBy],
+      ["Checked By", entry.signoff.checkedBy],
+      ["Approved By", entry.signoff.approvedBy],
+      ["Cashier", entry.signoff.cashier],
+      [],
+      ["Item", "Category", "Unit", "Balance", "Added", "Price", "Total Balance", "Amount"],
+      ...entry.lines.map((line) => [
+        line.itemName,
+        line.category,
+        line.unit,
+        line.previousBalance,
+        line.addedQty,
+        line.pricePerUnit,
+        getPurchaseLineTotalBalance(line),
+        roundStock(line.addedQty * line.pricePerUnit),
+      ]),
+      [],
+      ["Items", entry.lines.length],
+      ["Total Amount", getPurchaseEntryAmount(entry)],
+    ]);
+    toast({ title: `${departmentLabel} purchase entry downloaded` });
+  };
+
+  const downloadDailyHistoryEntry = (entry: KitchenDailyStockHistoryEntry) => {
+    const totals = getDailyEntryTotals(entry);
+
+    downloadCsvFile(`${department}-daily-stock-${getHistoryFileDate(entry.closedAt)}.csv`, [
+      ["Department", departmentLabel],
+      ["Record Type", "Daily Stock Entries"],
+      ["Started At", formatDateTime(entry.startedAt)],
+      ["Closed At", formatDateTime(entry.closedAt)],
+      ["Prepared By", entry.signoff.preparedBy],
+      ["Checked By", entry.signoff.checkedBy],
+      ["Approved By", entry.signoff.approvedBy],
+      ["Cashier", entry.signoff.cashier],
+      [],
+      ["Item", "Category", "Unit", "Opening Stock", "Received", "Used", "Wastage", "Closing Stock"],
+      ...entry.lines.map((line) => [
+        line.itemName,
+        line.category,
+        line.unit,
+        line.openingStock,
+        line.received,
+        line.used,
+        line.wastage,
+        getDailyLineClosingStock(line),
+      ]),
+      [],
+      ["Items", entry.lines.length],
+      ["Total Received", totals.received],
+      ["Total Used", totals.used],
+      ["Total Wastage", totals.wastage],
+    ]);
+    toast({ title: `${departmentLabel} daily entry downloaded` });
+  };
+
+  const renderHistoryPreview = () => {
+    if (!historyPreview) return null;
+
+    if (historyPreview.kind === "purchase") {
+      const entry = historyPreview.entry;
+
+      return (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Started At</p>
+              <p className="mt-2 text-sm font-bold">{formatDateTime(entry.startedAt)}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Closed At</p>
+              <p className="mt-2 text-sm font-bold">{formatDateTime(entry.closedAt)}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Items</p>
+              <p className="mt-2 text-sm font-bold">{entry.lines.length}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Amount</p>
+              <p className="mt-2 text-sm font-bold">{formatMoney(getPurchaseEntryAmount(entry))}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Prepared By</p>
+              <p className="mt-2 text-sm font-bold">{entry.signoff.preparedBy || "-"}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Checked By</p>
+              <p className="mt-2 text-sm font-bold">{entry.signoff.checkedBy || "-"}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Approved By</p>
+              <p className="mt-2 text-sm font-bold">{entry.signoff.approvedBy || "-"}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cashier</p>
+              <p className="mt-2 text-sm font-bold">{entry.signoff.cashier || "-"}</p>
+            </div>
+          </div>
+
+          <div className="max-h-[50vh] overflow-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Balance</TableHead>
+                  <TableHead>Added</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Total Balance</TableHead>
+                  <TableHead>Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entry.lines.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell className="font-bold">{line.itemName}</TableCell>
+                    <TableCell className="font-bold">{line.category || "-"}</TableCell>
+                    <TableCell className="font-bold">{line.unit}</TableCell>
+                    <TableCell className="font-bold">{line.previousBalance}</TableCell>
+                    <TableCell className="font-bold">{line.addedQty}</TableCell>
+                    <TableCell className="font-bold">{formatMoney(line.pricePerUnit)}</TableCell>
+                    <TableCell className="font-bold">{getPurchaseLineTotalBalance(line)}</TableCell>
+                    <TableCell className="font-bold">{formatMoney(roundStock(line.addedQty * line.pricePerUnit))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      );
+    }
+
+    const entry = historyPreview.entry;
+    const totals = getDailyEntryTotals(entry);
+
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Started At</p>
+            <p className="mt-2 text-sm font-bold">{formatDateTime(entry.startedAt)}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Closed At</p>
+            <p className="mt-2 text-sm font-bold">{formatDateTime(entry.closedAt)}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Items</p>
+            <p className="mt-2 text-sm font-bold">{entry.lines.length}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Received</p>
+            <p className="mt-2 text-sm font-bold">{totals.received}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Used</p>
+            <p className="mt-2 text-sm font-bold">{totals.used}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Wastage</p>
+            <p className="mt-2 text-sm font-bold">{totals.wastage}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Prepared By</p>
+            <p className="mt-2 text-sm font-bold">{entry.signoff.preparedBy || "-"}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Checked By</p>
+            <p className="mt-2 text-sm font-bold">{entry.signoff.checkedBy || "-"}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Approved By</p>
+            <p className="mt-2 text-sm font-bold">{entry.signoff.approvedBy || "-"}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cashier</p>
+            <p className="mt-2 text-sm font-bold">{entry.signoff.cashier || "-"}</p>
+          </div>
+        </div>
+
+        <div className="max-h-[50vh] overflow-auto rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Opening Stock</TableHead>
+                <TableHead>Received</TableHead>
+                <TableHead>Used</TableHead>
+                <TableHead>Wastage</TableHead>
+                <TableHead>Closing Stock</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entry.lines.map((line) => (
+                <TableRow key={line.id}>
+                  <TableCell className="font-bold">{line.itemName}</TableCell>
+                  <TableCell className="font-bold">{line.category || "-"}</TableCell>
+                  <TableCell className="font-bold">{line.unit}</TableCell>
+                  <TableCell className="font-bold">{line.openingStock}</TableCell>
+                  <TableCell className="font-bold">{line.received}</TableCell>
+                  <TableCell className="font-bold">{line.used}</TableCell>
+                  <TableCell className="font-bold">{line.wastage}</TableCell>
+                  <TableCell className="font-bold">{getDailyLineClosingStock(line)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as KitchenWorkflowTab)}>
@@ -728,6 +1014,7 @@ export function KitchenSessionManager({
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Prepared By</TableHead>
                     <TableHead>Approved By</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -735,16 +1022,26 @@ export function KitchenSessionManager({
                     <TableRow key={entry.id}>
                       <TableCell className="font-bold">{formatDateTime(entry.closedAt)}</TableCell>
                       <TableCell className="font-bold">{entry.lines.length}</TableCell>
-                      <TableCell className="font-bold">
-                        {formatMoney(entry.lines.reduce((sum, line) => sum + line.addedQty * line.pricePerUnit, 0))}
-                      </TableCell>
+                      <TableCell className="font-bold">{formatMoney(getPurchaseEntryAmount(entry))}</TableCell>
                       <TableCell className="font-bold">{entry.signoff.preparedBy}</TableCell>
                       <TableCell className="font-bold">{entry.signoff.approvedBy}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setHistoryPreview({ kind: "purchase", entry })}>
+                            <Eye className="mr-2 h-3.5 w-3.5" />
+                            View
+                          </Button>
+                          <Button size="sm" onClick={() => downloadPurchaseHistoryEntry(entry)}>
+                            <Download className="mr-2 h-3.5 w-3.5" />
+                            Download
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {purchaseHistory.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
                         No saved purchase sessions
                       </TableCell>
                     </TableRow>
@@ -884,21 +1181,38 @@ export function KitchenSessionManager({
                     <TableHead>Received</TableHead>
                     <TableHead>Used</TableHead>
                     <TableHead>Wastage</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dailyHistory.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="font-bold">{formatDateTime(entry.closedAt)}</TableCell>
-                      <TableCell className="font-bold">{entry.lines.length}</TableCell>
-                      <TableCell className="font-bold">{entry.lines.reduce((sum, line) => sum + line.received, 0)}</TableCell>
-                      <TableCell className="font-bold">{entry.lines.reduce((sum, line) => sum + line.used, 0)}</TableCell>
-                      <TableCell className="font-bold">{entry.lines.reduce((sum, line) => sum + line.wastage, 0)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {dailyHistory.map((entry) => {
+                    const totals = getDailyEntryTotals(entry);
+
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell className="font-bold">{formatDateTime(entry.closedAt)}</TableCell>
+                        <TableCell className="font-bold">{entry.lines.length}</TableCell>
+                        <TableCell className="font-bold">{totals.received}</TableCell>
+                        <TableCell className="font-bold">{totals.used}</TableCell>
+                        <TableCell className="font-bold">{totals.wastage}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setHistoryPreview({ kind: "daily-stock", entry })}>
+                              <Eye className="mr-2 h-3.5 w-3.5" />
+                              View
+                            </Button>
+                            <Button size="sm" onClick={() => downloadDailyHistoryEntry(entry)}>
+                              <Download className="mr-2 h-3.5 w-3.5" />
+                              Download
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                   {dailyHistory.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
                         No saved daily sheets
                       </TableCell>
                     </TableRow>
@@ -932,6 +1246,39 @@ export function KitchenSessionManager({
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseTarget(null)}>Cancel</Button>
             <Button onClick={submitCloseDialog}>Close Shift</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyPreview !== null} onOpenChange={(open) => !open && setHistoryPreview(null)}>
+        <DialogContent className="max-h-[85vh] max-w-6xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase tracking-tight">
+              {historyPreview?.kind === "purchase" ? `${departmentLabel} Purchase Entry` : `${departmentLabel} Daily Stock Entry`}
+            </DialogTitle>
+            <DialogDescription>
+              {historyPreview
+                ? `Table view for the ${departmentLabel.toLowerCase()} record closed ${formatDateTime(historyPreview.entry.closedAt)}.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[65vh] overflow-y-auto pr-1">
+            {renderHistoryPreview()}
+          </div>
+          <DialogFooter>
+            {historyPreview?.kind === "purchase" && (
+              <Button variant="outline" onClick={() => downloadPurchaseHistoryEntry(historyPreview.entry)}>
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            )}
+            {historyPreview?.kind === "daily-stock" && (
+              <Button variant="outline" onClick={() => downloadDailyHistoryEntry(historyPreview.entry)}>
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            )}
+            <Button onClick={() => setHistoryPreview(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
