@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -470,6 +471,16 @@ export default function KitchenPage() {
             </Table>
           </CardContent>
         </Card>
+
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-xl font-black uppercase tracking-tight">Kitchen Entry History</h2>
+            <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              View and download saved kitchen purchase and daily stock records.
+            </p>
+          </div>
+          <KitchenSessionManager isDirector />
+        </div>
       </div>
     );
   }
@@ -502,49 +513,61 @@ export default function KitchenPage() {
         </Tabs>
 
         {directorTab === "inventory" ? (
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Inventory from Store</CardTitle>
-              <CardDescription>Store additions plus received, used, and remaining quantities</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/10">
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Remaining</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {kitchenStoreItems.map((item) => {
-                    const itemEntries = fromStoreEntries.filter((entry) => entry.itemName === item.name);
-                    const received = itemEntries.reduce((sum, entry) => sum + entry.convertedQty, 0);
-                    const used = itemEntries.reduce((sum, entry) => sum + getUsedQty(entry.id), 0);
-                    const remaining = Math.max(0, received - used);
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.name}</TableCell>
-                        <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
-                        <TableCell className="font-bold">{received} units</TableCell>
-                        <TableCell className="font-bold">{used} units</TableCell>
-                        <TableCell className="font-bold">{remaining} units</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {kitchenStoreItems.length === 0 && (
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Inventory from Store</CardTitle>
+                <CardDescription>Store additions plus received, used, and remaining quantities</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-muted/10">
                     <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                        No inventory records
-                      </TableCell>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Store Qty</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Received</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Used</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Remaining</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {kitchenStoreItems.map((item) => {
+                      const itemEntries = fromStoreEntries.filter((entry) => entry.itemName === item.name);
+                      const received = itemEntries.reduce((sum, entry) => sum + entry.convertedQty, 0);
+                      const used = itemEntries.reduce((sum, entry) => sum + getUsedQty(entry.id), 0);
+                      const remaining = Math.max(0, received - used);
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-bold">{item.name}</TableCell>
+                          <TableCell className="font-bold">{item.stock} {item.unit}</TableCell>
+                          <TableCell className="font-bold">{received} units</TableCell>
+                          <TableCell className="font-bold">{used} units</TableCell>
+                          <TableCell className="font-bold">{remaining} units</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {kitchenStoreItems.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                          No inventory records
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-tight">Kitchen Entry History</h2>
+                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                  View and download saved kitchen purchase and daily stock records.
+                </p>
+              </div>
+              <KitchenSessionManager isDirector />
+            </div>
+          </div>
         ) : (
           <Card className="border-none shadow-sm">
             <CardHeader>
