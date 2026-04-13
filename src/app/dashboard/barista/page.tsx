@@ -852,14 +852,15 @@ export default function BaristaPage() {
       return;
     }
 
-    setPendingOrder({
-      mode: serviceMode,
-      destination,
-      lines: cart.map((line) => ({ name: line.item.name, qty: line.qty })),
-      total: subtotal,
-    });
-    setShowSettlementPopup(true);
-  };
+      setPendingOrder({
+        mode: serviceMode,
+        destination,
+        lines: cart.map((line) => ({ name: line.item.name, qty: line.qty })),
+        total: subtotal,
+      });
+      setShowPayNowPopup(false);
+      setShowSettlementPopup(true);
+    };
 
   const finalizeOrder = async (status: BaristaPaymentStatus, method: BaristaPaymentMethod) => {
     if (isDirector) return;
@@ -1769,7 +1770,14 @@ export default function BaristaPage() {
               >
                 Credit
               </Button>
-              <Button variant="outline" onClick={() => setShowSettlementPopup(false)} className="w-full h-10 font-black uppercase text-[10px] tracking-widest">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSettlementPopup(false);
+                  setShowPayNowPopup(false);
+                }}
+                className="w-full h-10 font-black uppercase text-[10px] tracking-widest"
+              >
                 Close
               </Button>
             </CardContent>

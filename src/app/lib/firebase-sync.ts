@@ -11,6 +11,7 @@ let _isConnected = false;
 let _firebaseRealtimeConnected = false;
 const _connectionListeners = new Set<(connected: boolean) => void>();
 const _lastSyncedAt: Record<string, number> = {};
+const FALLBACK_POLL_INTERVAL_MS = 60000;
 
 function dispatchStorageUpdated(key: string) {
   if (typeof window === "undefined") return;
@@ -547,6 +548,38 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
   let isDisposed = false;
   let pollTimer: number | null = null;
 
+  const stopFallbackPolling = () => {
+    if (pollTimer !== null) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const pollServerSnapshot = async () => {
+    try {
+      const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue<T>(key)));
+      if (remoteValue === null) return;
+      const currentValue = sanitizeForStorage(readParsedLocalValue<T>(key));
+      if (!areSnapshotsEqual(currentValue, remoteValue)) {
+        localStorage.setItem(key, JSON.stringify(remoteValue));
+        mirrorCanonicalStateToLegacyLocal(key, remoteValue);
+        dispatchStorageUpdated(key);
+        onChange(remoteValue);
+      }
+      markSyncHealthy(key);
+    } catch {
+      // Keep the fallback poll alive; the next successful request or Firebase reconnect will recover state.
+    }
+  };
+
+  const ensureFallbackPolling = () => {
+    if (pollTimer !== null || isDisposed) return;
+    void pollServerSnapshot();
+    pollTimer = window.setInterval(() => {
+      void pollServerSnapshot();
+    }, FALLBACK_POLL_INTERVAL_MS);
+  };
+
   void ensureFirebaseAuthReady()
     .then(() => {
       if (isDisposed) return;
@@ -563,6 +596,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
               dispatchStorageUpdated(key);
               onChange(fallbackValue);
               markSyncHealthy(key);
+              stopFallbackPolling();
               return;
             }
             readSnapshotValue<T>(key, null, onChange);
@@ -572,43 +606,27 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
           mirrorCanonicalStateToLegacyLocal(key, nextValue);
           readSnapshotValue<T>(key, nextValue, onChange);
           markSyncHealthy(key);
+          stopFallbackPolling();
         },
         (error) => {
           emitConnectionState(false);
           console.error(`Firebase subscription failed for ${key}`, error);
+          ensureFallbackPolling();
         },
       );
     })
     .catch((error) => {
       emitConnectionState(false);
       console.error(`Firebase auth bootstrap failed for ${key}`, error);
+      ensureFallbackPolling();
     });
-
-  pollTimer = window.setInterval(async () => {
-    try {
-      const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue<T>(key)));
-      if (remoteValue === null) return;
-      const currentValue = sanitizeForStorage(readParsedLocalValue<T>(key));
-      if (!areSnapshotsEqual(currentValue, remoteValue)) {
-        localStorage.setItem(key, JSON.stringify(remoteValue));
-        mirrorCanonicalStateToLegacyLocal(key, remoteValue);
-        dispatchStorageUpdated(key);
-        onChange(remoteValue);
-      }
-      markSyncHealthy(key);
-    } catch {
-      // Keep polling silently; direct Firebase listener or next successful poll will recover status.
-    }
-  }, 15000);
 
   return () => {
     isDisposed = true;
     window.removeEventListener("orange-hotel-storage-updated", handleCustomEvent as EventListener);
     window.removeEventListener("storage", handleStorageEvent);
     firebaseUnsubscribe();
-    if (pollTimer !== null) {
-      window.clearInterval(pollTimer);
-    }
+    stopFallbackPolling();
   };
 }
 

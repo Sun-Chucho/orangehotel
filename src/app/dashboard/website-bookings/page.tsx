@@ -100,6 +100,7 @@ export default function WebsiteBookingsPage() {
                 <TableHead className="h-12 font-black uppercase tracking-widest text-[10px]">Guest</TableHead>
                 <TableHead className="h-12 font-black uppercase tracking-widest text-[10px]">Stay</TableHead>
                 <TableHead className="h-12 font-black uppercase tracking-widest text-[10px]">Contact</TableHead>
+                <TableHead className="h-12 font-black uppercase tracking-widest text-[10px]">Backend</TableHead>
                 <TableHead className="h-12 font-black uppercase tracking-widest text-[10px]">Status</TableHead>
                 <TableHead className="h-12 text-right font-black uppercase tracking-widest text-[10px]">Action</TableHead>
               </TableRow>
@@ -127,6 +128,21 @@ export default function WebsiteBookingsPage() {
                   <TableCell>
                     <Badge
                       variant="outline"
+                      className={
+                        booking.backendSyncStatus === "synced"
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                          : "border-red-500 bg-red-50 text-red-700"
+                      }
+                    >
+                      {booking.backendSyncStatus ?? "synced"}
+                    </Badge>
+                    {booking.backendSyncError ? (
+                      <p className="mt-1 max-w-[220px] text-xs text-muted-foreground">{booking.backendSyncError}</p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
                       className={booking.status === "new" ? "border-amber-500 bg-amber-50 text-amber-700" : ""}
                     >
                       {booking.status}
@@ -146,7 +162,7 @@ export default function WebsiteBookingsPage() {
               ))}
               {websiteBookings.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center opacity-40">
+                  <TableCell colSpan={7} className="py-12 text-center opacity-40">
                     <MonitorSmartphone className="mx-auto mb-3 h-12 w-12" />
                     <p className="font-black uppercase tracking-widest text-xs">No website bookings found</p>
                   </TableCell>

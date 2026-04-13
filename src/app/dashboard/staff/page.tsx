@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { readJson, writeJson } from "@/app/lib/storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type StaffRoleFilter = "all" | Role;
 
@@ -56,6 +57,7 @@ export default function StaffPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<StaffRoleFilter>("all");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<StaffMember | null>(null);
 
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<Role>("cashier");
@@ -243,7 +245,14 @@ export default function StaffPage() {
                   ))}
                 </select>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button size="sm" variant="outline" className="font-bold text-[10px] uppercase tracking-widest" disabled={isDirector}>Profile</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold text-[10px] uppercase tracking-widest"
+                    onClick={() => setSelectedMember(member)}
+                  >
+                    Profile
+                  </Button>
                   <Button
                     size="sm"
                     variant="destructive"
@@ -268,6 +277,46 @@ export default function StaffPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={Boolean(selectedMember)} onOpenChange={(open) => !open && setSelectedMember(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black tracking-tight">Staff Profile</DialogTitle>
+            <DialogDescription>Saved staff details for this account.</DialogDescription>
+          </DialogHeader>
+          {selectedMember && (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Name</p>
+                  <p className="mt-1 font-bold">{selectedMember.name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Role</p>
+                  <p className="mt-1 font-bold">{selectedMember.role}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Shift</p>
+                  <p className="mt-1 font-bold">{selectedMember.shift}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Phone</p>
+                  <p className="mt-1 font-bold">{selectedMember.phone}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Email</p>
+                <p className="mt-1 font-bold break-all">{selectedMember.email}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedMember(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -16,6 +16,7 @@ export interface CompanyStockItem {
   received: string;
   issued: string;
   damaged: string;
+  damageReason?: string;
   balance: string;
   category: CompanyStockCategory;
   createdAt: number;

@@ -43,3 +43,13 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# python helpers
+__pycache__/
+*.pyc
+
+# local generated assets
+/print-ready-barcodes.html
+/test-barcode-label.html
+/test-barcode-label.png
+/smaller.mp4

@@ -7,6 +7,7 @@ const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
 
 export type WebsiteBookingStatus = "new" | "seen";
 export type WebsiteRoomType = "standard" | "platinum";
+export type WebsiteBookingBackendSyncStatus = "synced" | "pending" | "failed";
 
 export interface WebsiteBookingRecord {
   id: string;
@@ -25,6 +26,8 @@ export interface WebsiteBookingRecord {
   specialRequest: string;
   source: "website";
   status: WebsiteBookingStatus;
+  backendSyncStatus: WebsiteBookingBackendSyncStatus;
+  backendSyncError: string | null;
   createdAt: string;
   receptionistSeenAt: string | null;
 }

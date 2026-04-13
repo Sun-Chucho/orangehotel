@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   DEFAULT_HARDWARE_SETTINGS,
   HardwareLane,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type SettingsSection = "profile" | "notifications" | "security" | "general" | "billing" | "hardware";
 
@@ -65,6 +67,7 @@ const FALLBACK_PRINTERS = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
   const [section, setSection] = useState<SettingsSection>("profile");
@@ -75,26 +78,47 @@ export default function SettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   useEffect(() => {
-    const parsed = readJson<Partial<AppSettings>>(STORAGE_KEY);
-    if (!parsed) return;
-    try {
-      setSettings((current) => ({ ...current, ...parsed }));
-    } catch {
-      setSettings(DEFAULT_SETTINGS);
-    }
-  }, []);
+    const applySettingsSnapshot = (value?: Partial<AppSettings> | null) => {
+      const parsed = value ?? readJson<Partial<AppSettings>>(STORAGE_KEY);
+      if (!parsed) {
+        setSettings(DEFAULT_SETTINGS);
+        return;
+      }
 
-  useEffect(() => {
-    const parsed = readJson<Partial<HardwareSettings>>(STORAGE_HARDWARE_SETTINGS);
-    if (!parsed) return;
-    try {
-      setHardwareSettings({
-        kitchen: { ...DEFAULT_HARDWARE_SETTINGS.kitchen, ...parsed.kitchen },
-        barista: { ...DEFAULT_HARDWARE_SETTINGS.barista, ...parsed.barista },
-      });
-    } catch {
-      setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
-    }
+      try {
+        setSettings((current) => ({ ...current, ...parsed }));
+      } catch {
+        setSettings(DEFAULT_SETTINGS);
+      }
+    };
+
+    const applyHardwareSnapshot = (value?: Partial<HardwareSettings> | null) => {
+      const parsed = value ?? readJson<Partial<HardwareSettings>>(STORAGE_HARDWARE_SETTINGS);
+      if (!parsed) {
+        setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
+        return;
+      }
+
+      try {
+        setHardwareSettings({
+          kitchen: { ...DEFAULT_HARDWARE_SETTINGS.kitchen, ...parsed.kitchen },
+          barista: { ...DEFAULT_HARDWARE_SETTINGS.barista, ...parsed.barista },
+        });
+      } catch {
+        setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
+      }
+    };
+
+    applySettingsSnapshot();
+    applyHardwareSnapshot();
+
+    const unsubscribeSettings = subscribeToSyncedStorageKey<Partial<AppSettings>>(STORAGE_KEY, applySettingsSnapshot);
+    const unsubscribeHardware = subscribeToSyncedStorageKey<Partial<HardwareSettings>>(STORAGE_HARDWARE_SETTINGS, applyHardwareSnapshot);
+
+    return () => {
+      unsubscribeSettings();
+      unsubscribeHardware();
+    };
   }, []);
 
   const loadPrinters = async () => {
@@ -316,7 +340,9 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
                 <p className="text-sm text-muted-foreground">Billing controls are configured per role. Use the cashier and manager modules for transaction operations.</p>
-                <Button variant="outline" className="font-bold">View Recent Settlements</Button>
+                <Button variant="outline" className="font-bold" onClick={() => router.push("/dashboard/payments")}>
+                  View Recent Settlements
+                </Button>
               </CardContent>
             </Card>
           )}
