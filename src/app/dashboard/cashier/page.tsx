@@ -606,32 +606,6 @@ export default function BookingPage() {
     markRoomStatus(booking.roomNumber, "cleaning");
   };
 
-  const deleteBooking = async (booking: BookingRecord) => {
-    if (isDirector) return;
-
-    const approved = await confirm({
-      title: "Delete Booking",
-      description: `Delete receipt ${booking.receiptNo} for ${booking.guestName} in room ${booking.roomNumber}? This cannot be undone.`,
-      actionLabel: "Delete Booking",
-    });
-    if (!approved) return;
-
-    const nextTransactions = transactions.filter((entry) => entry.id !== booking.id);
-
-    setTransactions(nextTransactions);
-    writeCashierState(nextTransactions, receiptSeq);
-    setRooms(syncRoomsStateFromBookings(nextTransactions, rooms));
-
-    if (editingBookingId === booking.id) {
-      resetBookingForm();
-    }
-
-    toast({
-      title: "Booking Deleted",
-      description: `${booking.receiptNo} for ${booking.guestName} was removed.`,
-    });
-  };
-
   return (
     <div className="space-y-8">
       {dialog}
@@ -883,13 +857,6 @@ export default function BookingPage() {
                         >
                           Edit
                         </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => void deleteBooking(tx)}
-                          className="h-9 border-red-200 text-[10px] font-black uppercase tracking-widest text-red-700 hover:bg-red-50 hover:text-red-800"
-                        >
-                          Delete
-                        </Button>
                         {tx.status !== "checked-out" && (
                           <>
                         <Button
@@ -917,7 +884,7 @@ export default function BookingPage() {
 
               {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center">
+                  <TableCell colSpan={6} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">
