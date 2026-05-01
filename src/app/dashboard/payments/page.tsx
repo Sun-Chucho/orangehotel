@@ -24,6 +24,12 @@ type KitchenPaymentStatus = "completed" | "credit";
 type BaristaPaymentStatus = "completed" | "credit";
 type RoomType = "standard" | "platinum";
 
+interface BookingPaymentBreakdownItem {
+  method: Exclude<PaymentMethod, "credit">;
+  nights: number;
+  amount: number;
+}
+
 interface BookingRecord {
   id: string;
   receiptNo: string;
@@ -39,6 +45,7 @@ interface BookingRecord {
   nights: number;
   total: number;
   status: TransactionStatus;
+  paymentBreakdown?: BookingPaymentBreakdownItem[];
 }
 
 interface KitchenPaymentRecord {
@@ -116,6 +123,12 @@ function normalizeReceiptNo(value: string) {
 }
 
 function getBookingPaymentLabel(tx: BookingRecord) {
+  if (Array.isArray(tx.paymentBreakdown) && tx.paymentBreakdown.length > 0) {
+    return tx.paymentBreakdown
+      .map((entry) => `${entry.nights} night${entry.nights === 1 ? "" : "s"} ${entry.method}`)
+      .join(" / ");
+  }
+
   if (tx.payment === "credit") {
     return tx.status === "credit" ? "pending" : "unassigned";
   }
