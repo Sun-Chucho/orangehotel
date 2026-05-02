@@ -11,13 +11,14 @@ const ROLE_MANIFESTS = {
     background_color: "#fff7ed",
   },
   director: {
-    name: "Orange Hotel Director",
-    short_name: "OH Director",
-    start_url: "/MD",
-    id: "/MD",
-    description: "Orange Hotel managing director login and dashboard entry point.",
+    name: "Orange Hotel MD Dashboard",
+    short_name: "Orange MD",
+    start_url: "/MD?source=pwa",
+    scope: "/",
+    id: "/orange-hotel-md-dashboard",
+    description: "Orange Hotel managing director mobile dashboard.",
     theme_color: "#065f46",
-    background_color: "#ecfdf5",
+    background_color: "#f4f7f2",
   },
   inventory: {
     name: "Orange Hotel Inventory",
@@ -72,10 +73,13 @@ export async function GET(
     JSON.stringify({
       ...manifest,
       display: "standalone",
+      display_override: ["standalone", "minimal-ui"],
       start_url: manifest.start_url,
-      scope: manifest.start_url,
+      scope: "scope" in manifest ? manifest.scope : manifest.start_url,
       background_color: manifest.background_color,
       theme_color: manifest.theme_color,
+      categories: ["business", "productivity"],
+      prefer_related_applications: false,
       icons: [
         {
           src: "/icon-192.png",
@@ -86,6 +90,7 @@ export async function GET(
           src: "/icon-512.png",
           sizes: "512x512",
           type: "image/png",
+          purpose: "any maskable",
         },
       ],
     }),

@@ -158,7 +158,7 @@ export default function BookingPage() {
   useEffect(() => {
     const applyCashierSnapshot = (incomingRooms?: Room[]) => {
       const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
-      const normalizedTransactions = snapshot.transactions.map((tx) => ({
+      const normalizedTransactions: BookingRecord[] = snapshot.transactions.map((tx): BookingRecord => ({
           ...tx,
           status: tx.status === "credit" || tx.status === "checked-out" ? tx.status : "completed",
           checkedBy: tx.checkedBy || (tx.id.startsWith("hist-") ? tx.checkedBy : "Default"),

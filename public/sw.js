@@ -1,4 +1,4 @@
-const CACHE_NAME = "orange-hotel-shell-v2";
+const CACHE_NAME = "orange-hotel-shell-v3";
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -14,6 +14,7 @@ self.addEventListener("fetch", (event) => {
   // Always prefer fresh app code so deployed fixes are not trapped behind stale caches.
   if (
     request.destination === "document" ||
+    request.destination === "manifest" ||
     request.destination === "script" ||
     request.destination === "style" ||
     request.url.includes("/_next/")

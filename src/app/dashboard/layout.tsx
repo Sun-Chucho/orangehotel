@@ -13,7 +13,7 @@ import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
 import { readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Search, User, Clock, Menu } from "lucide-react";
+import { BarChart3, Bell, Home, Hotel, Search, User, Clock, Menu, WalletCards } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,12 @@ import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import { readActiveSessionUsername, readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeActiveSessionUsername } from "@/app/lib/login-profiles";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
+const DIRECTOR_MOBILE_NAV = [
+  { label: "Home", href: "/dashboard", icon: Home },
+  { label: "Rooms", href: "/dashboard/rooms", icon: Hotel },
+  { label: "Payments", href: "/dashboard/payments", icon: WalletCards },
+  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+] as const;
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v3";
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
@@ -851,10 +857,15 @@ export default function DashboardLayout({
     }
   }, [mounted, pathname, role, router]);
 
+  const isDirector = role === "director";
+  const directorCurrentLabel =
+    DIRECTOR_MOBILE_NAV.find((item) => item.href === pathname)?.label ??
+    (pathname.includes("/inventory") ? "Stock" : pathname.includes("/settings") ? "Settings" : "Dashboard");
+
   if (!mounted) return null;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className={cn("flex min-h-screen bg-background", isDirector && "bg-[#f4f7f2] md:bg-background")}>
       <aside
         className={cn(
           "fixed left-0 top-0 z-50 h-screen w-64 transition-transform duration-300",
@@ -873,17 +884,31 @@ export default function DashboardLayout({
       )}
       
       <div className={cn("flex-1 flex flex-col transition-[margin] duration-300", sidebarOpen ? "md:ml-64" : "md:ml-0")}>
-        <header className="h-16 bg-white border-b sticky top-0 z-30 flex items-center justify-between px-8 shadow-sm">
-          <div className="flex items-center gap-4 w-full md:w-1/3">
+        <header
+          className={cn(
+            "h-16 bg-white border-b sticky top-0 z-30 flex items-center justify-between px-8 shadow-sm",
+            isDirector && "h-[68px] border-0 bg-[#0f1712] px-4 text-white shadow-lg shadow-black/10 md:h-16 md:border-b md:bg-white md:px-8 md:text-foreground md:shadow-sm",
+          )}
+        >
+          <div className={cn("flex items-center gap-4 w-full md:w-1/3", isDirector && "w-auto min-w-0")}>
             <button
               type="button"
               onClick={() => setSidebarOpen((current) => !current)}
               aria-label="Toggle sidebar"
-              className="h-9 w-9 rounded-md border border-input flex items-center justify-center hover:bg-muted transition-colors"
+              className={cn(
+                "h-9 w-9 rounded-md border border-input flex items-center justify-center hover:bg-muted transition-colors",
+                isDirector && "shrink-0 border-white/15 bg-white/10 hover:bg-white/15 md:border-input md:bg-transparent md:hover:bg-muted",
+              )}
             >
               <Menu className="w-4 h-4" />
             </button>
-            <div className="relative w-full max-w-sm">
+            {isDirector && (
+              <div className="min-w-0 text-left md:hidden">
+                <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-emerald-200/80">Orange MD</p>
+                <p className="truncate text-sm font-black uppercase tracking-tight">{directorCurrentLabel}</p>
+              </div>
+            )}
+            <div className={cn("relative w-full max-w-sm", isDirector && "hidden md:block")}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 placeholder="Search resources..." 
@@ -892,14 +917,14 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className={cn("flex items-center gap-6", isDirector && "gap-2 md:gap-6")}>
             {shift && (
               <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-primary text-primary px-2">
                 <Clock className="w-3 h-3 mr-1" /> {shift}
               </Badge>
             )}
             
-            <div className="flex items-center gap-4 text-muted-foreground">
+            <div className={cn("flex items-center gap-4 text-muted-foreground", isDirector && "hidden md:flex")}>
               <SyncStatusIndicator />
               <button className="relative p-2 hover:bg-muted rounded-full transition-colors">
                 <Bell className="w-5 h-5" />
@@ -907,7 +932,7 @@ export default function DashboardLayout({
               </button>
             </div>
             
-            <div className="flex items-center gap-3 border-l pl-6">
+            <div className={cn("flex items-center gap-3 border-l pl-6", isDirector && "border-l-0 pl-0 md:border-l md:pl-6")}>
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold leading-none">{activeUsername || role}</p>
                 <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase tracking-widest">Username</p>
@@ -916,13 +941,13 @@ export default function DashboardLayout({
                 <p className="text-sm font-black leading-none uppercase tracking-tight">{role}</p>
                 <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase tracking-widest">Active Session</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-white shadow-lg">
+              <div className={cn("w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-white shadow-lg", isDirector && "rounded-lg bg-white/10 ring-1 ring-white/15 md:bg-secondary md:ring-0")}>
                 <User className="w-5 h-5" />
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="h-9 text-[10px] font-black uppercase tracking-widest"
+                className={cn("h-9 text-[10px] font-black uppercase tracking-widest", isDirector && "hidden md:inline-flex")}
                 onClick={() => {
                   setUsernameDraft(activeUsername || role);
                   setUsernameDialogOpen(true);
@@ -934,10 +959,34 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className="flex-1 p-8">
+        <main className={cn("flex-1 p-8", isDirector && "p-4 pb-28 md:p-8")}>
           {children}
         </main>
       </div>
+
+      {isDirector && (
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0f1712]/95 px-3 pb-3 pt-2 text-white shadow-[0_-12px_30px_rgba(0,0,0,0.18)] backdrop-blur md:hidden">
+          <div className="grid grid-cols-4 gap-1">
+            {DIRECTOR_MOBILE_NAV.map((item) => {
+              const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+              return (
+                <button
+                  key={item.href}
+                  type="button"
+                  onClick={() => router.push(item.href)}
+                  className={cn(
+                    "flex h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-black uppercase tracking-tight text-white/55 transition-colors",
+                    active && "bg-white text-[#0f1712]",
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
 
       <Dialog open={usernameDialogOpen} onOpenChange={setUsernameDialogOpen}>
         <DialogContent className="sm:max-w-md">

@@ -63,6 +63,7 @@ const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
   const router = useRouter();
+  const logoutPath = role === "director" ? "/MD" : "/";
   
   const handleNavigate = () => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -176,7 +177,7 @@ export function SidebarNav({ role }: { role: Role }) {
         <button 
           onClick={() => {
             localStorage.clear();
-            window.location.href = '/';
+            window.location.href = logoutPath;
           }}
           className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors font-bold text-xs uppercase tracking-widest"
         >

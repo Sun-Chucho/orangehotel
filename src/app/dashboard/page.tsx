@@ -76,7 +76,12 @@ export default function OverviewPage() {
       const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
       const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
       const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
-      setRooms(deriveRoomsStateFromBookings(cashierSnapshot.transactions, readRoomsState()));
+      setRooms(
+        deriveRoomsStateFromBookings(
+          cashierSnapshot.transactions.filter((tx): tx is CashierTransaction & { roomNumber: string } => Boolean(tx.roomNumber)),
+          readRoomsState(),
+        ),
+      );
 
       if (savedRole) setRole(savedRole);
       if (savedShift) setShift(savedShift);
@@ -158,13 +163,13 @@ export default function OverviewPage() {
   if (!mounted) return null;
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className={cn("space-y-8", isDirector && "space-y-5 md:space-y-8")}>
+      <header className={cn("flex flex-col md:flex-row md:items-end justify-between gap-4", isDirector && "rounded-lg border border-black/5 bg-white p-4 shadow-sm md:border-0 md:bg-transparent md:p-0 md:shadow-none")}>
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">
+          <h1 className={cn("text-3xl font-black tracking-tight uppercase", isDirector && "text-2xl md:text-3xl")}>
             {isDirector ? "Executive Overview" : "Operations Overview"}
           </h1>
-          <p className="text-muted-foreground uppercase font-bold text-xs tracking-wider">
+          <p className={cn("text-muted-foreground uppercase font-bold text-xs tracking-wider", isDirector && "mt-1 text-[10px] leading-5")}>
             {isDirector ? "Read-only strategic dashboard for managing director" : `Active performance tracking for ${role}`}
           </p>
         </div>
@@ -203,12 +208,12 @@ export default function OverviewPage() {
         </section>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6", isDirector && "grid-cols-2 gap-3 md:gap-6")}>
         {stats.map((stat) => (
-          <Card key={stat.label} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white overflow-hidden group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors")}>
+          <Card key={stat.label} className={cn("border-none shadow-sm hover:shadow-md transition-shadow bg-white overflow-hidden group", isDirector && "rounded-lg border border-black/5 shadow-sm")}>
+            <CardContent className={cn("p-6", isDirector && "p-4")}>
+              <div className={cn("flex items-center justify-between mb-4", isDirector && "mb-3")}>
+                <div className={cn("p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors", isDirector && "bg-[#eef4ed]")}>
                   <stat.icon className={cn("w-5 h-5", stat.color)} />
                 </div>
                 <div className={cn("flex items-center text-xs font-bold", stat.trendUp ? "text-green-500" : "text-destructive")}>
@@ -218,7 +223,7 @@ export default function OverviewPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                <h3 className="text-2xl font-black mt-1 tracking-tight">{stat.value}</h3>
+                <h3 className={cn("text-2xl font-black mt-1 tracking-tight", isDirector && "break-words text-lg leading-tight md:text-2xl")}>{stat.value}</h3>
               </div>
             </CardContent>
           </Card>
@@ -226,18 +231,18 @@ export default function OverviewPage() {
       </div>
 
       {isDirector && (
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="rounded-lg border border-black/5 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-black uppercase tracking-tight">Managing Director Snapshot</CardTitle>
             <CardDescription>Strategic indicators across revenue, occupancy, and receivables</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
               {executiveStats.map((metric) => (
-                <div key={metric.label} className="rounded-xl border p-4 bg-muted/10">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{metric.label}</p>
-                  <p className="text-2xl font-black mt-2">{metric.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{metric.note}</p>
+                <div key={metric.label} className="rounded-lg border bg-[#f7faf6] p-3 md:p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground md:text-[10px]">{metric.label}</p>
+                  <p className="mt-2 break-words text-lg font-black leading-tight md:text-2xl">{metric.value}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-muted-foreground md:text-xs">{metric.note}</p>
                 </div>
               ))}
             </div>
@@ -248,7 +253,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
-            <Card className="shadow-sm border-none bg-white">
+            <Card className={cn("shadow-sm border-none bg-white", isDirector && "rounded-lg border border-black/5")}>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-black uppercase tracking-tight">Room Status</CardTitle>
@@ -284,8 +289,7 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-3xl">
-          <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary rounded-full blur-3xl opacity-20" />
+        <Card className={cn("bg-black text-white shadow-lg overflow-hidden relative border-none rounded-lg", isDirector && "bg-[#0f1712]")}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2 font-black uppercase tracking-tight">Activity Log</CardTitle>
             <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Updates</CardDescription>

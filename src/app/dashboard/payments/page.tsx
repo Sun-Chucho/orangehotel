@@ -176,7 +176,7 @@ export default function PaymentsPage() {
         490,
       );
 
-      const correctedBookingTransactions = cashierSnapshot.transactions.map((tx) => {
+      const correctedBookingTransactions: BookingRecord[] = cashierSnapshot.transactions.map((tx): BookingRecord => {
         const forcedMethod = RECEPTION_METHOD_FIXES.get(normalizeReceiptNo(tx.receiptNo));
         const fallbackMethod =
           tx.status !== "credit" && (!tx.payment || tx.payment === "credit") ? "cash" : tx.payment;

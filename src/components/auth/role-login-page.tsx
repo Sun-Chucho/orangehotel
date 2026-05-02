@@ -4,7 +4,7 @@ import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Coffee, Lock, Package, ShieldCheck, ShoppingCart, Sun, Moon, User, Utensils } from "lucide-react";
+import { Building2, Coffee, Download, Lock, Package, ShieldCheck, ShoppingCart, Smartphone, Sun, Moon, User, Utensils } from "lucide-react";
 import { Role, USERS } from "@/app/lib/mock-data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,10 @@ interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
+
+type NavigatorWithStandalone = Navigator & {
+  standalone?: boolean;
+};
 
 const ROLE_CONFIG: Record<Role, { label: string; username: string; description: string; color: string; destination: string; icon: typeof ShieldCheck }> = {
   manager: {
@@ -82,10 +86,15 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const router = useRouter();
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
+  const isDirector = role === "director";
   const selectableUsers = role === "cashier" ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name })) : role === "barista" ? [...BARISTA_USERS] : [];
   const [username, setUsername] = useState(role === "barista" ? BARISTA_USERS[0].name : config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installFeedback, setInstallFeedback] = useState("");
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
+  const [isIosDevice, setIsIosDevice] = useState(false);
   const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
 
   useEffect(() => {
@@ -118,11 +127,58 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   }, [config.username, role]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    if (!isDirector || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
-    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
     return () => undefined;
-  }, []);
+  }, [isDirector]);
+
+  useEffect(() => {
+    if (!isDirector || typeof window === "undefined") return;
+
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as NavigatorWithStandalone).standalone === true;
+    setIsStandaloneApp(standalone);
+    setIsIosDevice(/iphone|ipad|ipod/i.test(navigator.userAgent));
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+      setInstallFeedback("");
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+      setIsStandaloneApp(true);
+      setInstallFeedback("MD application installed.");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, [isDirector]);
+
+  const installDirectorApp = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      setInstallPrompt(null);
+      setInstallFeedback(choice.outcome === "accepted" ? "MD application installed." : "Installation dismissed.");
+      return;
+    }
+
+    if (isIosDevice) {
+      setInstallFeedback("On iPhone, open Share and choose Add to Home Screen.");
+      return;
+    }
+
+    setInstallFeedback("Open this MD login in Chrome or Edge on your phone, then use the browser install option.");
+  };
 
   const handleLogin = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -165,10 +221,10 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-        <div className="mb-12">
-          <div className="w-40 h-40 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl mb-4 overflow-hidden p-4">
+    <div className={cn("min-h-screen flex flex-col", isDirector ? "bg-[#f4f7f2]" : "bg-background")}>
+      <div className={cn("flex-1 flex flex-col items-center justify-center p-6 text-center", isDirector && "px-4 py-8")}>
+        <div className={cn("mb-12", isDirector && "mb-6")}>
+          <div className={cn("w-40 h-40 bg-white flex items-center justify-center mx-auto shadow-2xl mb-4 overflow-hidden p-4", isDirector ? "h-28 w-28 rounded-lg shadow-xl" : "rounded-3xl")}>
             {logo && (
               <Image
                 src={logo.imageUrl}
@@ -186,9 +242,9 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
           </p>
         </div>
 
-        <div className="w-full max-w-md">
-          <form className="bg-white border p-8 rounded-2xl shadow-sm text-left" onSubmit={handleLogin}>
-            <div className={`${config.color} w-14 h-14 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-black/5`}>
+        <div className={cn("w-full max-w-md", isDirector && "max-w-sm")}>
+          <form className={cn("bg-white border p-8 shadow-sm text-left", isDirector ? "rounded-lg border-black/10 p-5 shadow-xl shadow-black/5" : "rounded-2xl")} onSubmit={handleLogin}>
+            <div className={`${config.color} w-14 h-14 rounded-lg flex items-center justify-center mb-6 shadow-lg shadow-black/5`}>
               <config.icon className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-black mb-2 tracking-tight uppercase">{config.label}</h1>
@@ -233,6 +289,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                     onChange={(event) => setUsername(event.target.value)}
                     className="pl-10 h-12"
                     placeholder="Enter username"
+                    autoComplete="username"
                   />
                 </div>
               </div>
@@ -247,6 +304,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                     onChange={(event) => setPassword(event.target.value)}
                     className="pl-10 h-12"
                     placeholder="Enter password"
+                    autoComplete="current-password"
                   />
                 </div>
               </div>
@@ -283,10 +341,42 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
             <Button
               type="submit"
-              className="w-full bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest h-14 rounded-xl shadow-lg shadow-primary/20"
+              className={cn("w-full bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest h-14 shadow-lg shadow-primary/20", isDirector ? "rounded-lg" : "rounded-xl")}
             >
               Enter Dashboard
             </Button>
+
+            {isDirector && !isStandaloneApp && (
+              <div className="mt-4 rounded-lg border border-emerald-900/10 bg-[#f0f6ef] p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-800 text-white">
+                    <Smartphone className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-widest text-emerald-950">Install MD Application</p>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-emerald-950/70">
+                      {installPrompt
+                        ? "Install this managing director profile as a phone app."
+                        : isIosDevice
+                          ? "Use the phone share menu to add this MD profile to the home screen."
+                          : "Use this tab from the MD login on a supported mobile browser."}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 h-11 w-full rounded-lg border-emerald-800 bg-white text-[11px] font-black uppercase tracking-widest text-emerald-900 hover:bg-emerald-50"
+                  onClick={() => void installDirectorApp()}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {installPrompt ? "Install Application" : isIosDevice ? "Add To Home Screen" : "Install MD App"}
+                </Button>
+                {installFeedback && (
+                  <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-900/70">{installFeedback}</p>
+                )}
+              </div>
+            )}
           </form>
         </div>
       </div>

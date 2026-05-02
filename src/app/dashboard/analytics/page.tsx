@@ -211,7 +211,8 @@ export default function AnalyticsPage() {
     const totalGuests = bookings.filter((booking) => {
       if (booking.status === "credit") return false;
       if (!booking.createdAt) return false;
-      return history.some((row) => row.date === toDayKey(booking.createdAt));
+      const bookingDay = toDayKey(booking.createdAt);
+      return history.some((row) => row.date === bookingDay);
     }).length;
     const bookingFreq = history.length === 0 ? 0 : Number((totalGuests / history.length).toFixed(1));
 
@@ -337,18 +338,18 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center text-white shadow-lg">
+          <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center text-white shadow-lg">
             <BarChart3 className="w-7 h-7 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight uppercase">Performance Analytics</h1>
+            <h1 className="text-2xl font-black tracking-tight uppercase md:text-3xl">Performance Analytics</h1>
             <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Live business intelligence and trends</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Tabs value={range} onValueChange={(value) => setRange(value as RangeKey)}>
             <TabsList className="h-10">
               <TabsTrigger value="7d" className="text-[10px] font-black uppercase tracking-widest">7D</TabsTrigger>
@@ -362,10 +363,10 @@ export default function AnalyticsPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white">
-            <CardContent className="p-6">
+          <Card key={stat.label} className="rounded-lg border-none bg-white shadow-sm transition-shadow hover:shadow-md">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between mb-2">
                 <div className="p-2 rounded-lg bg-muted/50 text-primary">
                   <stat.icon className="w-5 h-5" />
@@ -373,19 +374,19 @@ export default function AnalyticsPage() {
                 <span className="text-xs font-black text-muted-foreground">{stat.trend}</span>
               </div>
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
-              <h4 className="text-xl font-black mt-1 tracking-tight">{stat.value}</h4>
+              <h4 className="mt-1 break-words text-lg font-black tracking-tight md:text-xl">{stat.value}</h4>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Card className="border-none shadow-sm bg-white">
+      <Card className="rounded-lg border-none bg-white shadow-sm">
         <CardHeader>
           <CardTitle className="text-xl font-black uppercase tracking-tight">F&amp;B Control Sheet Metrics</CardTitle>
           <CardDescription>Live KPIs from beverage cost, recipe costing, and stock-sales tracking sheets</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <div className="rounded-xl border p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Beverage Cost %</p>
               <p className="text-2xl font-black mt-1">{fnbControlMetrics.beverageCostPct.toFixed(1)}%</p>
@@ -409,13 +410,13 @@ export default function AnalyticsPage() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-sm border-none bg-white">
+        <Card className="rounded-lg border-none bg-white shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Trend</CardTitle>
             <CardDescription>Actual room, kitchen, and barista revenue for the selected range</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="h-[350px] w-full">
+            <div className="h-[260px] w-full md:h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={history}>
                   <defs>
@@ -439,13 +440,13 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-none bg-white">
+        <Card className="rounded-lg border-none bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Mix</CardTitle>
             <CardDescription>Current distribution across live departments and credit exposure</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
-            <div className="h-[280px] w-full">
+            <div className="h-[220px] w-full md:h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={8} dataKey="value" stroke="none">
