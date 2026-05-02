@@ -1,4 +1,4 @@
-const CACHE_NAME = "orange-hotel-shell-v3";
+const CACHE_NAME = "orange-hotel-shell-v4";
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

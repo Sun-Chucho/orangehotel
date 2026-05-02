@@ -95,6 +95,8 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [installFeedback, setInstallFeedback] = useState("");
   const [isStandaloneApp, setIsStandaloneApp] = useState(false);
   const [isIosDevice, setIsIosDevice] = useState(false);
+  const [isAndroidDevice, setIsAndroidDevice] = useState(false);
+  const [serviceWorkerReady, setServiceWorkerReady] = useState(false);
   const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
 
   useEffect(() => {
@@ -129,7 +131,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   useEffect(() => {
     if (!isDirector || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
-    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+    void navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .then(() => navigator.serviceWorker.ready)
+      .then(() => setServiceWorkerReady(true))
+      .catch(() => setServiceWorkerReady(false));
     return () => undefined;
   }, [isDirector]);
 
@@ -141,6 +147,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       (navigator as NavigatorWithStandalone).standalone === true;
     setIsStandaloneApp(standalone);
     setIsIosDevice(/iphone|ipad|ipod/i.test(navigator.userAgent));
+    setIsAndroidDevice(/android/i.test(navigator.userAgent));
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -150,8 +157,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     const handleAppInstalled = () => {
       setInstallPrompt(null);
-      setIsStandaloneApp(true);
-      setInstallFeedback("MD application installed.");
+      setInstallFeedback("Installed. Look for Orange MD on your phone home screen or app list.");
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -168,17 +174,34 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
       setInstallPrompt(null);
-      setInstallFeedback(choice.outcome === "accepted" ? "MD application installed." : "Installation dismissed.");
+      setInstallFeedback(
+        choice.outcome === "accepted"
+          ? "Installing. Look for Orange MD on your phone home screen or app list."
+          : "Installation dismissed.",
+      );
       return;
     }
 
     if (isIosDevice) {
-      setInstallFeedback("On iPhone, open Share and choose Add to Home Screen.");
+      setInstallFeedback("On iPhone, open this page in Safari, tap Share, then Add to Home Screen.");
       return;
     }
 
-    setInstallFeedback("Open this MD login in Chrome or Edge on your phone, then use the browser install option.");
+    if (isAndroidDevice) {
+      setInstallFeedback("On Android, open Chrome menu, choose Install app, then look for Orange MD.");
+      return;
+    }
+
+    setInstallFeedback("Use your browser menu to install this page as Orange MD.");
   };
+
+  const installButtonText = installPrompt
+    ? "Install Application"
+    : isIosDevice
+      ? "Show iPhone Steps"
+      : isAndroidDevice
+        ? "Show Android Steps"
+        : "Show Install Steps";
 
   const handleLogin = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -359,9 +382,16 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                         ? "Install this managing director profile as a phone app."
                         : isIosDevice
                           ? "Use the phone share menu to add this MD profile to the home screen."
-                          : "Use this tab from the MD login on a supported mobile browser."}
+                          : isAndroidDevice
+                            ? "Use the Chrome install option so Orange MD appears with your phone apps."
+                            : "Use this MD login on a supported mobile browser."}
                     </p>
                   </div>
+                </div>
+                <div className="mt-3 rounded-lg border border-emerald-900/10 bg-white/70 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-900/70">
+                    {serviceWorkerReady ? "App installer ready" : "Preparing app installer"}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -370,7 +400,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                   onClick={() => void installDirectorApp()}
                 >
                   <Download className="mr-2 h-4 w-4" />
-                  {installPrompt ? "Install Application" : isIosDevice ? "Add To Home Screen" : "Install MD App"}
+                  {installButtonText}
                 </Button>
                 {installFeedback && (
                   <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-900/70">{installFeedback}</p>

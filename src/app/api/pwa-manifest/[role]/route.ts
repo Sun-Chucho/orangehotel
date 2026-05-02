@@ -80,11 +80,13 @@ export async function GET(
       theme_color: manifest.theme_color,
       categories: ["business", "productivity"],
       prefer_related_applications: false,
+      orientation: "portrait-primary",
       icons: [
         {
           src: "/icon-192.png",
           sizes: "192x192",
           type: "image/png",
+          purpose: "any maskable",
         },
         {
           src: "/icon-512.png",
