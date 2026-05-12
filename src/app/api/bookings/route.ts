@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { appendWebsiteBookingServer } from "@/app/lib/website-bookings-server";
 import { type WebsiteBookingBackendSyncStatus, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
+import { createNgeniusPayPageOrder } from "@/app/lib/ngenius";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,7 @@ const bookingSchema = z.object({
   specialRequest: z.string().trim().max(400).optional().default(""),
   website: z.string().optional(),
   formStartedAt: z.number().int().nonnegative().optional(),
+  checkoutAction: z.enum(["reservation", "payment"]).optional().default("reservation"),
 });
 
 const getClientIp = (request: NextRequest) => {
@@ -67,6 +69,15 @@ const isRateLimited = (ip: string) => {
 
 const asUtcDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const createBookingReference = () => `OH-${Date.now()}`;
+
+function getPublicBaseUrl(request: NextRequest) {
+  const configured = process.env.NGENIUS_SITE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+  const host = getHost(request);
+  return host ? `${forwardedProto}://${host}` : new URL(request.url).origin;
+}
 
 function getHost(request: NextRequest) {
   return request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
@@ -168,10 +179,13 @@ export async function POST(request: NextRequest) {
     const totalAmount = nights * pricePerNight;
     const createdAt = new Date().toISOString();
     const backendUrl = process.env.BOOKING_BACKEND_URL?.trim();
+    const paymentEnabled = data.checkoutAction === "payment" && process.env.NGENIUS_PAYMENT_ENABLED !== "false";
     let backendSyncStatus: WebsiteBookingBackendSyncStatus = backendUrl ? "pending" : "failed";
     let backendSyncError: string | null = backendUrl ? null : "Booking backend is not configured.";
     let bookingReference = createBookingReference();
     let warning: string | null = backendUrl ? null : "Booking saved for reception follow-up, but backend sync is not configured.";
+    let paymentOrderReference: string | null = null;
+    let paymentUrl: string | null = null;
 
     const payload = {
       fullName: data.fullName,
@@ -234,6 +248,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (paymentEnabled) {
+      const baseUrl = getPublicBaseUrl(request);
+      const paymentOrder = await createNgeniusPayPageOrder({
+        amount: {
+          currencyCode: process.env.NGENIUS_CURRENCY?.trim() || "TZS",
+          value: totalAmount * 100,
+        },
+        emailAddress: data.email,
+        bookingReference,
+        description: `${data.roomType} room, ${nights} night${nights === 1 ? "" : "s"}`,
+        redirectUrl: `${baseUrl}/payment/return?booking=${encodeURIComponent(bookingReference)}`,
+        cancelUrl: `${baseUrl}/payment/cancel?booking=${encodeURIComponent(bookingReference)}`,
+      });
+
+      paymentOrderReference = paymentOrder.orderReference;
+      paymentUrl = paymentOrder.paymentUrl;
+    }
+
     const websiteBooking: WebsiteBookingRecord = {
       id: `web-${Date.now()}`,
       bookingReference,
@@ -253,6 +285,12 @@ export async function POST(request: NextRequest) {
       status: "new",
       backendSyncStatus,
       backendSyncError,
+      paymentStatus: paymentEnabled ? "pending" : "not_started",
+      paymentProvider: paymentEnabled ? "ngenius" : undefined,
+      paymentOrderReference,
+      paymentUrl,
+      paymentGatewayState: paymentEnabled ? "STARTED" : null,
+      paymentCheckedAt: null,
       createdAt,
       receptionistSeenAt: null,
     };
@@ -269,6 +307,10 @@ export async function POST(request: NextRequest) {
         nights,
         pricePerNight,
         totalAmount,
+        checkoutAction: data.checkoutAction,
+        paymentStatus: websiteBooking.paymentStatus,
+        paymentOrderReference,
+        paymentUrl,
       },
       { status: backendSyncStatus === "synced" ? 200 : 202, headers: { "Cache-Control": "no-store" } }
     );

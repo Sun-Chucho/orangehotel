@@ -8,6 +8,7 @@ const FIREBASE_STORAGE_ROOT = "orangeHotel/storage";
 export type WebsiteBookingStatus = "new" | "seen";
 export type WebsiteRoomType = "standard" | "platinum";
 export type WebsiteBookingBackendSyncStatus = "synced" | "pending" | "failed";
+export type WebsiteBookingPaymentStatus = "pending" | "paid" | "failed" | "cancelled" | "not_started";
 
 export interface WebsiteBookingRecord {
   id: string;
@@ -28,6 +29,12 @@ export interface WebsiteBookingRecord {
   status: WebsiteBookingStatus;
   backendSyncStatus: WebsiteBookingBackendSyncStatus;
   backendSyncError: string | null;
+  paymentStatus?: WebsiteBookingPaymentStatus;
+  paymentProvider?: "ngenius";
+  paymentOrderReference?: string | null;
+  paymentUrl?: string | null;
+  paymentGatewayState?: string | null;
+  paymentCheckedAt?: string | null;
   createdAt: string;
   receptionistSeenAt: string | null;
 }

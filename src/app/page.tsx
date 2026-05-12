@@ -12,6 +12,7 @@ const INVENTORY = {
 } as const;
 
 type RoomType = "standard" | "platinum";
+type CheckoutAction = "reservation" | "payment";
 type HighlightStory = {
   title: string;
   tag: string;
@@ -293,7 +294,7 @@ export default function Home() {
   const [guests, setGuests] = useState("1");
   const [specialRequest, setSpecialRequest] = useState("");
   const [website, setWebsite] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<CheckoutAction | null>(null);
   const [error, setError] = useState("");
   const [successRef, setSuccessRef] = useState("");
   const [successNote, setSuccessNote] = useState("");
@@ -354,8 +355,7 @@ export default function Home() {
   const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
   const experienceImages = [MAIN_ROOM_IMAGE, RESTAURANT_IMAGES[1], LUNCH_IMAGES[4], BAR_IMAGES[1]];
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submitBooking = async (checkoutAction: CheckoutAction) => {
     setError("");
     setSuccessRef("");
     setSuccessNote("");
@@ -365,7 +365,7 @@ export default function Home() {
       return;
     }
 
-    setLoading(true);
+    setLoadingAction(checkoutAction);
     try {
       const response = await fetch("/api/bookings", {
         method: "POST",
@@ -381,6 +381,7 @@ export default function Home() {
           specialRequest,
           website,
           formStartedAt,
+          checkoutAction,
         }),
       });
 
@@ -391,7 +392,17 @@ export default function Home() {
       }
 
       setSuccessRef(result.bookingReference ?? "REQUEST-RECEIVED");
-      setSuccessNote(result.warning ?? "Your booking was received and sent to reception.");
+      setSuccessNote(
+        result.paymentUrl
+          ? "Redirecting to secure sandbox payment..."
+          : checkoutAction === "reservation"
+            ? "Your reservation was received and sent to reception."
+            : result.warning ?? "Your booking was received and sent to reception.",
+      );
+      if (typeof result.paymentUrl === "string" && result.paymentUrl.length > 0) {
+        window.location.assign(result.paymentUrl);
+        return;
+      }
       setFullName("");
       setEmail("");
       setPhone("");
@@ -405,8 +416,17 @@ export default function Home() {
     } catch {
       setError("We could not reach the booking server. Please try again.");
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const submitter = "submitter" in event.nativeEvent
+      ? (event.nativeEvent.submitter as HTMLButtonElement | null)
+      : null;
+    const checkoutAction = submitter?.value === "payment" ? "payment" : "reservation";
+    await submitBooking(checkoutAction);
   };
 
   const openBookingPopup = () => {
@@ -524,7 +544,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-14">
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
         <div className="mb-8 text-center">
           <h2 className="font-headline text-4xl">What We Offer</h2>
           <p className="mt-2 text-sm text-black/65">Premium hotel accommodation, restaurant dining, and bar experiences in one destination.</p>
@@ -545,8 +565,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-14">
-        <div className="relative h-[360px] overflow-hidden rounded-sm">
+      <section className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 sm:pb-14">
+        <div className="relative min-h-[460px] overflow-hidden rounded-sm sm:h-[360px] sm:min-h-0">
           <LandingImage
             key={FEATURED_EXPERIENCES[restaurantShowcaseIndex].image}
             src={FEATURED_EXPERIENCES[restaurantShowcaseIndex].image}
@@ -556,13 +576,13 @@ export default function Home() {
             className="object-cover transition-all duration-[2800ms] ease-in-out"
           />
           <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
-          <div className="relative flex h-full items-center justify-between gap-4 px-4 text-white md:px-8">
-            <div className="max-w-xl rounded-[28px] border border-white/10 bg-black/25 p-6 backdrop-blur-sm md:p-8">
+          <div className="relative flex h-full flex-col items-start justify-center gap-4 px-4 py-8 text-white sm:flex-row sm:items-center sm:justify-between md:px-8">
+            <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/40 p-5 backdrop-blur-sm sm:rounded-[28px] md:p-8">
               <p className="text-xs uppercase tracking-[0.18em] text-orange-200">Featured Experience</p>
               <p className="mt-4 text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">
                 {FEATURED_EXPERIENCES[restaurantShowcaseIndex].eyebrow}
               </p>
-              <h2 className="mt-3 font-headline text-4xl">
+              <h2 className="mt-3 font-headline text-3xl leading-tight sm:text-4xl">
                 {FEATURED_EXPERIENCES[restaurantShowcaseIndex].title}
               </h2>
               <p className="mt-4 text-sm text-white/85">
@@ -593,7 +613,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-14">
+      <section className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 sm:pb-14">
         <h2 className="font-headline text-4xl">Latest Highlights</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-[1.3fr_0.8fr_0.9fr]">
           {stories.map((story) => {
@@ -646,9 +666,9 @@ export default function Home() {
       </section>
 
       {activeStory ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md" onClick={() => setActiveStory(null)}>
-          <div className="grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-[#111111] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:grid-cols-[1.1fr_0.9fr]" onClick={(event) => event.stopPropagation()}>
-            <div className="relative min-h-[340px] md:min-h-[620px]">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/75 p-3 backdrop-blur-md sm:p-4" onClick={() => setActiveStory(null)}>
+          <div className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-[#111111] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] sm:rounded-[28px] md:grid-cols-[1.1fr_0.9fr]" onClick={(event) => event.stopPropagation()}>
+            <div className="relative min-h-[260px] sm:min-h-[340px] md:min-h-[620px]">
               <LandingImage
                 key={activeStory.images[activeStorySlide]}
                 src={activeStory.images[activeStorySlide]}
@@ -670,12 +690,12 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-col justify-between p-6 md:p-10">
+            <div className="flex flex-col justify-between p-5 sm:p-6 md:p-10">
               <div>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">{activeStory.tag}</p>
-                    <h3 className="mt-3 font-headline text-4xl leading-tight">{activeStory.title}</h3>
+                    <h3 className="mt-3 font-headline text-3xl leading-tight sm:text-4xl">{activeStory.title}</h3>
                   </div>
                   <button
                     type="button"
@@ -721,12 +741,12 @@ export default function Home() {
       ) : null}
 
       {showBookingPopup ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onClick={() => setShowBookingPopup(false)}>
-          <div className="w-full max-w-lg rounded-[28px] bg-[#121212] p-6 text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:p-8" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-md sm:p-4" onClick={() => setShowBookingPopup(false)}>
+          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#121212] p-5 text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] sm:rounded-[28px] sm:p-6 md:p-8" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Reservation Popup</p>
-                <h3 className="mt-3 font-headline text-4xl leading-tight">Book Your Stay At Orange Hotel</h3>
+                <h3 className="mt-3 font-headline text-3xl leading-tight sm:text-4xl">Book Your Stay At Orange Hotel</h3>
               </div>
               <button
                 type="button"
@@ -784,7 +804,7 @@ export default function Home() {
         </div>
       ) : null}
 
-      <section className="mx-auto max-w-6xl px-6 pb-14">
+      <section className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 sm:pb-14">
         <div className="relative overflow-hidden rounded-sm px-6 py-16 text-center text-white md:px-10">
           <LandingImage
             key={experienceImages[experienceShowcaseIndex]}
@@ -797,7 +817,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.48)_45%,rgba(245,124,0,0.28)_100%)]" />
           <div className="relative">
             <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Orange Experience</p>
-            <h2 className="mt-3 font-headline text-5xl">Rooms, Restaurant, And Bar</h2>
+            <h2 className="mt-3 font-headline text-3xl leading-tight sm:text-5xl">Rooms, Restaurant, And Bar</h2>
             <p className="mx-auto mt-4 max-w-2xl text-sm text-white/80">Book your stay, start with breakfast, enjoy lunch in the restaurant, and close the day with signature drinks at the bar.</p>
             <a href="#book" className="mt-8 inline-block border-b border-orange-300 pb-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
               Discover More
@@ -806,7 +826,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-14">
+      <section className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 sm:pb-14">
         <div className="grid overflow-hidden rounded-sm bg-[#3a3a3a] text-white md:grid-cols-3">
           <div className="relative min-h-[260px] px-8 py-12 text-center">
             <LandingImage src={MAIN_ROOM_IMAGE} alt="Orange Hotel luxury room" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
@@ -901,10 +921,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="book" className="mx-auto grid max-w-6xl gap-8 px-6 pb-16 md:grid-cols-[0.95fr_1.05fr]">
+      <section id="book" className="mx-auto grid max-w-6xl gap-6 px-4 pb-16 sm:px-6 md:grid-cols-[0.95fr_1.05fr] md:gap-8">
         <aside className="rounded-sm border border-black/15 bg-black p-8 text-white shadow-xl">
           <p className="text-xs uppercase tracking-[0.18em] text-orange-300">Booking Preview</p>
-          <h2 className="mt-3 font-headline text-4xl">Your Stay</h2>
+          <h2 className="mt-3 font-headline text-3xl sm:text-4xl">Your Stay</h2>
           <div className="mt-8 space-y-4 text-sm">
             <div className="rounded-sm border border-orange-300/25 bg-orange-500/10 px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-orange-200">
               Grand Opening price reduction is active on current website room offers
@@ -924,7 +944,7 @@ export default function Home() {
               <span className="text-white/70">Nights</span>
               <strong>{nights || 0}</strong>
             </div>
-            <div className="flex items-center justify-between text-base">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-base">
               <span className="font-semibold text-white/80">Estimated Total</span>
               <strong className="text-orange-300">{formatTzs(total)}</strong>
             </div>
@@ -941,8 +961,8 @@ export default function Home() {
           </div>
         </aside>
 
-        <form onSubmit={handleSubmit} className="rounded-sm border border-black/10 bg-white p-7 shadow-[0_16px_32px_rgba(0,0,0,0.08)] md:p-8">
-          <h2 className="font-headline text-4xl">Reserve Your Room</h2>
+        <form onSubmit={handleSubmit} className="rounded-sm border border-black/10 bg-white p-5 shadow-[0_16px_32px_rgba(0,0,0,0.08)] sm:p-7 md:p-8">
+          <h2 className="font-headline text-3xl sm:text-4xl">Reserve Your Room</h2>
           <p className="mt-2 text-sm text-black/60">Secure reservation form with instant submission to Orange Hotel booking backend.</p>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -969,7 +989,7 @@ export default function Home() {
             </label>
             <label className="text-sm font-semibold sm:col-span-2">
               Room type
-              <div className="mt-2 grid grid-cols-2 gap-3">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setRoomType("standard")}
@@ -1012,14 +1032,28 @@ export default function Home() {
             </p>
           ) : null}
 
-          <button
-            disabled={loading}
-            type="submit"
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 bg-black px-5 py-4 text-sm font-bold uppercase tracking-[0.15em] text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-            {loading ? "Submitting..." : "Securely Book Now"}
-          </button>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <button
+              disabled={loadingAction !== null}
+              type="submit"
+              name="checkoutAction"
+              value="reservation"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-black bg-white px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:border-orange-500 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loadingAction === "reservation" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+              {loadingAction === "reservation" ? "Saving..." : "Make Reservation"}
+            </button>
+            <button
+              disabled={loadingAction !== null}
+              type="submit"
+              name="checkoutAction"
+              value="payment"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 bg-black px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loadingAction === "payment" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+              {loadingAction === "payment" ? "Opening Payment..." : "Book Now"}
+            </button>
+          </div>
         </form>
       </section>
 
@@ -1038,10 +1072,10 @@ export default function Home() {
             <div className="mt-5 space-y-3">
               <a
                 href="mailto:orangehotelarusha@gmail.com"
-                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
+                className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 transition hover:border-orange-400/50 hover:bg-white/10 hover:text-white"
               >
                 <Mail className="h-4 w-4 text-orange-300" />
-                <span>orangehotelarusha@gmail.com</span>
+                <span className="min-w-0 break-words">orangehotelarusha@gmail.com</span>
               </a>
               <a
                 href="tel:+255702693911"
@@ -1104,28 +1138,28 @@ export default function Home() {
         </div>
       </footer>
 
-      <div className="fixed bottom-4 right-4 z-[120] flex flex-col items-end gap-3 md:bottom-6 md:right-6">
+      <div className="fixed bottom-3 right-3 z-[120] flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-2 sm:bottom-4 sm:right-4 md:bottom-6 md:right-6">
         <a
           href={WHATSAPP_LINK}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-3 rounded-full border border-white/20 bg-[#25D366] px-5 py-4 text-white shadow-[0_18px_44px_rgba(37,211,102,0.35)] transition hover:scale-105 hover:bg-[#1ebe5b]"
+          className="flex items-center gap-2 rounded-full border border-white/20 bg-[#25D366] p-3 text-white shadow-[0_18px_44px_rgba(37,211,102,0.35)] transition hover:scale-105 hover:bg-[#1ebe5b] sm:gap-3 sm:px-5 sm:py-4"
           aria-label="Open WhatsApp chat"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
             <WhatsAppIcon className="h-6 w-6" />
           </span>
-          <span className="text-left">
+          <span className="hidden text-left sm:block">
             <span className="block text-[10px] font-black uppercase tracking-[0.22em] text-white/80">Quick Message</span>
             <span className="block text-sm font-black uppercase tracking-[0.16em]">WhatsApp</span>
           </span>
         </a>
         {showChatWidget ? (
-          <div className="mb-3 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[26px] border border-black/10 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
+          <div className="mb-2 w-[min(360px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.18)] sm:mb-3 sm:rounded-[26px]">
             <div className="flex items-center justify-between bg-black px-5 py-4 text-white">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-300">Live Chat</p>
-                <p className="mt-1 font-headline text-2xl leading-none">Orange Hotel Support</p>
+                <p className="mt-1 font-headline text-xl leading-none sm:text-2xl">Orange Hotel Support</p>
               </div>
               <button
                 type="button"
@@ -1195,13 +1229,13 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setShowChatWidget((current) => !current)}
-          className="flex items-center gap-3 rounded-full border border-white/20 bg-orange-500 px-5 py-4 text-white shadow-[0_18px_44px_rgba(245,124,0,0.45)] transition hover:scale-105 hover:bg-orange-400"
+          className="flex items-center gap-2 rounded-full border border-white/20 bg-orange-500 p-3 text-white shadow-[0_18px_44px_rgba(245,124,0,0.45)] transition hover:scale-105 hover:bg-orange-400 sm:gap-3 sm:px-5 sm:py-4"
           aria-label="Open live chat"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
             <MessageCircle className="h-6 w-6" />
           </span>
-          <span className="text-left">
+          <span className="hidden text-left sm:block">
             <span className="block text-[10px] font-black uppercase tracking-[0.22em] text-white/75">Need Help?</span>
             <span className="block text-sm font-black uppercase tracking-[0.16em]">Live Chat</span>
           </span>
