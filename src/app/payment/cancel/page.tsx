@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { updateWebsiteBookingPaymentServer } from "@/app/lib/website-bookings-server";
 
 export default async function PaymentCancelPage({
   searchParams,
@@ -6,6 +7,10 @@ export default async function PaymentCancelPage({
   searchParams: Promise<{ booking?: string }>;
 }) {
   const params = await searchParams;
+  if (params.booking) {
+    await updateWebsiteBookingPaymentServer(params.booking, "cancelled", "CANCELLED_BY_RETURN");
+  }
+
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#f8f6f3] px-4 py-12 text-black">
       <section className="w-full max-w-xl rounded-sm border border-black/10 bg-white p-6 shadow-[0_18px_45px_rgba(0,0,0,0.10)] sm:p-8">
