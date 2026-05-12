@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { appendWebsiteBookingServer } from "@/app/lib/website-bookings-server";
-import { type WebsiteBookingBackendSyncStatus, type WebsiteBookingRecord } from "@/app/lib/website-bookings";
+import {
+  type WebsiteBookingBackendSyncStatus,
+  type WebsiteBookingPaymentStatus,
+  type WebsiteBookingRecord,
+} from "@/app/lib/website-bookings";
 import { createNgeniusPayPageOrder } from "@/app/lib/ngenius";
 
 export const runtime = "nodejs";
@@ -186,6 +190,9 @@ export async function POST(request: NextRequest) {
     let warning: string | null = backendUrl ? null : "Booking saved for reception follow-up, but backend sync is not configured.";
     let paymentOrderReference: string | null = null;
     let paymentUrl: string | null = null;
+    let paymentStatus: WebsiteBookingPaymentStatus = paymentEnabled ? "pending" : "not_started";
+    let paymentGatewayState: string | null = paymentEnabled ? "STARTED" : null;
+    let paymentError: string | null = null;
 
     const payload = {
       fullName: data.fullName,
@@ -250,20 +257,27 @@ export async function POST(request: NextRequest) {
 
     if (paymentEnabled) {
       const baseUrl = getPublicBaseUrl(request);
-      const paymentOrder = await createNgeniusPayPageOrder({
-        amount: {
-          currencyCode: process.env.NGENIUS_CURRENCY?.trim() || "TZS",
-          value: totalAmount * 100,
-        },
-        emailAddress: data.email,
-        bookingReference,
-        description: `${data.roomType} room, ${nights} night${nights === 1 ? "" : "s"}`,
-        redirectUrl: `${baseUrl}/payment/return?booking=${encodeURIComponent(bookingReference)}`,
-        cancelUrl: `${baseUrl}/payment/cancel?booking=${encodeURIComponent(bookingReference)}`,
-      });
+      try {
+        const paymentOrder = await createNgeniusPayPageOrder({
+          amount: {
+            currencyCode: process.env.NGENIUS_CURRENCY?.trim() || "TZS",
+            value: totalAmount * 100,
+          },
+          emailAddress: data.email,
+          bookingReference,
+          description: `${data.roomType} room, ${nights} night${nights === 1 ? "" : "s"}`,
+          redirectUrl: `${baseUrl}/payment/return?booking=${encodeURIComponent(bookingReference)}`,
+          cancelUrl: `${baseUrl}/payment/cancel?booking=${encodeURIComponent(bookingReference)}`,
+        });
 
-      paymentOrderReference = paymentOrder.orderReference;
-      paymentUrl = paymentOrder.paymentUrl;
+        paymentOrderReference = paymentOrder.orderReference;
+        paymentUrl = paymentOrder.paymentUrl;
+      } catch (error) {
+        paymentStatus = "failed";
+        paymentGatewayState = "FAILED";
+        paymentError = error instanceof Error ? error.message : "Payment gateway checkout failed.";
+        console.error("N-Genius payment order creation failed", { bookingReference, error: paymentError });
+      }
     }
 
     const websiteBooking: WebsiteBookingRecord = {
@@ -285,17 +299,29 @@ export async function POST(request: NextRequest) {
       status: "new",
       backendSyncStatus,
       backendSyncError,
-      paymentStatus: paymentEnabled ? "pending" : "not_started",
+      paymentStatus,
       paymentProvider: paymentEnabled ? "ngenius" : undefined,
       paymentOrderReference,
       paymentUrl,
-      paymentGatewayState: paymentEnabled ? "STARTED" : null,
+      paymentGatewayState,
       paymentCheckedAt: null,
       createdAt,
       receptionistSeenAt: null,
     };
 
     await appendWebsiteBookingServer(websiteBooking);
+
+    if (paymentError) {
+      return NextResponse.json(
+        {
+          error: paymentError,
+          bookingReference,
+          checkoutAction: data.checkoutAction,
+          paymentStatus,
+        },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
     return NextResponse.json(
       {
@@ -314,7 +340,8 @@ export async function POST(request: NextRequest) {
       },
       { status: backendSyncStatus === "synced" ? 200 : 202, headers: { "Cache-Control": "no-store" } }
     );
-  } catch {
+  } catch (error) {
+    console.error("Booking route failed", error);
     return NextResponse.json({ error: "Unexpected server error." }, { status: 500 });
   }
 }
