@@ -73,6 +73,7 @@ const isRateLimited = (ip: string) => {
 
 const asUtcDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const createBookingReference = () => `OH-${Date.now()}`;
+const PUBLIC_PAYMENT_ERROR = "Payment checkout is temporarily unavailable. Your booking request was saved for reception follow-up.";
 
 function getPublicBaseUrl(request: NextRequest) {
   const configured = process.env.NGENIUS_SITE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -275,8 +276,9 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         paymentStatus = "failed";
         paymentGatewayState = "FAILED";
-        paymentError = error instanceof Error ? error.message : "Payment gateway checkout failed.";
-        console.error("N-Genius payment order creation failed", { bookingReference, error: paymentError });
+        const privatePaymentError = error instanceof Error ? error.message : "Payment gateway checkout failed.";
+        paymentError = PUBLIC_PAYMENT_ERROR;
+        console.error("N-Genius payment order creation failed", { bookingReference, error: privatePaymentError });
       }
     }
 
