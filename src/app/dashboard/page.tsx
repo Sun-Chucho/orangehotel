@@ -249,27 +249,43 @@ export default function OverviewPage() {
       </div>
 
       {isDirector && (
-        <Card className="rounded-lg border border-black/5 bg-white shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-black uppercase tracking-tight">Managing Director Snapshot</CardTitle>
-            <CardDescription>Strategic indicators across revenue, occupancy, and receivables</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
-              {executiveStats.map((metric) => (
-                <div key={metric.label} className="rounded-lg border bg-[#f7faf6] p-3 md:p-4">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground md:text-[10px]">{metric.label}</p>
-                  <p className="mt-2 break-words text-lg font-black leading-tight md:text-2xl">{metric.value}</p>
-                  <p className="mt-1 text-[10px] leading-4 text-muted-foreground md:text-xs">{metric.note}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card className="rounded-lg border border-black/5 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-black uppercase tracking-tight">Managing Director Snapshot</CardTitle>
+              <CardDescription>Strategic indicators across revenue, occupancy, and receivables</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
+                {executiveStats.map((metric) => (
+                  <div key={metric.label} className="rounded-lg border bg-[#f7faf6] p-3 md:p-4">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground md:text-[10px]">{metric.label}</p>
+                    <p className="mt-2 break-words text-lg font-black leading-tight md:text-2xl">{metric.value}</p>
+                    <p className="mt-1 text-[10px] leading-4 text-muted-foreground md:text-xs">{metric.note}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[
+              { label: "Reports", href: "/dashboard/analytics", note: "Daily, weekly, monthly" },
+              { label: "Payments", href: "/dashboard/payments", note: "Collections and credits" },
+              { label: "Rooms", href: "/dashboard/rooms", note: "Occupancy status" },
+              { label: "Expenses", href: "/dashboard/expenses", note: "Grouped spending" },
+            ].map((item) => (
+              <Link key={item.href} href={item.href} className="rounded-lg border border-black/5 bg-white p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.note}</p>
+                <p className="mt-2 text-sm font-black uppercase tracking-tight">{item.label}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className={cn("grid grid-cols-1 gap-8", !isDirector && "lg:grid-cols-3")}>
+        <div className={cn("space-y-8", !isDirector && "lg:col-span-2")}>
           <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
             <Card className={cn("shadow-sm border-none bg-white", isDirector && "rounded-lg border border-black/5")}>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -307,7 +323,8 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        <Card className={cn("bg-black text-white shadow-lg overflow-hidden relative border-none rounded-lg", isDirector && "bg-[#0f1712]")}>
+        {!isDirector && (
+        <Card className="bg-black text-white shadow-lg overflow-hidden relative border-none rounded-lg">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2 font-black uppercase tracking-tight">Activity Log</CardTitle>
             <CardDescription className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Internal Updates</CardDescription>
@@ -337,6 +354,7 @@ export default function OverviewPage() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

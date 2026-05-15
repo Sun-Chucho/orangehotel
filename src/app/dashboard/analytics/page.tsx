@@ -35,7 +35,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type RangeKey = "7d" | "14d" | "30d";
+type ReportRange = "daily" | "weekly" | "monthly" | "all-time";
 
 type BookingTransaction = {
   createdAt?: number;
@@ -59,10 +59,20 @@ type RevenueHistoryRow = {
   baristaRevenue: number;
 };
 
+type RevenueEvent = {
+  date: string;
+  timestamp: number;
+  source: "rooms" | "kitchen" | "barista";
+  total: number;
+};
+
 const COLORS = ["#F57C00", "#000000", "#FFB74D", "#757575"];
 
 function formatShortDate(dateText: string) {
-  return new Date(`${dateText}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  if (/^\d{4}-\d{2}$/.test(dateText)) {
+    return new Date(`${dateText}-01T00:00:00`).toLocaleDateString("en-US", { month: "short", year: "2-digit" }).toUpperCase();
+  }
+  return new Date(`${dateText}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "2-digit" }).toUpperCase();
 }
 
 function toDayKey(timestamp: number) {
@@ -73,8 +83,18 @@ function toDayKey(timestamp: number) {
   return `${year}-${month}-${day}`;
 }
 
-function createDayKeys(range: RangeKey) {
-  const days = range === "7d" ? 7 : range === "14d" ? 14 : 30;
+function toMonthKey(timestamp: number) {
+  const value = new Date(timestamp);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function formatMonthLabel(monthKey: string) {
+  return new Date(`${monthKey}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function createRecentDayKeys(days: number) {
   const keys: string[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -83,6 +103,20 @@ function createDayKeys(range: RangeKey) {
     const next = new Date(today);
     next.setDate(today.getDate() - index);
     keys.push(toDayKey(next.getTime()));
+  }
+
+  return keys;
+}
+
+function createMonthDayKeys(monthKey: string) {
+  const [yearText, monthText] = monthKey.split("-");
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const days = new Date(year, monthIndex + 1, 0).getDate();
+  const keys: string[] = [];
+
+  for (let day = 1; day <= days; day += 1) {
+    keys.push(`${yearText}-${monthText}-${String(day).padStart(2, "0")}`);
   }
 
   return keys;
@@ -97,7 +131,8 @@ function calculateGrowth(current: number, previous: number) {
 }
 
 export default function AnalyticsPage() {
-  const [range, setRange] = useState<RangeKey>("7d");
+  const [range, setRange] = useState<ReportRange>("daily");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [bookings, setBookings] = useState<BookingTransaction[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<PosPaymentRecord[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
@@ -153,14 +188,62 @@ export default function AnalyticsPage() {
     };
   }, []);
 
+  const revenueEvents = useMemo<RevenueEvent[]>(() => {
+    const events: RevenueEvent[] = [];
+
+    bookings.forEach((booking) => {
+      if (booking.status === "credit" || !booking.createdAt || !booking.total) return;
+      events.push({ date: toDayKey(booking.createdAt), timestamp: booking.createdAt, source: "rooms", total: booking.total });
+    });
+
+    kitchenPayments.forEach((payment) => {
+      if (payment.status === "credit" || !payment.createdAt || !payment.total) return;
+      events.push({ date: toDayKey(payment.createdAt), timestamp: payment.createdAt, source: "kitchen", total: payment.total });
+    });
+
+    baristaPayments.forEach((payment) => {
+      if (payment.status === "credit" || !payment.createdAt || !payment.total) return;
+      events.push({ date: toDayKey(payment.createdAt), timestamp: payment.createdAt, source: "barista", total: payment.total });
+    });
+
+    return events;
+  }, [baristaPayments, bookings, kitchenPayments]);
+
+  const availableMonths = useMemo(() => {
+    const monthKeys = Array.from(new Set(revenueEvents.map((event) => toMonthKey(event.timestamp))));
+    if (monthKeys.length === 0) monthKeys.push(toMonthKey(Date.now()));
+    return monthKeys.sort((a, b) => b.localeCompare(a));
+  }, [revenueEvents]);
+
+  useEffect(() => {
+    if (!selectedMonth || !availableMonths.includes(selectedMonth)) {
+      setSelectedMonth(availableMonths[0] ?? toMonthKey(Date.now()));
+    }
+  }, [availableMonths, selectedMonth]);
+
+  const activeReportLabel = useMemo(() => {
+    if (range === "daily") return "Today";
+    if (range === "weekly") return "Last 7 Days";
+    if (range === "monthly") return formatMonthLabel(selectedMonth || availableMonths[0] || toMonthKey(Date.now()));
+    return "All Time";
+  }, [availableMonths, range, selectedMonth]);
+
   const history = useMemo<RevenueHistoryRow[]>(() => {
-    const keys = createDayKeys(range);
+    const keys =
+      range === "daily"
+        ? createRecentDayKeys(1)
+        : range === "weekly"
+          ? createRecentDayKeys(7)
+          : range === "monthly"
+            ? createMonthDayKeys(selectedMonth || availableMonths[0] || toMonthKey(Date.now()))
+            : availableMonths.slice().reverse();
+
     const rows = new Map<string, RevenueHistoryRow>(
       keys.map((key) => [
         key,
         {
           date: key,
-          label: key,
+          label: /^\d{4}-\d{2}$/.test(key) ? formatMonthLabel(key) : key,
           totalRevenue: 0,
           roomRevenue: 0,
           kitchenRevenue: 0,
@@ -169,38 +252,18 @@ export default function AnalyticsPage() {
       ]),
     );
 
-    bookings.forEach((booking) => {
-      if (booking.status === "credit") return;
-      if (!booking.createdAt || !booking.total) return;
-      const key = toDayKey(booking.createdAt);
+    revenueEvents.forEach((event) => {
+      const key = range === "all-time" ? toMonthKey(event.timestamp) : event.date;
       const row = rows.get(key);
       if (!row) return;
-      row.roomRevenue += booking.total;
-      row.totalRevenue += booking.total;
-    });
-
-    kitchenPayments.forEach((payment) => {
-      if (payment.status === "credit") return;
-      if (!payment.createdAt || !payment.total) return;
-      const key = toDayKey(payment.createdAt);
-      const row = rows.get(key);
-      if (!row) return;
-      row.kitchenRevenue += payment.total;
-      row.totalRevenue += payment.total;
-    });
-
-    baristaPayments.forEach((payment) => {
-      if (payment.status === "credit") return;
-      if (!payment.createdAt || !payment.total) return;
-      const key = toDayKey(payment.createdAt);
-      const row = rows.get(key);
-      if (!row) return;
-      row.baristaRevenue += payment.total;
-      row.totalRevenue += payment.total;
+      if (event.source === "rooms") row.roomRevenue += event.total;
+      if (event.source === "kitchen") row.kitchenRevenue += event.total;
+      if (event.source === "barista") row.baristaRevenue += event.total;
+      row.totalRevenue += event.total;
     });
 
     return keys.map((key) => rows.get(key)!);
-  }, [baristaPayments, bookings, kitchenPayments, range]);
+  }, [availableMonths, range, revenueEvents, selectedMonth]);
 
   const totals = useMemo(() => {
     const totalRevenue = history.reduce((sum, day) => sum + day.totalRevenue, 0);
@@ -208,13 +271,14 @@ export default function AnalyticsPage() {
     const kitchenRevenue = history.reduce((sum, day) => sum + day.kitchenRevenue, 0);
     const baristaRevenue = history.reduce((sum, day) => sum + day.baristaRevenue, 0);
     const avgDaily = history.length === 0 ? 0 : Math.round(totalRevenue / history.length);
+    const periodKeys = new Set(history.map((row) => row.date));
     const totalGuests = bookings.filter((booking) => {
-      if (booking.status === "credit") return false;
-      if (!booking.createdAt) return false;
-      const bookingDay = toDayKey(booking.createdAt);
-      return history.some((row) => row.date === bookingDay);
+      if (booking.status === "credit" || !booking.createdAt) return false;
+      const key = range === "all-time" ? toMonthKey(booking.createdAt) : toDayKey(booking.createdAt);
+      return periodKeys.has(key);
     }).length;
-    const bookingFreq = history.length === 0 ? 0 : Number((totalGuests / history.length).toFixed(1));
+    const divisor = range === "all-time" ? Math.max(history.length, 1) : Math.max(history.filter((row) => row.totalRevenue > 0).length, 1);
+    const bookingFreq = Number((totalGuests / divisor).toFixed(1));
 
     return {
       totalRevenue,
@@ -225,11 +289,12 @@ export default function AnalyticsPage() {
       totalGuests,
       bookingFreq,
     };
-  }, [bookings, history]);
+  }, [bookings, history, range]);
 
   const growth = useMemo(() => {
+    if (range === "all-time") return "All";
     const split = history.length;
-    const previousKeys = createDayKeys(range).map((key) => key);
+    const previousKeys = history.map((row) => row.date);
     const oldest = new Date(`${previousKeys[0]}T00:00:00`);
     const previousRows = previousKeys.map((_, index) => {
       const date = new Date(oldest);
@@ -280,12 +345,12 @@ export default function AnalyticsPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Avg Daily Revenue", value: `TSh ${totals.avgDaily.toLocaleString()}`, trend: `${range.toUpperCase()} Live`, icon: DollarSign },
+      { label: range === "all-time" ? "Avg Period Revenue" : "Avg Daily Revenue", value: `TSh ${totals.avgDaily.toLocaleString()}`, trend: activeReportLabel, icon: DollarSign },
       { label: "Period Growth", value: growth, trend: "Vs previous period", icon: TrendingUp },
-      { label: "Total Guests", value: totals.totalGuests.toLocaleString(), trend: `${range.toUpperCase()} bookings`, icon: Users },
-      { label: "Booking Freq", value: `${totals.bookingFreq}/day`, trend: "Live average", icon: Calendar },
+      { label: "Total Guests", value: totals.totalGuests.toLocaleString(), trend: "Filtered bookings", icon: Users },
+      { label: "Booking Freq", value: `${totals.bookingFreq}/${range === "all-time" ? "period" : "day"}`, trend: "Filtered average", icon: Calendar },
     ],
-    [growth, range, totals.avgDaily, totals.bookingFreq, totals.totalGuests],
+    [activeReportLabel, growth, range, totals.avgDaily, totals.bookingFreq, totals.totalGuests],
   );
 
   const fnbControlMetrics = useMemo(() => {
@@ -322,6 +387,8 @@ export default function AnalyticsPage() {
     const payload = {
       generatedAt: new Date().toISOString(),
       range,
+      selectedMonth,
+      activeReportLabel,
       totals,
       history,
       pieData,
@@ -332,7 +399,7 @@ export default function AnalyticsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `analytics-${range}.json`;
+    link.download = `md-report-${range}${range === "monthly" ? `-${selectedMonth}` : ""}.json`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -345,16 +412,17 @@ export default function AnalyticsPage() {
             <BarChart3 className="w-7 h-7 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tight uppercase md:text-3xl">Performance Analytics</h1>
-            <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Live business intelligence and trends</p>
+            <h1 className="text-2xl font-black tracking-tight uppercase md:text-3xl">MD Reports</h1>
+            <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">Daily, weekly, monthly, and all-time business reports</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Tabs value={range} onValueChange={(value) => setRange(value as RangeKey)}>
-            <TabsList className="h-10">
-              <TabsTrigger value="7d" className="text-[10px] font-black uppercase tracking-widest">7D</TabsTrigger>
-              <TabsTrigger value="14d" className="text-[10px] font-black uppercase tracking-widest">14D</TabsTrigger>
-              <TabsTrigger value="30d" className="text-[10px] font-black uppercase tracking-widest">30D</TabsTrigger>
+          <Tabs value={range} onValueChange={(value) => setRange(value as ReportRange)}>
+            <TabsList className="h-10 flex-wrap">
+              <TabsTrigger value="daily" className="text-[10px] font-black uppercase tracking-widest">Daily</TabsTrigger>
+              <TabsTrigger value="weekly" className="text-[10px] font-black uppercase tracking-widest">Weekly</TabsTrigger>
+              <TabsTrigger value="monthly" className="text-[10px] font-black uppercase tracking-widest">Monthly</TabsTrigger>
+              <TabsTrigger value="all-time" className="text-[10px] font-black uppercase tracking-widest">All Time</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button size="sm" className="bg-primary font-black uppercase tracking-widest text-[10px]" onClick={exportReport}>
@@ -362,6 +430,55 @@ export default function AnalyticsPage() {
           </Button>
         </div>
       </header>
+
+      {range === "monthly" && (
+        <Card className="rounded-lg border-none bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-black uppercase tracking-tight">Select Month</CardTitle>
+            <CardDescription>Choose a month to open that month&apos;s report.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+              {availableMonths.map((month) => (
+                <button
+                  key={month}
+                  type="button"
+                  onClick={() => setSelectedMonth(month)}
+                  className={`rounded-lg border p-3 text-left transition-colors ${
+                    selectedMonth === month ? "border-primary bg-primary/10 text-primary" : "bg-white hover:border-primary/40"
+                  }`}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Monthly Report</p>
+                  <p className="mt-1 text-sm font-black uppercase tracking-tight">{formatMonthLabel(month)}</p>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="rounded-lg border border-black/5 bg-white shadow-sm">
+        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Active Report</p>
+            <p className="mt-1 text-xl font-black uppercase tracking-tight">{activeReportLabel}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-right">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rooms</p>
+              <p className="text-sm font-black">TSh {totals.roomRevenue.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Kitchen</p>
+              <p className="text-sm font-black">TSh {totals.kitchenRevenue.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista</p>
+              <p className="text-sm font-black">TSh {totals.baristaRevenue.toLocaleString()}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
@@ -413,7 +530,7 @@ export default function AnalyticsPage() {
         <Card className="rounded-lg border-none bg-white shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Trend</CardTitle>
-            <CardDescription>Actual room, kitchen, and barista revenue for the selected range</CardDescription>
+            <CardDescription>Actual room, kitchen, and barista revenue for {activeReportLabel}</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
             <div className="h-[260px] w-full md:h-[350px]">
@@ -431,7 +548,7 @@ export default function AnalyticsPage() {
                   <Tooltip
                     contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.1)", fontWeight: "bold" }}
                     formatter={(value: number) => [`TSh ${value.toLocaleString()}`, "Revenue"]}
-                    labelFormatter={(value) => new Date(`${value}T00:00:00`).toLocaleDateString()}
+                    labelFormatter={(value) => (/^\d{4}-\d{2}$/.test(String(value)) ? formatMonthLabel(String(value)) : new Date(`${value}T00:00:00`).toLocaleDateString())}
                   />
                   <Area type="monotone" dataKey="totalRevenue" stroke="#F57C00" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
                 </AreaChart>
@@ -472,6 +589,39 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="rounded-lg border-none bg-white shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">Report Breakdown</CardTitle>
+          <CardDescription>Each row is grouped by the selected report period.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="max-h-[360px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-muted/80 text-left">
+                <tr>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Period</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Rooms</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Kitchen</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Barista</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row) => (
+                  <tr key={row.date} className="border-t">
+                    <td className="px-4 py-3 font-bold">{row.label}</td>
+                    <td className="px-4 py-3 font-bold">TSh {row.roomRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 font-bold">TSh {row.kitchenRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 font-bold">TSh {row.baristaRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-black">TSh {row.totalRevenue.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
