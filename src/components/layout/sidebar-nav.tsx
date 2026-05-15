@@ -53,7 +53,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['director'] },
   { label: 'Settings', href: '/dashboard/settings/password', icon: Settings, roles: ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'] },
-  { label: 'System Settings', href: '/dashboard/settings', icon: Settings, roles: ['director'] },
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
@@ -78,10 +77,16 @@ export function SidebarNav({ role }: { role: Role }) {
     const visible = NAV_ITEMS
       .filter(item => item.roles.includes(role))
       .filter((item) => !(role === "inventory" && item.href === "/dashboard/inventory/barista-stock"))
+      .filter((item) => !(role === "barista" && item.href === "/dashboard/live-chat"))
       .map((item) => {
         if (item.href !== "/dashboard/fnb-pos") return item;
         if (role === "kitchen") return { ...item, label: "Kitchen POS", href: "/dashboard/kitchen" };
         if (role === "barista") return { ...item, label: "Barista POS", href: "/dashboard/barista" };
+        return item;
+      })
+      .map((item) => {
+        if (item.href !== "/dashboard/settings/password") return item;
+        if (role === "manager" || role === "director") return { ...item, href: "/dashboard/settings" };
         return item;
       });
     const priority = ROLE_NAV_PRIORITY[role];
@@ -129,7 +134,8 @@ export function SidebarNav({ role }: { role: Role }) {
           const isRolePosRoute =
             (item.href === "/dashboard/kitchen" && pathname === "/dashboard/kitchen") ||
             (item.href === "/dashboard/barista" && pathname === "/dashboard/barista");
-          const isActive = item.href === "/dashboard/fnb-pos" ? isFnBPosRoute : isRolePosRoute || pathname === item.href;
+          const isSettingsRoute = item.href.startsWith("/dashboard/settings") && pathname.startsWith("/dashboard/settings");
+          const isActive = item.href === "/dashboard/fnb-pos" ? isFnBPosRoute : isRolePosRoute || isSettingsRoute || pathname === item.href;
           return (
             <Link
               key={item.href}
