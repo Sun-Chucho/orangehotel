@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
+  Ban,
   Mail,
   Phone,
   Plus,
@@ -21,6 +22,14 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { readJson, writeJson } from "@/app/lib/storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DEFAULT_LOGIN_PASSWORD,
+  LoginProfiles,
+  readLocalLoginProfiles,
+  saveLoginProfileToServer,
+  upsertProfileUser,
+  writeLocalLoginProfiles,
+} from "@/app/lib/login-profiles";
 
 type StaffRoleFilter = "all" | Role;
 
@@ -32,6 +41,7 @@ interface StaffMember {
   phone: string;
   email: string;
   shift: "Day" | "Night";
+  blocked?: boolean;
 }
 
 const ROLE_OPTIONS: Role[] = ["manager", "director", "inventory", "cashier", "kitchen", "barista"];
@@ -62,6 +72,46 @@ export default function StaffPage() {
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<Role>("cashier");
   const [newShift, setNewShift] = useState<"Day" | "Night">("Day");
+  const [newPassword, setNewPassword] = useState(DEFAULT_LOGIN_PASSWORD);
+
+  const persistMembers = (nextMembers: StaffMember[]) => {
+    setMembers(nextMembers);
+    writeJson(STAFF_STORAGE_KEY, nextMembers);
+  };
+
+  const saveRoleProfile = async (role: Role, username: string, password?: string, blocked = false) => {
+    const profiles = readLocalLoginProfiles() ?? {};
+    const nextEntry = upsertProfileUser(profiles[role], username, {
+      ...(password ? { password } : {}),
+      blocked,
+      updatedAt: Date.now(),
+    });
+    const nextProfiles: LoginProfiles = {
+      ...profiles,
+      [role]: nextEntry,
+    };
+    writeLocalLoginProfiles(nextProfiles);
+    await saveLoginProfileToServer(role, nextEntry);
+  };
+
+  const removeRoleProfileUser = async (role: Role, username: string) => {
+    const profiles = readLocalLoginProfiles() ?? {};
+    const entry = profiles[role];
+    if (!entry) return;
+
+    const nextUsers = (entry.users ?? []).filter((user) => user.username.trim().toLowerCase() !== username.trim().toLowerCase());
+    const nextEntry = {
+      ...entry,
+      users: nextUsers,
+      updatedAt: Date.now(),
+    };
+    const nextProfiles: LoginProfiles = {
+      ...profiles,
+      [role]: nextEntry,
+    };
+    writeLocalLoginProfiles(nextProfiles);
+    await saveLoginProfileToServer(role, nextEntry);
+  };
 
   useEffect(() => {
     const storedMembers = readJson<StaffMember[]>(STAFF_STORAGE_KEY);
@@ -94,51 +144,64 @@ export default function StaffPage() {
     });
   }, [members, roleFilter, searchTerm]);
 
-  const addMember = () => {
+  const addMember = async () => {
     if (newName.trim().length === 0) return;
 
     const id = `u-${Date.now()}`;
+    const username = newName.trim();
     const member: StaffMember = {
       id,
-      name: newName.trim(),
+      name: username,
       role: newRole,
       avatar: "/logo.jpeg",
       phone: `+1 (555) 300-${Math.floor(1000 + Math.random() * 9000)}`,
       email: toEmail(newName.trim()),
       shift: newShift,
+      blocked: false,
     };
 
-    setMembers((current) => {
-      const nextMembers = [member, ...current];
-      writeJson(STAFF_STORAGE_KEY, nextMembers);
-      return nextMembers;
-    });
+    persistMembers([member, ...members]);
+    await saveRoleProfile(newRole, username, newPassword.trim() || DEFAULT_LOGIN_PASSWORD, false);
     setNewName("");
     setNewRole("cashier");
     setNewShift("Day");
+    setNewPassword(DEFAULT_LOGIN_PASSWORD);
     setShowAddForm(false);
   };
 
-  const updateMemberRole = (memberId: string, role: Role) => {
+  const updateMemberRole = async (memberId: string, role: Role) => {
     if (isDirector) return;
 
-    setMembers((current) => {
-      const nextMembers = current.map((member) =>
-        member.id === memberId ? { ...member, role } : member,
-      );
-      writeJson(STAFF_STORAGE_KEY, nextMembers);
-      return nextMembers;
-    });
+    const currentMember = members.find((member) => member.id === memberId);
+    if (!currentMember || currentMember.role === role) return;
+
+    const nextMembers = members.map((member) =>
+      member.id === memberId ? { ...member, role } : member,
+    );
+    persistMembers(nextMembers);
+    await removeRoleProfileUser(currentMember.role, currentMember.name);
+    await saveRoleProfile(role, currentMember.name, undefined, currentMember.blocked === true);
   };
 
-  const deleteMember = (memberId: string) => {
+  const deleteMember = async (memberId: string) => {
     if (isDirector) return;
 
-    setMembers((current) => {
-      const nextMembers = current.filter((member) => member.id !== memberId);
-      writeJson(STAFF_STORAGE_KEY, nextMembers);
-      return nextMembers;
-    });
+    const currentMember = members.find((member) => member.id === memberId);
+    if (!currentMember) return;
+
+    persistMembers(members.filter((member) => member.id !== memberId));
+    await removeRoleProfileUser(currentMember.role, currentMember.name);
+  };
+
+  const toggleMemberBlocked = async (memberId: string) => {
+    if (isDirector) return;
+
+    const currentMember = members.find((member) => member.id === memberId);
+    if (!currentMember) return;
+
+    const nextBlocked = !currentMember.blocked;
+    persistMembers(members.map((member) => (member.id === memberId ? { ...member, blocked: nextBlocked } : member)));
+    await saveRoleProfile(currentMember.role, currentMember.name, undefined, nextBlocked);
   };
 
   return (
@@ -155,7 +218,7 @@ export default function StaffPage() {
 
       {showAddForm && !isDirector && (
         <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
             <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Full name" />
             <select
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -174,7 +237,8 @@ export default function StaffPage() {
               <option value="Day">Day Shift</option>
               <option value="Night">Night Shift</option>
             </select>
-            <Button className="font-bold" onClick={addMember}>Save Staff</Button>
+            <Input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Login password" />
+            <Button className="font-bold" onClick={() => void addMember()}>Save Staff</Button>
           </CardContent>
         </Card>
       )}
@@ -216,7 +280,8 @@ export default function StaffPage() {
                     {member.role}
                   </Badge>
                   <span className="flex items-center gap-1 text-[10px] font-black text-green-500 uppercase">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> On Duty
+                    <div className={`w-1.5 h-1.5 rounded-full ${member.blocked ? "bg-red-500" : "bg-green-500"}`} />
+                    {member.blocked ? "Blocked" : "Active"}
                   </span>
                 </div>
               </div>
@@ -237,14 +302,14 @@ export default function StaffPage() {
                 <select
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-[10px] font-black uppercase tracking-widest"
                   value={member.role}
-                  onChange={(event) => updateMemberRole(member.id, event.target.value as Role)}
+                  onChange={(event) => void updateMemberRole(member.id, event.target.value as Role)}
                   disabled={isDirector}
                 >
                   {ROLE_OPTIONS.map((role) => (
                     <option key={role} value={role}>{role}</option>
                   ))}
                 </select>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     size="sm"
                     variant="outline"
@@ -255,12 +320,21 @@ export default function StaffPage() {
                   </Button>
                   <Button
                     size="sm"
+                    variant="outline"
+                    className="font-bold text-[10px] uppercase tracking-widest"
+                    disabled={isDirector}
+                    onClick={() => void toggleMemberBlocked(member.id)}
+                  >
+                    <Ban className="mr-1 h-3 w-3" /> {member.blocked ? "Unblock" : "Block"}
+                  </Button>
+                  <Button
+                    size="sm"
                     variant="destructive"
                     className="font-bold text-[10px] uppercase tracking-widest"
                     disabled={isDirector}
-                    onClick={() => deleteMember(member.id)}
+                    onClick={() => void deleteMember(member.id)}
                   >
-                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                    <Trash2 className="mr-1 h-3 w-3" /> Remove
                   </Button>
                 </div>
               </div>

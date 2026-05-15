@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROOMS, Room } from "@/app/lib/mock-data";
+import { ROOMS, Role, Room } from "@/app/lib/mock-data";
+import { readStoredRole } from "@/app/lib/auth";
 import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
 import { HISTORICAL_BOOKINGS } from "@/app/lib/seed-bookings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -154,8 +155,11 @@ export default function BookingPage() {
   const [rooms, setRooms] = useState<Room[]>(ROOMS.map((room) => ({ ...room })));
   const [transactions, setTransactions] = useState<BookingRecord[]>([]);
   const [receiptSeq, setReceiptSeq] = useState(84920);
+  const [role, setRole] = useState<Role>("cashier");
+  const isManager = role === "manager";
 
   useEffect(() => {
+    setRole(readStoredRole() ?? "cashier");
     const applyCashierSnapshot = (incomingRooms?: Room[]) => {
       const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
       const normalizedTransactions: BookingRecord[] = snapshot.transactions.map((tx): BookingRecord => ({
@@ -364,7 +368,7 @@ export default function BookingPage() {
   };
 
   const openEditBooking = (booking: BookingRecord) => {
-    if (isDirector) return;
+    if (isDirector || isManager) return;
 
     setEditingBookingId(booking.id);
     setGuestName(booking.guestName);
@@ -850,13 +854,15 @@ export default function BookingPage() {
                   <TableCell className="text-right">
                     {!isDirector ? (
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => openEditBooking(tx)}
-                          className="h-9 font-black uppercase text-[10px] tracking-widest"
-                        >
-                          Edit
-                        </Button>
+                        {!isManager && (
+                          <Button
+                            variant="outline"
+                            onClick={() => openEditBooking(tx)}
+                            className="h-9 font-black uppercase text-[10px] tracking-widest"
+                          >
+                            Edit
+                          </Button>
+                        )}
                         {tx.status !== "checked-out" && (
                           <>
                         <Button

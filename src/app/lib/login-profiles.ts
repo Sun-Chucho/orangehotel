@@ -10,6 +10,7 @@ export const SESSION_IDENTITY_EVENT = "orange-hotel-session-identity-updated";
 export interface LoginUserAccount {
   username: string;
   password?: string;
+  blocked?: boolean;
   updatedAt: number;
 }
 
@@ -120,6 +121,11 @@ export function getProfilePassword(entry: LoginProfileEntry | null | undefined, 
   return fallback;
 }
 
+export function isProfileUserBlocked(entry: LoginProfileEntry | null | undefined, username: string) {
+  const matchedUser = entry?.users?.find((user) => user.username.trim().toLowerCase() === username.trim().toLowerCase());
+  return matchedUser?.blocked === true;
+}
+
 export function upsertProfileUser(
   entry: LoginProfileEntry | null | undefined,
   username: string,
@@ -131,6 +137,7 @@ export function upsertProfileUser(
   const nextUser: LoginUserAccount = {
     username: normalizedUsername,
     password: typeof updates.password === "string" ? updates.password.trim() : existingUsers.find((user) => user.username.toLowerCase() === normalizedUsername.toLowerCase())?.password,
+    blocked: typeof updates.blocked === "boolean" ? updates.blocked : existingUsers.find((user) => user.username.toLowerCase() === normalizedUsername.toLowerCase())?.blocked,
     updatedAt: now,
   };
 

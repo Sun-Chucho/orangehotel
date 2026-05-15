@@ -22,6 +22,7 @@ function sanitizeEntry(entry: Partial<LoginProfileEntry> | null | undefined): Lo
           const nextUser: LoginUserAccount = {
             username: userName,
             ...(userPassword ? { password: userPassword } : {}),
+            ...(user?.blocked === true ? { blocked: true } : {}),
             updatedAt: userUpdatedAt,
           };
           return nextUser;

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, hydrateLoginProfilesFromServer, LoginProfiles, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
+import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, hydrateLoginProfilesFromServer, isProfileUserBlocked, LoginProfiles, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 interface RoleLoginPageProps {
   role: Role;
@@ -87,7 +87,14 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
   const isDirector = role === "director";
-  const selectableUsers = role === "cashier" ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name })) : role === "barista" ? [...BARISTA_USERS] : [];
+  const [profileUsers, setProfileUsers] = useState<Array<{ id: string; name: string; blocked?: boolean }>>([]);
+  const defaultSelectableUsers = role === "cashier" ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name })) : role === "barista" ? [...BARISTA_USERS] : [];
+  const selectableUsers = useMemo(() => {
+    const usersByName = new Map<string, { id: string; name: string; blocked?: boolean }>();
+    defaultSelectableUsers.forEach((user) => usersByName.set(user.name.trim().toLowerCase(), user));
+    profileUsers.forEach((user) => usersByName.set(user.name.trim().toLowerCase(), user));
+    return Array.from(usersByName.values()).filter((user) => !user.blocked);
+  }, [defaultSelectableUsers, profileUsers]);
   const [username, setUsername] = useState(role === "barista" ? BARISTA_USERS[0].name : config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -103,6 +110,13 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const applyProfiles = () => {
       const profiles = readLocalLoginProfiles();
       const profile = profiles?.[role];
+      setProfileUsers(
+        (profile?.users ?? []).map((user) => ({
+          id: `${role}-${user.username}`,
+          name: user.username,
+          blocked: user.blocked,
+        })),
+      );
       if (!profile) {
         if (role === "barista") {
           setUsername(BARISTA_USERS[0].name);
@@ -209,6 +223,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const profiles = readLocalLoginProfiles() ?? {};
     const currentProfile = profiles[role];
     const expectedPassword = getProfilePassword(currentProfile, username, DEFAULT_LOGIN_PASSWORD);
+
+    if (isProfileUserBlocked(currentProfile, username)) {
+      setError("This user is blocked. Contact the manager.");
+      return;
+    }
 
     if (!username.trim() || password !== expectedPassword) {
       setError("Invalid username or password.");
