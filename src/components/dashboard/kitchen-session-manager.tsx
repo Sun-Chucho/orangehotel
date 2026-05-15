@@ -225,10 +225,12 @@ export function KitchenSessionManager({
   const [closeNotes, setCloseNotes] = useState(DEFAULT_SIGNOFF);
   const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10));
   const [closeTime, setCloseTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [purchaseSearch, setPurchaseSearch] = useState("");
   const purchaseCopy = getWorkflowCopy("purchase", department);
   const dailyCopy = getWorkflowCopy("daily-stock", department);
   const departmentLabel = department === "kitchen" ? "Kitchen" : "Barista";
   const departmentCategory = department === "kitchen" ? "Kitchen" : "Bar";
+  const isBaristaDepartment = department === "barista";
   const purchaseSessionKey =
     department === "kitchen" ? STORAGE_KITCHEN_PURCHASE_SESSION : STORAGE_BARISTA_PURCHASE_SESSION;
   const purchaseHistoryKey =
@@ -264,6 +266,12 @@ export function KitchenSessionManager({
     };
   }, [dailyHistoryKey, dailySessionKey, department, purchaseHistoryKey, purchaseSessionKey]);
 
+  useEffect(() => {
+    if (isBaristaDepartment && activeTab === "daily-stock") {
+      setActiveTab("purchase");
+    }
+  }, [activeTab, isBaristaDepartment]);
+
   const purchaseTotalAmount = useMemo(
     () =>
       (purchaseSession?.lines ?? []).reduce(
@@ -272,6 +280,17 @@ export function KitchenSessionManager({
       ),
     [purchaseSession],
   );
+  const filteredPurchaseLines = useMemo(() => {
+    const query = purchaseSearch.trim().toLowerCase();
+    const lines = purchaseSession?.lines ?? [];
+    if (!query) return lines;
+
+    return lines.filter((line) =>
+      [line.itemName, line.category, line.unit]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [purchaseSearch, purchaseSession]);
 
   const dailyTotals = useMemo(() => {
     return (dailySession?.lines ?? []).reduce(
@@ -898,9 +917,11 @@ export function KitchenSessionManager({
           <TabsTrigger value="purchase" className="font-black uppercase text-[10px] tracking-widest">
             {purchaseCopy.tabLabel}
           </TabsTrigger>
-          <TabsTrigger value="daily-stock" className="font-black uppercase text-[10px] tracking-widest">
-            {dailyCopy.tabLabel}
-          </TabsTrigger>
+          {!isBaristaDepartment && (
+            <TabsTrigger value="daily-stock" className="font-black uppercase text-[10px] tracking-widest">
+              {dailyCopy.tabLabel}
+            </TabsTrigger>
+          )}
         </TabsList>
       </Tabs>
 
@@ -912,7 +933,9 @@ export function KitchenSessionManager({
                 <div>
                   <CardTitle className="text-lg font-black uppercase">{purchaseCopy.title}</CardTitle>
                   <CardDescription>
-                    {`Start a purchase sheet, enter added stock for the day, then close it to save history and update ${departmentLabel.toLowerCase()} inventory.`}
+                    {isBaristaDepartment
+                      ? "Search an existing item, enter only the added stock and price, then close the purchase sheet."
+                      : `Start a purchase sheet, enter added stock for the day, then close it to save history and update ${departmentLabel.toLowerCase()} inventory.`}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -935,10 +958,18 @@ export function KitchenSessionManager({
             <CardContent className="space-y-4 p-4">
               {purchaseSession ? (
                 <>
-                  <div className="flex justify-end">
-                    <Button variant="outline" onClick={addPurchaseLine} disabled={isDirector}>
-                      Add Item Row
-                    </Button>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <Input
+                      value={purchaseSearch}
+                      onChange={(event) => setPurchaseSearch(event.target.value)}
+                      placeholder="Search item"
+                      className="max-w-md"
+                    />
+                    {!isBaristaDepartment && (
+                      <Button variant="outline" onClick={addPurchaseLine} disabled={isDirector}>
+                        Add Item Row
+                      </Button>
+                    )}
                   </div>
                   <Table>
                     <TableHeader>
@@ -951,26 +982,27 @@ export function KitchenSessionManager({
                         <TableHead>Price</TableHead>
                         <TableHead>Total Balance</TableHead>
                         <TableHead>Amount</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
+                        {!isBaristaDepartment && <TableHead className="text-right">Action</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {purchaseSession.lines.map((line) => {
+                      {filteredPurchaseLines.map((line) => {
                         const totalBalance = roundStock(line.previousBalance + line.addedQty);
                         const amount = roundStock(line.addedQty * line.pricePerUnit);
+                        const lockStaticPurchaseFields = isBaristaDepartment;
                         return (
                           <TableRow key={line.id}>
                             <TableCell>
-                              <Input value={line.itemName} onChange={(event) => updatePurchaseLine(line.id, "itemName", event.target.value)} />
+                              <Input value={line.itemName} onChange={(event) => updatePurchaseLine(line.id, "itemName", event.target.value)} disabled={lockStaticPurchaseFields} />
                             </TableCell>
                             <TableCell>
-                              <Input value={line.category} onChange={(event) => updatePurchaseLine(line.id, "category", event.target.value)} />
+                              <Input value={line.category} onChange={(event) => updatePurchaseLine(line.id, "category", event.target.value)} disabled={lockStaticPurchaseFields} />
                             </TableCell>
                             <TableCell>
-                              <Input value={line.unit} onChange={(event) => updatePurchaseLine(line.id, "unit", event.target.value)} />
+                              <Input value={line.unit} onChange={(event) => updatePurchaseLine(line.id, "unit", event.target.value)} disabled={lockStaticPurchaseFields} />
                             </TableCell>
                             <TableCell>
-                              <Input type="number" min="0" value={line.previousBalance} onChange={(event) => updatePurchaseLine(line.id, "previousBalance", event.target.value)} />
+                              <Input type="number" min="0" value={line.previousBalance} onChange={(event) => updatePurchaseLine(line.id, "previousBalance", event.target.value)} disabled={lockStaticPurchaseFields} />
                             </TableCell>
                             <TableCell>
                               <Input type="number" min="0" value={line.addedQty} onChange={(event) => updatePurchaseLine(line.id, "addedQty", event.target.value)} />
@@ -980,14 +1012,23 @@ export function KitchenSessionManager({
                             </TableCell>
                             <TableCell className="font-bold">{totalBalance}</TableCell>
                             <TableCell className="font-bold">{formatMoney(amount)}</TableCell>
+                            {!isBaristaDepartment && (
                             <TableCell className="text-right">
                               <Button variant="ghost" size="sm" onClick={() => removePurchaseLine(line.id)} disabled={isDirector}>
                                 Remove
                               </Button>
                             </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}
+                      {filteredPurchaseLines.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={isBaristaDepartment ? 8 : 9} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
+                            No purchase rows match your search
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   <div className="flex justify-end">
