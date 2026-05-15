@@ -19,13 +19,20 @@ import {
   StoreUsageLog,
   TransferDestination,
 } from "@/app/lib/inventory-transfer";
+import {
+  KitchenDailyStockHistoryEntry,
+  KitchenPurchaseHistoryEntry,
+  STORAGE_BARISTA_PURCHASE_HISTORY,
+  STORAGE_KITCHEN_DAILY_STOCK_HISTORY,
+  STORAGE_KITCHEN_PURCHASE_HISTORY,
+} from "@/app/lib/kitchen-session-storage";
 import { readJson, STORAGE_BARISTA_STATE, writeJson } from "@/app/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { Download, Eye, Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -34,6 +41,13 @@ import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-ma
 export type InventoryTab =
   | "kitchen-stock"
   | "barista-stock";
+
+type KitchenManagerPane = "stock" | "expenses" | "entries";
+type BaristaManagerPane = "finance" | "inventory" | "purchase";
+type HistoryPreview =
+  | { department: "kitchen" | "barista"; kind: "purchase"; entry: KitchenPurchaseHistoryEntry }
+  | { department: "kitchen"; kind: "daily"; entry: KitchenDailyStockHistoryEntry }
+  | null;
 
 type ItemCategory = "Kitchen" | "Bar";
 
@@ -88,6 +102,57 @@ function getLogicLabel(rule: StockLogicRule | undefined) {
   return `1 ${rule.storeUnit} -> ${rule.unitToMenu} ${rule.departmentUnit}`;
 }
 
+function roundMoney(value: number) {
+  return Math.round(value).toLocaleString();
+}
+
+function formatHistoryDate(value: string) {
+  return new Date(value).toLocaleString();
+}
+
+function getHistoryFileDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "record";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function escapeCsvValue(value: string | number | null | undefined) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function downloadCsvFile(filename: string, rows: Array<Array<string | number | null | undefined>>) {
+  if (typeof window === "undefined") return;
+
+  const csvContent = rows.map((row) => row.map((value) => escapeCsvValue(value)).join(",")).join("\n");
+  const blob = new Blob(["\ufeff", csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
+function getPurchaseEntryAmount(entry: KitchenPurchaseHistoryEntry) {
+  return entry.lines.reduce((sum, line) => sum + (line.addedQty || 0) * (line.pricePerUnit || 0), 0);
+}
+
+function getDailyEntryTotals(entry: KitchenDailyStockHistoryEntry) {
+  return entry.lines.reduce(
+    (acc, line) => {
+      acc.received += line.received || 0;
+      acc.used += line.used || 0;
+      acc.wastage += line.wastage || 0;
+      return acc;
+    },
+    { received: 0, used: 0, wastage: 0 },
+  );
+}
+
 function normalizeBaristaFinanceTarget(value: string) {
   return normalizeBaristaProductTarget(value);
 }
@@ -126,11 +191,16 @@ export function InventoryControlView({
   const isDirector = useIsDirector();
   const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab | null>(initialTab);
-  const [baristaView, setBaristaView] = useState<"inventory" | "finance">("inventory");
+  const [kitchenManagerPane, setKitchenManagerPane] = useState<KitchenManagerPane>("stock");
+  const [baristaView, setBaristaView] = useState<BaristaManagerPane>("finance");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
   const [baristaMenuItems, setBaristaMenuItems] = useState<Array<{ name: string; price: number }>>([]);
+  const [kitchenPurchaseHistory, setKitchenPurchaseHistory] = useState<KitchenPurchaseHistoryEntry[]>([]);
+  const [kitchenDailyHistory, setKitchenDailyHistory] = useState<KitchenDailyStockHistoryEntry[]>([]);
+  const [baristaPurchaseHistory, setBaristaPurchaseHistory] = useState<KitchenPurchaseHistoryEntry[]>([]);
+  const [historyPreview, setHistoryPreview] = useState<HistoryPreview>(null);
 
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenSubCategory, setKitchenSubCategory] = useState("");
@@ -202,17 +272,26 @@ export function InventoryControlView({
       setStoreItems(normalizedStore);
       setBaristaPayments(Array.isArray(baristaState?.payments) ? baristaState.payments : []);
       setBaristaMenuItems(Array.isArray(baristaState?.menuItems) ? baristaState.menuItems : []);
+      setKitchenPurchaseHistory(readJson<KitchenPurchaseHistoryEntry[]>(STORAGE_KITCHEN_PURCHASE_HISTORY) ?? []);
+      setKitchenDailyHistory(readJson<KitchenDailyStockHistoryEntry[]>(STORAGE_KITCHEN_DAILY_STOCK_HISTORY) ?? []);
+      setBaristaPurchaseHistory(readJson<KitchenPurchaseHistoryEntry[]>(STORAGE_BARISTA_PURCHASE_HISTORY) ?? []);
     };
 
     applyInventorySnapshot();
     const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyInventorySnapshot);
     const unsubscribeStore = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applyInventorySnapshot);
     const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyInventorySnapshot);
+    const unsubscribeKitchenPurchase = subscribeToSyncedStorageKey(STORAGE_KITCHEN_PURCHASE_HISTORY, applyInventorySnapshot);
+    const unsubscribeKitchenDaily = subscribeToSyncedStorageKey(STORAGE_KITCHEN_DAILY_STOCK_HISTORY, applyInventorySnapshot);
+    const unsubscribeBaristaPurchase = subscribeToSyncedStorageKey(STORAGE_BARISTA_PURCHASE_HISTORY, applyInventorySnapshot);
 
     return () => {
       unsubscribeInventory();
       unsubscribeStore();
       unsubscribeBarista();
+      unsubscribeKitchenPurchase();
+      unsubscribeKitchenDaily();
+      unsubscribeBaristaPurchase();
     };
   }, []);
 
@@ -962,6 +1041,234 @@ export function InventoryControlView({
     </div>
   );
 
+  const downloadPurchaseHistoryEntry = (department: "kitchen" | "barista", entry: KitchenPurchaseHistoryEntry) => {
+    downloadCsvFile(`${department}-daily-purchases-${getHistoryFileDate(entry.closedAt)}.csv`, [
+      ["Department", department === "kitchen" ? "Kitchen" : "Barista"],
+      ["Record Type", "Daily Purchases"],
+      ["Started At", entry.startedAt],
+      ["Closed At", entry.closedAt],
+      ["Prepared By", entry.signoff.preparedBy],
+      ["Checked By", entry.signoff.checkedBy],
+      ["Approved By", entry.signoff.approvedBy],
+      ["Cashier", entry.signoff.cashier],
+      [],
+      ["Item", "Category", "Unit", "Previous Balance", "Added", "Price", "Total Balance", "Amount"],
+      ...entry.lines.map((line) => [
+        line.itemName,
+        line.category,
+        line.unit,
+        line.previousBalance,
+        line.addedQty,
+        line.pricePerUnit,
+        line.previousBalance + line.addedQty,
+        line.addedQty * line.pricePerUnit,
+      ]),
+      [],
+      ["Total Amount", getPurchaseEntryAmount(entry)],
+    ]);
+  };
+
+  const downloadDailyHistoryEntry = (entry: KitchenDailyStockHistoryEntry) => {
+    const totals = getDailyEntryTotals(entry);
+    downloadCsvFile(`kitchen-daily-entries-${getHistoryFileDate(entry.closedAt)}.csv`, [
+      ["Department", "Kitchen"],
+      ["Record Type", "Daily Entries"],
+      ["Started At", entry.startedAt],
+      ["Closed At", entry.closedAt],
+      ["Prepared By", entry.signoff.preparedBy],
+      ["Checked By", entry.signoff.checkedBy],
+      ["Approved By", entry.signoff.approvedBy],
+      ["Cashier", entry.signoff.cashier],
+      [],
+      ["Item", "Category", "Unit", "Opening", "Received", "Used", "Wastage", "Closing"],
+      ...entry.lines.map((line) => [
+        line.itemName,
+        line.category,
+        line.unit,
+        line.openingStock,
+        line.received,
+        line.used,
+        line.wastage,
+        line.openingStock + line.received - line.used - line.wastage,
+      ]),
+      [],
+      ["Total Received", totals.received],
+      ["Total Used", totals.used],
+      ["Total Wastage", totals.wastage],
+    ]);
+  };
+
+  const renderHistoryCards = (
+    entries: Array<KitchenPurchaseHistoryEntry | KitchenDailyStockHistoryEntry>,
+    kind: "purchase" | "daily",
+    department: "kitchen" | "barista",
+  ) => (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {entries.map((entry) => {
+        const purchaseAmount = kind === "purchase" ? getPurchaseEntryAmount(entry as KitchenPurchaseHistoryEntry) : 0;
+        const dailyTotals = kind === "daily" ? getDailyEntryTotals(entry as KitchenDailyStockHistoryEntry) : null;
+        return (
+          <Card key={entry.id} className="shadow-sm">
+            <CardContent className="space-y-4 p-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  {kind === "purchase" ? "Daily Expenses" : "Daily Entries"}
+                </p>
+                <p className="mt-1 text-lg font-black">{formatHistoryDate(entry.closedAt)}</p>
+                <p className="mt-1 text-xs font-bold text-muted-foreground">{entry.lines.length} item rows</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                {kind === "purchase" ? (
+                  <p className="text-sm font-black">TSh {roundMoney(purchaseAmount)}</p>
+                ) : (
+                  <p className="text-sm font-black">
+                    Received {dailyTotals?.received ?? 0} | Used {dailyTotals?.used ?? 0} | Wastage {dailyTotals?.wastage ?? 0}
+                  </p>
+                )}
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Added by {entry.signoff.preparedBy || "Inventory Manager"}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setHistoryPreview(
+                      kind === "purchase"
+                        ? { department, kind: "purchase", entry: entry as KitchenPurchaseHistoryEntry }
+                        : { department: "kitchen", kind: "daily", entry: entry as KitchenDailyStockHistoryEntry },
+                    )
+                  }
+                  className="flex-1 font-black uppercase tracking-widest text-[10px]"
+                >
+                  <Eye className="mr-2 h-3.5 w-3.5" />
+                  View / Open
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    kind === "purchase"
+                      ? downloadPurchaseHistoryEntry(department, entry as KitchenPurchaseHistoryEntry)
+                      : downloadDailyHistoryEntry(entry as KitchenDailyStockHistoryEntry)
+                  }
+                  className="flex-1 font-black uppercase tracking-widest text-[10px]"
+                >
+                  <Download className="mr-2 h-3.5 w-3.5" />
+                  Download
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+      {entries.length === 0 && (
+        <Card className="border-dashed shadow-none md:col-span-2 xl:col-span-3">
+          <CardContent className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            No saved records yet
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderHistoryPreview = () => {
+    if (!historyPreview) return null;
+    const entry = historyPreview.entry;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <Card className="max-h-[86vh] w-full max-w-6xl overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 border-b">
+            <div>
+              <CardTitle className="text-xl font-black uppercase tracking-tight">
+                {historyPreview.kind === "purchase" ? "Daily Expenses" : "Daily Entries"}
+              </CardTitle>
+              <CardDescription>{formatHistoryDate(entry.closedAt)}</CardDescription>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setHistoryPreview(null)}>
+              <XCircle className="h-5 w-5" />
+            </Button>
+          </CardHeader>
+          <CardContent className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                ["Prepared By", entry.signoff.preparedBy],
+                ["Checked By", entry.signoff.checkedBy],
+                ["Approved By", entry.signoff.approvedBy],
+                ["Cashier", entry.signoff.cashier],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-md border p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+                  <p className="mt-2 text-sm font-bold">{value || "-"}</p>
+                </div>
+              ))}
+            </div>
+            {historyPreview.kind === "purchase" ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Previous</TableHead>
+                    <TableHead>Added</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(entry as KitchenPurchaseHistoryEntry).lines.map((line) => (
+                    <TableRow key={line.id}>
+                      <TableCell className="font-bold">{line.itemName}</TableCell>
+                      <TableCell className="font-bold">{line.category || "-"}</TableCell>
+                      <TableCell className="font-bold">{line.unit}</TableCell>
+                      <TableCell className="font-bold">{line.previousBalance}</TableCell>
+                      <TableCell className="font-bold">{line.addedQty}</TableCell>
+                      <TableCell className="font-bold">TSh {roundMoney(line.pricePerUnit)}</TableCell>
+                      <TableCell className="font-bold">{line.previousBalance + line.addedQty}</TableCell>
+                      <TableCell className="font-bold">TSh {roundMoney(line.addedQty * line.pricePerUnit)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Opening</TableHead>
+                    <TableHead>Received</TableHead>
+                    <TableHead>Used</TableHead>
+                    <TableHead>Wastage</TableHead>
+                    <TableHead>Closing</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(entry as KitchenDailyStockHistoryEntry).lines.map((line) => (
+                    <TableRow key={line.id}>
+                      <TableCell className="font-bold">{line.itemName}</TableCell>
+                      <TableCell className="font-bold">{line.category || "-"}</TableCell>
+                      <TableCell className="font-bold">{line.unit}</TableCell>
+                      <TableCell className="font-bold">{line.openingStock}</TableCell>
+                      <TableCell className="font-bold">{line.received}</TableCell>
+                      <TableCell className="font-bold">{line.used}</TableCell>
+                      <TableCell className="font-bold">{line.wastage}</TableCell>
+                      <TableCell className="font-bold">{line.openingStock + line.received - line.used - line.wastage}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {dialog}
@@ -984,10 +1291,14 @@ export function InventoryControlView({
         <Tabs value={activeTab ?? ""} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
           <TabsList className="h-11">
             {effectiveVisibleTabs.includes("kitchen-stock") && (
-              <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
+              <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">
+                {role === "manager" ? "Kitchen" : "Kitchen Stock"}
+              </TabsTrigger>
             )}
             {effectiveVisibleTabs.includes("barista-stock") && (
-              <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">Barista Stock</TabsTrigger>
+              <TabsTrigger value="barista-stock" className="font-black uppercase text-[10px] tracking-widest">
+                {role === "manager" ? "Barista" : "Barista Stock"}
+              </TabsTrigger>
             )}
           </TabsList>
         </Tabs>
@@ -1003,7 +1314,25 @@ export function InventoryControlView({
 
       {activeTab === "kitchen-stock" && (
         <div className="space-y-6">
-          {isReadOnlyStock ? (
+          {role === "manager" ? (
+            <>
+              <Tabs value={kitchenManagerPane} onValueChange={(value) => setKitchenManagerPane(value as KitchenManagerPane)}>
+                <TabsList className="h-11 flex-wrap">
+                  <TabsTrigger value="stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
+                  <TabsTrigger value="expenses" className="font-black uppercase text-[10px] tracking-widest">Daily Expenses</TabsTrigger>
+                  <TabsTrigger value="entries" className="font-black uppercase text-[10px] tracking-widest">Daily Entries</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {kitchenManagerPane === "stock" && (
+                <>
+                  {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
+                  {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems, "kitchen")}
+                </>
+              )}
+              {kitchenManagerPane === "expenses" && renderHistoryCards(kitchenPurchaseHistory, "purchase", "kitchen")}
+              {kitchenManagerPane === "entries" && renderHistoryCards(kitchenDailyHistory, "daily", "kitchen")}
+            </>
+          ) : isReadOnlyStock ? (
             <>
               {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
               {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems, "kitchen")}
@@ -1016,12 +1345,14 @@ export function InventoryControlView({
 
       {activeTab === "barista-stock" && (
         <div className="space-y-6">
-          {(canEditStock || role === "manager") && <KitchenSessionManager isDirector={isDirector} department="barista" />}
           {canViewBaristaFinance && (
-            <Tabs value={baristaView} onValueChange={(value) => setBaristaView(value as "inventory" | "finance")}>
+            <Tabs value={baristaView} onValueChange={(value) => setBaristaView(value as BaristaManagerPane)}>
               <TabsList className="h-11">
+                <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Barista Finances</TabsTrigger>
                 <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
-                <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
+                {role === "manager" && (
+                  <TabsTrigger value="purchase" className="font-black uppercase text-[10px] tracking-widest">Daily Purchase</TabsTrigger>
+                )}
               </TabsList>
             </Tabs>
           )}
@@ -1032,8 +1363,24 @@ export function InventoryControlView({
             </>
           )}
           {canViewBaristaFinance && baristaView === "finance" && renderBaristaFinance()}
+          {role === "manager" && baristaView === "purchase" && (
+            <>
+              <KitchenSessionManager isDirector={isDirector} department="barista" />
+              <section className="space-y-3">
+                <div>
+                  <h2 className="text-xl font-black uppercase tracking-tight">Saved Barista Daily Purchases</h2>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Date cards show what was added from barista daily purchase sessions.
+                  </p>
+                </div>
+                {renderHistoryCards(baristaPurchaseHistory, "purchase", "barista")}
+              </section>
+            </>
+          )}
         </div>
       )}
+
+      {renderHistoryPreview()}
 
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
