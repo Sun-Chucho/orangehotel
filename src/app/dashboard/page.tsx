@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { readStoredRole } from "@/app/lib/auth";
@@ -17,10 +18,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   FileText,
+  Package,
 } from "lucide-react";
 import { deriveRoomsStateFromBookings, readRoomsState } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
-import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 
 interface CashierTransaction {
   roomNumber?: string;
@@ -199,12 +200,29 @@ export default function OverviewPage() {
       {!isDirector && (
         <section className="space-y-3">
           <div>
-            <h2 className="text-2xl font-black tracking-tight uppercase">Daily Entries</h2>
+            <h2 className="text-2xl font-black tracking-tight uppercase">Stock Review</h2>
             <p className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider">
-              Open and close shift sheets from the manager dashboard. Changes sync with inventory records automatically.
+              Open compact read-only kitchen and barista stock pages without loading the full tables here.
             </p>
           </div>
-          <KitchenSessionManager isDirector={false} />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {[
+              { label: "Kitchen Stock", href: "/dashboard/inventory/kitchen-stock" },
+              { label: "Barista Stock", href: "/dashboard/inventory/barista-stock" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center justify-between rounded-lg border bg-white p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+              >
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Read Only</p>
+                  <p className="mt-1 text-lg font-black uppercase tracking-tight">{item.label}</p>
+                </div>
+                <Package className="h-5 w-5 text-primary" />
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

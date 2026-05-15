@@ -125,7 +125,7 @@ export function InventoryControlView({
 }) {
   const isDirector = useIsDirector();
   const [role, setRole] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<InventoryTab | null>(initialTab);
   const [baristaView, setBaristaView] = useState<"inventory" | "finance">("inventory");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
@@ -168,6 +168,8 @@ export function InventoryControlView({
   const { confirm, dialog } = useConfirmDialog();
   const canViewBuyingPrice = role === "inventory";
   const isInventoryRole = role === "inventory";
+  const isReadOnlyStock = isDirector || role === "manager";
+  const canEditStock = !isReadOnlyStock;
   const effectiveVisibleTabs = useMemo(
     () => (isInventoryRole ? visibleTabs.filter((tab) => tab !== "barista-stock") : visibleTabs),
     [isInventoryRole, visibleTabs],
@@ -178,14 +180,14 @@ export function InventoryControlView({
   }, []);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    setActiveTab(isReadOnlyStock ? null : initialTab);
+  }, [initialTab, isReadOnlyStock]);
 
   useEffect(() => {
-    if (!effectiveVisibleTabs.includes(activeTab)) {
-      setActiveTab(effectiveVisibleTabs[0] ?? "kitchen-stock");
+    if (activeTab && !effectiveVisibleTabs.includes(activeTab)) {
+      setActiveTab(isReadOnlyStock ? null : effectiveVisibleTabs[0] ?? "kitchen-stock");
     }
-  }, [activeTab, effectiveVisibleTabs]);
+  }, [activeTab, effectiveVisibleTabs, isReadOnlyStock]);
 
   useEffect(() => {
     const applyInventorySnapshot = () => {
@@ -349,7 +351,7 @@ export function InventoryControlView({
   };
 
   const saveInlineSellingPrice = (lane: StoreLane, itemId: string, rawValue: string) => {
-    if (isDirector) return;
+    if (!canEditStock) return;
 
     const sellingPrice = Number(rawValue);
     if (Number.isNaN(sellingPrice) || sellingPrice < 0) return;
@@ -410,7 +412,7 @@ export function InventoryControlView({
   };
 
   const addStoreItem = async (lane: StoreLane) => {
-    if (isDirector) return;
+    if (!canEditStock) return;
 
     const name = lane === "kitchen" ? kitchenName : baristaName;
     const subCategory = (lane === "kitchen" ? kitchenSubCategory : baristaSubCategory).trim();
@@ -499,7 +501,7 @@ export function InventoryControlView({
   };
 
   const saveEditedItem = async () => {
-    if (isDirector) return;
+    if (!canEditStock) return;
     if (!editModal) return;
 
     const qty = Number(editModal.qty);
@@ -577,7 +579,7 @@ export function InventoryControlView({
   };
 
   const clearDepartmentInventory = async (lane: StoreLane) => {
-    if (isDirector) return;
+    if (!canEditStock) return;
 
     const label = lane === "kitchen" ? "Kitchen" : "Bar";
     const destinationCategory: ItemCategory = lane === "kitchen" ? "Kitchen" : "Bar";
@@ -611,13 +613,15 @@ export function InventoryControlView({
       <CardHeader className="border-b">
         <CardTitle className="text-lg uppercase font-black">{title}</CardTitle>
         <CardDescription>
-          {lane === "kitchen" && isInventoryRole
+          {isReadOnlyStock
+            ? "Read-only stock table. Managers can view balances without changing inventory."
+            : lane === "kitchen" && isInventoryRole
             ? "Inventory manager can adjust existing kitchen stock and record damages."
             : "Add or edit stock with the same core fields shown in the table."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        {!(lane === "kitchen" && isInventoryRole) && (
+        {canEditStock && !(lane === "kitchen" && isInventoryRole) && (
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-2">
           <Input
             value={lane === "kitchen" ? kitchenName : baristaName}
@@ -695,14 +699,14 @@ export function InventoryControlView({
               />
             </>
           )}
-          <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={isDirector}>
+          <Button className="h-10 font-black uppercase text-[10px] tracking-widest" onClick={() => addStoreItem(lane)} disabled={!canEditStock}>
             <Plus className="w-4 h-4 mr-2" /> Add
           </Button>
           <Button
             variant="outline"
             className="h-10 font-black uppercase text-[10px] tracking-widest"
             onClick={() => clearDepartmentInventory(lane)}
-            disabled={isDirector}
+            disabled={!canEditStock}
           >
             <Trash2 className="w-4 h-4 mr-2" /> Clear
           </Button>
@@ -729,7 +733,7 @@ export function InventoryControlView({
               )}
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Low Threshold</TableHead>
               <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
-              <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>
+              {canEditStock && <TableHead className="font-black uppercase text-[10px] tracking-widest text-right">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -763,7 +767,7 @@ export function InventoryControlView({
                       </TableCell>
                     )}
                     <TableCell className="font-bold">
-                      {isDirector ? (
+                      {!canEditStock ? (
                         typeof displaySellingPrice === "number" && displaySellingPrice > 0 ? `TSh ${displaySellingPrice.toLocaleString()}` : "-"
                       ) : (
                         <Input
@@ -793,17 +797,19 @@ export function InventoryControlView({
                 )}
                 <TableCell className="font-bold">{item.minStock}</TableCell>
                 <TableCell className="font-black uppercase text-[10px] tracking-widest">{getStockLabel(item.stock, item.minStock)}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => openEditModal(lane, item)} disabled={isDirector}>
-                    <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
-                  </Button>
-                </TableCell>
+                {canEditStock && (
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" onClick={() => openEditModal(lane, item)}>
+                      <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
               );
             })}
             {list.length === 0 && (
               <TableRow>
-                <TableCell colSpan={lane === "kitchen" ? 9 : canViewBuyingPrice ? 9 : 8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                <TableCell colSpan={lane === "kitchen" ? (canEditStock ? 9 : 8) : canViewBuyingPrice ? (canEditStock ? 9 : 8) : (canEditStock ? 8 : 7)} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                   No stock recorded yet
                 </TableCell>
               </TableRow>
@@ -966,16 +972,16 @@ export function InventoryControlView({
         </p>
       </header>
 
-      {isDirector && (
+      {isReadOnlyStock && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
           <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
-            Managing Director View: Stock visibility only
+            {isDirector ? "Managing Director View" : "Manager View"}: Stock visibility only. Open a stock tab to view the table.
           </CardContent>
         </Card>
       )}
 
-      {effectiveVisibleTabs.length > 1 && (
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
+      {effectiveVisibleTabs.length > 0 && (
+        <Tabs value={activeTab ?? ""} onValueChange={(value) => setActiveTab(value as InventoryTab)}>
           <TabsList className="h-11">
             {effectiveVisibleTabs.includes("kitchen-stock") && (
               <TabsTrigger value="kitchen-stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
@@ -987,15 +993,30 @@ export function InventoryControlView({
         </Tabs>
       )}
 
+      {isReadOnlyStock && !activeTab && (
+        <Card className="border-dashed shadow-none">
+          <CardContent className="p-6 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            Select Kitchen Stock or Barista Stock above to open the table.
+          </CardContent>
+        </Card>
+      )}
+
       {activeTab === "kitchen-stock" && (
         <div className="space-y-6">
-          <KitchenSessionManager isDirector={isDirector} />
+          {isReadOnlyStock ? (
+            <>
+              {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
+              {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems, "kitchen")}
+            </>
+          ) : (
+            <KitchenSessionManager isDirector={isDirector} />
+          )}
         </div>
       )}
 
       {activeTab === "barista-stock" && (
         <div className="space-y-6">
-          {!isDirector && <KitchenSessionManager isDirector={isDirector} department="barista" />}
+          {canEditStock && <KitchenSessionManager isDirector={isDirector} department="barista" />}
           {canViewBaristaFinance && (
             <Tabs value={baristaView} onValueChange={(value) => setBaristaView(value as "inventory" | "finance")}>
               <TabsList className="h-11">

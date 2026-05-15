@@ -20,7 +20,8 @@ import {
   FileSpreadsheet,
   MessageCircle,
   MonitorSmartphone,
-  LogOut
+  LogOut,
+  ReceiptText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role } from "@/app/lib/mock-data";
@@ -38,20 +39,21 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'director', 'cashier'] },
   { label: 'Kitchen Stock', href: '/dashboard/inventory/kitchen-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
   { label: 'Barista Stock', href: '/dashboard/inventory/barista-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
-  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['director', 'inventory'] },
   { label: 'Menu Create', href: '/dashboard/menu-create', icon: FileSpreadsheet, roles: ['manager'] },
   { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director', 'inventory'] },
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: [] },
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
-  { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['manager', 'director', 'cashier'] },
-  { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['manager', 'director', 'cashier'] },
+  { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['director', 'cashier'] },
+  { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
-  { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['manager', 'director', 'kitchen', 'barista'] },
+  { label: 'Expenses', href: '/dashboard/expenses', icon: ReceiptText, roles: ['manager', 'director'] },
+  { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['director', 'kitchen', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['director'] },
   { label: 'Settings', href: '/dashboard/settings/password', icon: Settings, roles: ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'] },
-  { label: 'System Settings', href: '/dashboard/settings', icon: Settings, roles: ['manager', 'director'] },
+  { label: 'System Settings', href: '/dashboard/settings', icon: Settings, roles: ['director'] },
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {

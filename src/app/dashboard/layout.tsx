@@ -13,7 +13,7 @@ import { normalizeRole } from "@/app/lib/auth";
 import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
 import { readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Bell, Home, Hotel, Search, User, Clock, Menu, WalletCards } from "lucide-react";
+import { BarChart3, Bell, Home, Hotel, Search, User, Clock, Menu, WalletCards, ReceiptText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ const DIRECTOR_MOBILE_NAV = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Rooms", href: "/dashboard/rooms", icon: Hotel },
   { label: "Payments", href: "/dashboard/payments", icon: WalletCards },
+  { label: "Expenses", href: "/dashboard/expenses", icon: ReceiptText },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
 ] as const;
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v3";
@@ -750,8 +751,8 @@ export default function DashboardLayout({
   const [usernameFeedback, setUsernameFeedback] = useState<string | null>(null);
 
   const allowedByRole: Record<Role, string[]> = {
-    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
-    director: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
+    manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/expenses', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
+    director: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/expenses', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
     inventory: ['/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/company-stock', '/dashboard/settings/password'],
     cashier: ['/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/rooms', '/dashboard/settings/password'],
     kitchen: ['/dashboard/fnb-pos', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/payments', '/dashboard/settings/password'],
@@ -966,7 +967,7 @@ export default function DashboardLayout({
 
       {isDirector && (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0f1712]/95 px-3 pb-3 pt-2 text-white shadow-[0_-12px_30px_rgba(0,0,0,0.18)] backdrop-blur md:hidden">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {DIRECTOR_MOBILE_NAV.map((item) => {
               const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
               return (
