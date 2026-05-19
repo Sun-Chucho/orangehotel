@@ -130,6 +130,7 @@ export const FIREBASE_SYNC_KEYS = [
   "orange-hotel-website-bookings",
   "orange-hotel-live-chat",
   "orange-hotel-expenses",
+  "orange-hotel-menu-audit-trail",
   "orange-hotel-login-profiles",
   "orange-hotel-kitchen-purchase-session",
   "orange-hotel-kitchen-purchase-history",
@@ -347,6 +348,7 @@ function getCanonicalDefaultValue(key: string) {
     case "orange-hotel-website-bookings":
     case "orange-hotel-live-chat":
     case "orange-hotel-expenses":
+    case "orange-hotel-menu-audit-trail":
     case "orange-hotel-kitchen-purchase-history":
     case "orange-hotel-kitchen-daily-stock-history":
     case "orange-hotel-barista-purchase-history":

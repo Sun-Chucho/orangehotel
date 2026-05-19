@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writePosState } from "@/app/lib/storage";
+import { readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
+import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import {
   KITCHEN_CATEGORY_LABELS,
   KITCHEN_CATEGORY_OPTIONS,
@@ -35,6 +36,16 @@ interface PaymentRecord {
   id: string;
 }
 
+interface MenuAuditEntry {
+  id: string;
+  menu: "kitchen" | "barista";
+  itemId: string;
+  itemName: string;
+  changedAt: number;
+  changedBy: string;
+  changes: string[];
+}
+
 const KITCHEN_LEGACY = {
   tickets: "orange-hotel-kitchen-tickets",
   seq: "orange-hotel-kitchen-seq",
@@ -51,6 +62,18 @@ const BARISTA_LEGACY = {
   defaultSeq: 490,
 } as const;
 
+const STORAGE_MENU_AUDIT = "orange-hotel-menu-audit-trail";
+
+function formatAuditDate(value: number) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export function MenuCreateView() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
@@ -64,6 +87,9 @@ export function MenuCreateView() {
   const [kitchenPrice, setKitchenPrice] = useState("");
   const [kitchenPrepMinutes, setKitchenPrepMinutes] = useState("15");
   const [kitchenCategory, setKitchenCategory] = useState<KitchenMenuCategory>("salad");
+  const [editingKitchenId, setEditingKitchenId] = useState<string | null>(null);
+  const [editingKitchenName, setEditingKitchenName] = useState("");
+  const [editingKitchenPrice, setEditingKitchenPrice] = useState("");
 
   const [baristaTickets, setBaristaTickets] = useState<QueueTicket[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PaymentRecord[]>([]);
@@ -73,6 +99,10 @@ export function MenuCreateView() {
   const [baristaPrice, setBaristaPrice] = useState("");
   const [baristaPrepMinutes, setBaristaPrepMinutes] = useState("10");
   const [baristaCategory, setBaristaCategory] = useState<BaristaCategory>("coffee");
+  const [editingBaristaId, setEditingBaristaId] = useState<string | null>(null);
+  const [editingBaristaName, setEditingBaristaName] = useState("");
+  const [editingBaristaPrice, setEditingBaristaPrice] = useState("");
+  const [auditTrail, setAuditTrail] = useState<MenuAuditEntry[]>([]);
 
   useEffect(() => {
     const kitchenSnapshot = readPosState<QueueTicket, PaymentRecord, KitchenMenuItem>(
@@ -110,7 +140,18 @@ export function MenuCreateView() {
     setBaristaPayments(baristaSnapshot.payments);
     setBaristaSeq(baristaSnapshot.ticketSeq);
     setBaristaMenuItems(baristaSnapshot.menuItems);
+    setAuditTrail(readJson<MenuAuditEntry[]>(STORAGE_MENU_AUDIT) ?? []);
+
+    return subscribeToSyncedStorageKey<MenuAuditEntry[]>(STORAGE_MENU_AUDIT, (value) => {
+      setAuditTrail(Array.isArray(value) ? value : readJson<MenuAuditEntry[]>(STORAGE_MENU_AUDIT) ?? []);
+    });
   }, []);
+
+  const saveAuditEntry = (entry: MenuAuditEntry) => {
+    const nextAuditTrail = [entry, ...auditTrail].slice(0, 100);
+    setAuditTrail(nextAuditTrail);
+    writeJson(STORAGE_MENU_AUDIT, nextAuditTrail);
+  };
 
   const addKitchenMenuItem = async () => {
     if (isDirector) return;
@@ -142,6 +183,57 @@ export function MenuCreateView() {
     setKitchenCategory("salad");
   };
 
+  const startKitchenEdit = (item: KitchenMenuItem) => {
+    setEditingKitchenId(item.id);
+    setEditingKitchenName(item.name);
+    setEditingKitchenPrice(String(item.price));
+  };
+
+  const cancelKitchenEdit = () => {
+    setEditingKitchenId(null);
+    setEditingKitchenName("");
+    setEditingKitchenPrice("");
+  };
+
+  const saveKitchenEdit = async (item: KitchenMenuItem) => {
+    if (isDirector) return;
+    const nextName = editingKitchenName.trim();
+    const nextPrice = Number(editingKitchenPrice);
+    if (!nextName || Number.isNaN(nextPrice) || nextPrice <= 0) return;
+
+    const changes = [
+      item.name !== nextName ? `Name: ${item.name} -> ${nextName}` : "",
+      item.price !== nextPrice ? `Price: TSh ${item.price.toLocaleString()} -> TSh ${nextPrice.toLocaleString()}` : "",
+    ].filter(Boolean);
+    if (changes.length === 0) {
+      cancelKitchenEdit();
+      return;
+    }
+
+    const approved = await confirm({
+      title: "Update Kitchen Menu Item",
+      description: `Save changes to ${item.name}?`,
+      actionLabel: "Save Changes",
+    });
+    if (!approved) return;
+
+    const nextMenuItems = kitchenMenuItems.map((entry) =>
+      entry.id === item.id ? { ...entry, name: nextName, price: nextPrice } : entry,
+    );
+    setKitchenMenuItems(nextMenuItems);
+    writePosState(STORAGE_KITCHEN_STATE, kitchenTickets, kitchenSeq, kitchenPayments, nextMenuItems);
+    saveAuditEntry({
+      id: `audit-${Date.now()}`,
+      menu: "kitchen",
+      itemId: item.id,
+      itemName: nextName,
+      changedAt: Date.now(),
+      changedBy: "manager",
+      changes,
+    });
+    cancelKitchenEdit();
+  };
+
   const addBaristaMenuItem = async () => {
     if (isDirector) return;
     const price = Number(baristaPrice);
@@ -171,6 +263,59 @@ export function MenuCreateView() {
     setBaristaPrepMinutes("10");
     setBaristaCategory("coffee");
   };
+
+  const startBaristaEdit = (item: BaristaMenuItem) => {
+    setEditingBaristaId(item.id);
+    setEditingBaristaName(item.name);
+    setEditingBaristaPrice(String(item.price));
+  };
+
+  const cancelBaristaEdit = () => {
+    setEditingBaristaId(null);
+    setEditingBaristaName("");
+    setEditingBaristaPrice("");
+  };
+
+  const saveBaristaEdit = async (item: BaristaMenuItem) => {
+    if (isDirector) return;
+    const nextName = editingBaristaName.trim();
+    const nextPrice = Number(editingBaristaPrice);
+    if (!nextName || Number.isNaN(nextPrice) || nextPrice <= 0) return;
+
+    const changes = [
+      item.name !== nextName ? `Name: ${item.name} -> ${nextName}` : "",
+      item.price !== nextPrice ? `Price: TSh ${item.price.toLocaleString()} -> TSh ${nextPrice.toLocaleString()}` : "",
+    ].filter(Boolean);
+    if (changes.length === 0) {
+      cancelBaristaEdit();
+      return;
+    }
+
+    const approved = await confirm({
+      title: "Update Barista Menu Item",
+      description: `Save changes to ${item.name}?`,
+      actionLabel: "Save Changes",
+    });
+    if (!approved) return;
+
+    const nextMenuItems = baristaMenuItems.map((entry) =>
+      entry.id === item.id ? { ...entry, name: nextName, price: nextPrice } : entry,
+    );
+    setBaristaMenuItems(nextMenuItems);
+    writePosState(STORAGE_BARISTA_STATE, baristaTickets, baristaSeq, baristaPayments, nextMenuItems);
+    saveAuditEntry({
+      id: `audit-${Date.now()}`,
+      menu: "barista",
+      itemId: item.id,
+      itemName: nextName,
+      changedAt: Date.now(),
+      changedBy: "manager",
+      changes,
+    });
+    cancelBaristaEdit();
+  };
+
+  const visibleAuditTrail = auditTrail.filter((entry) => entry.menu === tab);
 
   return (
     <div className="space-y-6">
@@ -229,20 +374,49 @@ export function MenuCreateView() {
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Category</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Prep</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Price</TableHead>
+                    <TableHead className="text-right font-black uppercase text-[10px] tracking-widest h-12">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {kitchenMenuItems.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-bold">{item.name}</TableCell>
+                      <TableCell className="font-bold">
+                        {editingKitchenId === item.id ? (
+                          <Input value={editingKitchenName} onChange={(event) => setEditingKitchenName(event.target.value)} disabled={isDirector} />
+                        ) : (
+                          item.name
+                        )}
+                      </TableCell>
                       <TableCell className="font-bold uppercase text-[10px] tracking-widest">{KITCHEN_CATEGORY_LABELS[item.category]}</TableCell>
                       <TableCell className="font-bold">{item.prepMinutes} min</TableCell>
-                      <TableCell className="font-bold">TSh {item.price.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold">
+                        {editingKitchenId === item.id ? (
+                          <Input type="number" min="1" value={editingKitchenPrice} onChange={(event) => setEditingKitchenPrice(event.target.value)} disabled={isDirector} />
+                        ) : (
+                          `TSh ${item.price.toLocaleString()}`
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {editingKitchenId === item.id ? (
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" onClick={() => saveKitchenEdit(item)} disabled={isDirector} className="font-black uppercase text-[10px] tracking-widest">
+                              Save
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={cancelKitchenEdit} className="font-black uppercase text-[10px] tracking-widest">
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => startKitchenEdit(item)} disabled={isDirector} className="font-black uppercase text-[10px] tracking-widest">
+                            Edit
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {kitchenMenuItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                      <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                         No kitchen menu items yet
                       </TableCell>
                     </TableRow>
@@ -296,20 +470,49 @@ export function MenuCreateView() {
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Category</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Prep</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Price</TableHead>
+                    <TableHead className="text-right font-black uppercase text-[10px] tracking-widest h-12">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {baristaMenuItems.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-bold">{item.name}</TableCell>
+                      <TableCell className="font-bold">
+                        {editingBaristaId === item.id ? (
+                          <Input value={editingBaristaName} onChange={(event) => setEditingBaristaName(event.target.value)} disabled={isDirector} />
+                        ) : (
+                          item.name
+                        )}
+                      </TableCell>
                       <TableCell className="font-bold uppercase text-[10px] tracking-widest">{item.category}</TableCell>
                       <TableCell className="font-bold">{item.prepMinutes} min</TableCell>
-                      <TableCell className="font-bold">TSh {item.price.toLocaleString()}</TableCell>
+                      <TableCell className="font-bold">
+                        {editingBaristaId === item.id ? (
+                          <Input type="number" min="1" value={editingBaristaPrice} onChange={(event) => setEditingBaristaPrice(event.target.value)} disabled={isDirector} />
+                        ) : (
+                          `TSh ${item.price.toLocaleString()}`
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {editingBaristaId === item.id ? (
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" onClick={() => saveBaristaEdit(item)} disabled={isDirector} className="font-black uppercase text-[10px] tracking-widest">
+                              Save
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={cancelBaristaEdit} className="font-black uppercase text-[10px] tracking-widest">
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => startBaristaEdit(item)} disabled={isDirector} className="font-black uppercase text-[10px] tracking-widest">
+                            Edit
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {baristaMenuItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                      <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
                         No barista menu items yet
                       </TableCell>
                     </TableRow>
@@ -320,6 +523,42 @@ export function MenuCreateView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">Menu Edit Audit Trail</CardTitle>
+          <CardDescription>Recent {tab === "kitchen" ? "kitchen" : "barista"} menu changes with timestamp and details.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/10">
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">When</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Changed By</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Changes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleAuditTrail.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="font-bold">{formatAuditDate(entry.changedAt)}</TableCell>
+                  <TableCell className="font-bold">{entry.itemName}</TableCell>
+                  <TableCell className="font-bold capitalize">{entry.changedBy}</TableCell>
+                  <TableCell className="font-medium text-muted-foreground">{entry.changes.join(" | ")}</TableCell>
+                </TableRow>
+              ))}
+              {visibleAuditTrail.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No menu edits recorded yet
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
