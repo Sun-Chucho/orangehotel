@@ -21,7 +21,8 @@ import {
   MessageCircle,
   MonitorSmartphone,
   LogOut,
-  ReceiptText
+  ReceiptText,
+  HandCoins
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role } from "@/app/lib/mock-data";
@@ -45,6 +46,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: [] },
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
+  { label: 'Cash Requests', href: '/dashboard/cash-requests', icon: HandCoins, roles: ['cashier'] },
   { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['director', 'cashier'] },
   { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
@@ -56,7 +58,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
-  cashier: ['/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat'],
+  cashier: ['/dashboard/cashier', '/dashboard/cash-requests', '/dashboard/website-bookings', '/dashboard/live-chat'],
   kitchen: ['/dashboard/kitchen'],
   barista: ['/dashboard/barista'],
 };

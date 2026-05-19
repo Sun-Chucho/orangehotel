@@ -922,7 +922,7 @@ export default function DashboardLayout({
     manager: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/menu-create', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/expenses', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
     director: ['/dashboard', '/dashboard/rooms', '/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/inventory/barista-stock', '/dashboard/company-stock', '/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/expenses', '/dashboard/payments', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/barista', '/dashboard/staff', '/dashboard/analytics', '/dashboard/settings', '/dashboard/settings/sync', '/dashboard/settings/password'],
     inventory: ['/dashboard/inventory', '/dashboard/inventory/kitchen-stock', '/dashboard/company-stock', '/dashboard/settings/password'],
-    cashier: ['/dashboard/cashier', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/rooms', '/dashboard/settings/password'],
+    cashier: ['/dashboard/cashier', '/dashboard/cash-requests', '/dashboard/website-bookings', '/dashboard/live-chat', '/dashboard/payments', '/dashboard/rooms', '/dashboard/settings/password'],
     kitchen: ['/dashboard/fnb-pos', '/dashboard/kitchen', '/dashboard/cancelled', '/dashboard/payments', '/dashboard/settings/password'],
     barista: ['/dashboard/fnb-pos', '/dashboard/barista', '/dashboard/payments', '/dashboard/cancelled', '/dashboard/settings/password'],
   };

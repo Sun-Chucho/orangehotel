@@ -12,6 +12,9 @@ export interface ExpenseRecord {
   notes?: string;
   createdAt: number;
   createdBy?: string;
+  payoutStatus?: "approved" | "paid-out";
+  paidOutAt?: number;
+  paidOutBy?: string;
 }
 
 export const EXPENSE_DEPARTMENTS: Array<{ value: ExpenseDepartment; label: string }> = [
