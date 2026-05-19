@@ -11,7 +11,9 @@ let _isConnected = false;
 let _firebaseRealtimeConnected = false;
 const _connectionListeners = new Set<(connected: boolean) => void>();
 const _lastSyncedAt: Record<string, number> = {};
+const _pendingLocalWrites: Record<string, { value: unknown; createdAt: number }> = {};
 const FALLBACK_POLL_INTERVAL_MS = 60000;
+const PENDING_LOCAL_WRITE_TTL_MS = 15000;
 
 function dispatchStorageUpdated(key: string) {
   if (typeof window === "undefined") return;
@@ -307,6 +309,24 @@ function areSnapshotsEqual(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function shouldIgnoreRemoteValue(key: string, remoteValue: unknown) {
+  const pending = _pendingLocalWrites[key];
+  if (!pending) return false;
+
+  if (Date.now() - pending.createdAt > PENDING_LOCAL_WRITE_TTL_MS) {
+    delete _pendingLocalWrites[key];
+    return false;
+  }
+
+  if (areSnapshotsEqual(remoteValue, pending.value)) {
+    delete _pendingLocalWrites[key];
+    return false;
+  }
+
+  const localValue = sanitizeForStorage(sanitizeSyncedValue(key, readParsedLocalValue(key)));
+  return areSnapshotsEqual(localValue, pending.value);
+}
+
 function getCanonicalDefaultValue(key: string) {
   switch (key) {
     case "orange-hotel-cashier-state":
@@ -441,6 +461,7 @@ function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value:
 export function syncStorageValueToFirebase<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   const sanitizedValue = sanitizeForStorage(value);
+  _pendingLocalWrites[key] = { value: sanitizedValue, createdAt: Date.now() };
   void ensureFirebaseAuthReady()
     .then(() => set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue))
     .then(() => {
@@ -561,6 +582,7 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
     try {
       const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue<T>(key)));
       if (remoteValue === null) return;
+      if (shouldIgnoreRemoteValue(key, remoteValue)) return;
       const currentValue = sanitizeForStorage(readParsedLocalValue<T>(key));
       if (!areSnapshotsEqual(currentValue, remoteValue)) {
         localStorage.setItem(key, JSON.stringify(remoteValue));
@@ -605,6 +627,9 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
             return;
           }
           const nextValue = sanitizeForStorage(sanitizeSyncedValue(key, snapshot.val() as T));
+          if (shouldIgnoreRemoteValue(key, nextValue)) {
+            return;
+          }
           mirrorCanonicalStateToLegacyLocal(key, nextValue);
           readSnapshotValue<T>(key, nextValue, onChange);
           markSyncHealthy(key);

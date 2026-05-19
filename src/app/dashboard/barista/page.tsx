@@ -259,6 +259,7 @@ export default function BaristaPage() {
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
   const [passwordFeedback, setPasswordFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
+  const [deliveringTicketId, setDeliveringTicketId] = useState<string | null>(null);
 
   const roomSuggestions = useMemo(() => ROOMS.map((room) => room.number), []);
   const tableSuggestions = useMemo(
@@ -931,16 +932,36 @@ export default function BaristaPage() {
   };
 
   const deliverTicket = async (id: string) => {
-    if (isDirector) return;
+    if (isDirector || deliveringTicketId) return;
     const approved = await confirm({
       title: "Deliver Barista Order",
       description: "Are you sure you want to mark this barista order as delivered?",
       actionLabel: "Deliver",
     });
     if (!approved) return;
-    const nextTickets = tickets.filter((ticket) => ticket.id !== id);
-    setTickets(nextTickets);
-    writePosState(STORAGE_BARISTA_STATE, nextTickets, ticketSeq, baristaPayments, storedMenuItems);
+    setDeliveringTicketId(id);
+    try {
+      const snapshot = readPosState<BaristaTicket, BaristaPaymentRecord, BaristaMenuItem>(
+        STORAGE_BARISTA_STATE,
+        STORAGE_TICKETS,
+        STORAGE_SEQ,
+        STORAGE_PAYMENTS,
+        STORAGE_MENU,
+        490,
+      );
+      const sourceTickets = snapshot.tickets.length > 0 ? snapshot.tickets : tickets;
+      const sourcePayments = snapshot.payments.length > 0 ? snapshot.payments : baristaPayments;
+      const sourceMenuItems = snapshot.menuItems.length > 0 ? snapshot.menuItems : storedMenuItems;
+      const nextTickets = sourceTickets.filter((ticket) => ticket.id !== id);
+
+      setTickets(nextTickets);
+      setTicketSeq(snapshot.ticketSeq);
+      setBaristaPayments(sourcePayments);
+      setStoredMenuItems(sourceMenuItems);
+      writePosState(STORAGE_BARISTA_STATE, nextTickets, snapshot.ticketSeq, sourcePayments, sourceMenuItems);
+    } finally {
+      setDeliveringTicketId(null);
+    }
   };
 
   const cancelTicket = async (id: string) => {
@@ -1521,8 +1542,8 @@ export default function BaristaPage() {
                         <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
-                              <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
+                            <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector || deliveringTicketId === ticket.id} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
+                              <CheckCircle2 className="w-4 h-4 mr-1" /> {deliveringTicketId === ticket.id ? "Saving" : "Delivered"}
                             </Button>
                             <Button onClick={() => cancelTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
                               <XCircle className="w-4 h-4 mr-1" /> Cancelled
