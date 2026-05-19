@@ -343,6 +343,7 @@ export default function Home() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewStayType, setReviewStayType] = useState("");
   const [reviewDetails, setReviewDetails] = useState("");
+  const [showReviewPopup, setShowReviewPopup] = useState(false);
 
   const nights = useMemo(() => {
     if (!checkIn || !checkOut) return 0;
@@ -556,6 +557,7 @@ export default function Home() {
     setReviewRating(5);
     setReviewStayType("");
     setReviewDetails("");
+    setShowReviewPopup(false);
   };
 
   return (
@@ -1148,21 +1150,79 @@ export default function Home() {
       </section>
 
       <section id="reviews" className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-sm border border-black/10 bg-white p-6 shadow-[0_16px_32px_rgba(0,0,0,0.08)] sm:p-8">
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Customer Reviews</p>
-            <h2 className="mt-3 font-headline text-4xl leading-tight">Share Your Orange Hotel Experience</h2>
-            <div className="mt-5 flex items-center gap-3">
-              <div className="flex text-orange-500">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <Star key={index} className={`h-5 w-5 ${index < Math.round(averageReviewRating) ? "fill-current" : ""}`} />
-                ))}
+        <div className="overflow-hidden rounded-sm border border-black/10 bg-black text-white shadow-xl">
+          <div className="flex flex-col gap-5 px-5 py-7 sm:px-8 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Customer Reviews</p>
+              <h2 className="mt-3 font-headline text-4xl leading-tight">Guest Feedback From Orange Hotel</h2>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <div className="flex text-orange-300">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <Star key={index} className={`h-5 w-5 ${index < Math.round(averageReviewRating) ? "fill-current" : ""}`} />
+                  ))}
+                </div>
+                <span className="text-sm font-black">{averageReviewRating.toFixed(1)} / 5</span>
+                <span className="text-sm text-white/55">{reviews.length} reviews</span>
               </div>
-              <span className="text-sm font-black">{averageReviewRating.toFixed(1)} / 5</span>
-              <span className="text-sm text-black/55">{reviews.length} reviews</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowReviewPopup(true)}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-sm bg-orange-500 px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition hover:bg-orange-400"
+            >
+              <Star className="h-4 w-4 fill-current" />
+              Submit Review
+            </button>
+          </div>
+
+          <div className="border-t border-white/10 px-5 pb-6 sm:px-8">
+            <div className="flex items-center justify-between gap-4 py-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Swipe or scroll horizontally</p>
+              <span className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
+                Horizontal
+              </span>
+            </div>
+            <div className="flex snap-x gap-4 overflow-x-auto pb-4">
+              {reviews.map((review) => (
+                <article key={review.id} className="min-w-[280px] snap-start rounded-sm border border-white/10 bg-white/[0.06] p-5 sm:min-w-[360px]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate font-black">{review.name}</h4>
+                      <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.18em] text-white/45">{review.stayType}</p>
+                    </div>
+                    <div className="flex shrink-0 text-orange-300">
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <Star key={index} className={`h-4 w-4 ${index < review.rating ? "fill-current" : ""}`} />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-4 line-clamp-5 min-h-[140px] text-sm leading-7 text-white/78">{review.details}</p>
+                  <p className="mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/70">{review.createdAt}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {showReviewPopup ? (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-sm border border-black/10 bg-white p-5 shadow-[0_28px_90px_rgba(0,0,0,0.28)] sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Submit Review</p>
+                <h2 className="mt-2 font-headline text-3xl leading-tight">Rate Your Orange Hotel Experience</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReviewPopup(false)}
+                className="rounded-sm border border-black/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-black/65 transition hover:border-black hover:text-black"
+              >
+                Close
+              </button>
             </div>
 
-            <form onSubmit={submitReview} className="mt-8 grid gap-4">
+            <form onSubmit={submitReview} className="mt-6 grid gap-4">
               <label className="text-sm font-semibold">
                 Your name
                 <input
@@ -1184,7 +1244,7 @@ export default function Home() {
               </label>
               <div>
                 <p className="text-sm font-semibold">Stars</p>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {Array.from({ length: 5 }).map((_, index) => {
                     const value = index + 1;
                     return (
@@ -1220,39 +1280,8 @@ export default function Home() {
               </button>
             </form>
           </div>
-
-          <div className="rounded-sm border border-black/10 bg-black p-4 text-white shadow-xl sm:p-5">
-            <div className="flex items-center justify-between gap-4 px-2 py-2">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Guest Feedback</p>
-                <h3 className="mt-2 font-headline text-3xl">Recent Reviews</h3>
-              </div>
-              <span className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
-                Scroll
-              </span>
-            </div>
-            <div className="mt-3 max-h-[520px] space-y-3 overflow-y-auto pr-2">
-              {reviews.map((review) => (
-                <article key={review.id} className="rounded-sm border border-white/10 bg-white/[0.06] p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h4 className="font-black">{review.name}</h4>
-                      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">{review.stayType}</p>
-                    </div>
-                    <div className="flex text-orange-300">
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <Star key={index} className={`h-4 w-4 ${index < review.rating ? "fill-current" : ""}`} />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="mt-4 text-sm leading-7 text-white/78">{review.details}</p>
-                  <p className="mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/70">{review.createdAt}</p>
-                </article>
-              ))}
-            </div>
-          </div>
         </div>
-      </section>
+      ) : null}
 
       <footer className="border-t border-white/10 bg-[#0b0b0b] text-white">
         <div className="mx-auto grid max-w-6xl gap-8 px-6 py-14 md:grid-cols-[1.1fr_1fr_1.1fr]">
