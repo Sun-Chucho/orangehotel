@@ -136,7 +136,7 @@ export default function KitchenPage() {
       setTickets(snapshot.tickets);
       setTicketSeq(snapshot.ticketSeq);
       setKitchenPayments(snapshot.payments);
-      const nextMenuItems = mergeKitchenMenuItems(snapshot.menuItems, { stripDefaultMenu: true });
+      const nextMenuItems = mergeKitchenMenuItems(snapshot.menuItems);
       setMenuItems(nextMenuItems);
       if (JSON.stringify(nextMenuItems) !== JSON.stringify(snapshot.menuItems)) {
         writePosState(STORAGE_KITCHEN_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, nextMenuItems);

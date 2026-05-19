@@ -190,7 +190,6 @@ function sanitizeSyncedValue<T>(key: string, value: T): T {
     payments: Array.isArray(snapshot.payments) ? snapshot.payments : [],
     menuItems: mergeKitchenMenuItems(
       (Array.isArray(snapshot.menuItems) ? snapshot.menuItems : []) as KitchenMenuItem[],
-      { stripDefaultMenu: true },
     ),
   } as T;
 }
@@ -405,7 +404,6 @@ function getLocalFallbackForSync(key: string) {
     const payments = readParsedLocalValue<unknown[]>("orange-hotel-kitchen-payments") ?? [];
     const menuItems = mergeKitchenMenuItems(
       ((readParsedLocalValue<unknown[]>("orange-hotel-kitchen-menu") ?? []) as KitchenMenuItem[]),
-      { stripDefaultMenu: true },
     );
     const ticketSeq = Number(localStorage.getItem("orange-hotel-kitchen-seq"));
     if (tickets.length === 0 && payments.length === 0 && menuItems.length === 0 && !Number.isFinite(ticketSeq)) {

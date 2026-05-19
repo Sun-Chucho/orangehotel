@@ -5,7 +5,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { STORAGE_COMPANY_STOCK } from "@/app/lib/company-stock";
 import { COMPANY_STOCK_SHEET } from "@/app/lib/company-stock-seed";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
-import { mergeKitchenMenuItems } from "@/app/lib/kitchen-menu";
+import { DEFAULT_KITCHEN_MENU, mergeKitchenMenuItems } from "@/app/lib/kitchen-menu";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
 import { ExpenseRecord, STORAGE_EXPENSES } from "@/app/lib/expenses";
 import { KitchenPurchaseHistoryEntry, STORAGE_KITCHEN_PURCHASE_HISTORY } from "@/app/lib/kitchen-session-storage";
@@ -33,6 +33,7 @@ const DIRECTOR_MOBILE_NAV = [
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
 ] as const;
 const KITCHEN_TRANSACTIONS_RESET_KEY = "orange-hotel-kitchen-transactions-reset-v3";
+const KITCHEN_MENU_PRICE_FIX_KEY = "orange-hotel-kitchen-menu-price-fix-v1";
 const DOMPO_STOCK_FIX_KEY = "orange-hotel-dompo-750ml-stock-fix-v1";
 const BARISTA_STOCK_FIX_KEY = "orange-hotel-barista-stock-fix-v5";
 const BARISTA_FINANCE_PRICE_FIX_KEY = "orange-hotel-barista-finance-price-fix-v3";
@@ -307,6 +308,25 @@ function applyBusinessCorrections() {
     });
     writePosState(STORAGE_KITCHEN_STATE, [], kitchenSnapshot.ticketSeq, [], cleanedKitchenMenu);
     localStorage.setItem(KITCHEN_TRANSACTIONS_RESET_KEY, "1");
+  }
+
+  if (!localStorage.getItem(KITCHEN_MENU_PRICE_FIX_KEY)) {
+    const kitchenSnapshot = readPosState<unknown, unknown, unknown>(
+      STORAGE_KITCHEN_STATE,
+      "orange-hotel-kitchen-tickets",
+      "orange-hotel-kitchen-seq",
+      "orange-hotel-kitchen-payments",
+      "orange-hotel-kitchen-menu",
+      300,
+    );
+    writePosState(
+      STORAGE_KITCHEN_STATE,
+      kitchenSnapshot.tickets,
+      kitchenSnapshot.ticketSeq,
+      kitchenSnapshot.payments,
+      DEFAULT_KITCHEN_MENU,
+    );
+    localStorage.setItem(KITCHEN_MENU_PRICE_FIX_KEY, "1");
   }
 
   if (!localStorage.getItem(DOMPO_STOCK_FIX_KEY)) {

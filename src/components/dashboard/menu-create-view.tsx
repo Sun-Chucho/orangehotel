@@ -86,7 +86,7 @@ export function MenuCreateView() {
     setKitchenTickets(kitchenSnapshot.tickets);
     setKitchenPayments(kitchenSnapshot.payments);
     setKitchenSeq(kitchenSnapshot.ticketSeq);
-    const nextKitchenMenuItems = mergeKitchenMenuItems(kitchenSnapshot.menuItems, { stripDefaultMenu: true });
+    const nextKitchenMenuItems = mergeKitchenMenuItems(kitchenSnapshot.menuItems);
     setKitchenMenuItems(nextKitchenMenuItems);
     if (JSON.stringify(nextKitchenMenuItems) !== JSON.stringify(kitchenSnapshot.menuItems)) {
       writePosState(
