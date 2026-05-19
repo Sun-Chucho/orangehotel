@@ -87,6 +87,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
   const isDirector = role === "director";
+  const isInstallableRole = role === "director" || role === "kitchen" || role === "barista";
   const [profileUsers, setProfileUsers] = useState<Array<{ id: string; name: string; blocked?: boolean }>>([]);
   const defaultSelectableUsers = role === "cashier" ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name })) : role === "barista" ? [...BARISTA_USERS] : [];
   const selectableUsers = useMemo(() => {
@@ -143,7 +144,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   }, [config.username, role]);
 
   useEffect(() => {
-    if (!isDirector || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    if (!isInstallableRole || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
     void navigator.serviceWorker
       .register("/sw.js", { scope: "/" })
@@ -151,17 +152,19 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       .then(() => setServiceWorkerReady(true))
       .catch(() => setServiceWorkerReady(false));
     return () => undefined;
-  }, [isDirector]);
+  }, [isInstallableRole]);
 
   useEffect(() => {
-    if (!isDirector || typeof window === "undefined") return;
+    if (!isInstallableRole || typeof window === "undefined") return;
 
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as NavigatorWithStandalone).standalone === true;
+    const userAgent = navigator.userAgent;
+    const isTouchMac = /macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1;
     setIsStandaloneApp(standalone);
-    setIsIosDevice(/iphone|ipad|ipod/i.test(navigator.userAgent));
-    setIsAndroidDevice(/android/i.test(navigator.userAgent));
+    setIsIosDevice(/iphone|ipad|ipod/i.test(userAgent) || isTouchMac);
+    setIsAndroidDevice(/android/i.test(userAgent));
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -171,7 +174,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     const handleAppInstalled = () => {
       setInstallPrompt(null);
-      setInstallFeedback("Installed. Look for Orange MD on your phone home screen or app list.");
+      setInstallFeedback(`Installed. Look for ${config.label} on your desktop, home screen, or app list.`);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -181,7 +184,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
-  }, [isDirector]);
+  }, [config.label, isInstallableRole]);
 
   const installDirectorApp = async () => {
     if (installPrompt) {
@@ -190,23 +193,23 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       setInstallPrompt(null);
       setInstallFeedback(
         choice.outcome === "accepted"
-          ? "Installing. Look for Orange MD on your phone home screen or app list."
+          ? `Installing. Look for ${config.label} on your desktop, home screen, or app list.`
           : "Installation dismissed.",
       );
       return;
     }
 
     if (isIosDevice) {
-      setInstallFeedback("On iPhone, open this page in Safari, tap Share, then Add to Home Screen.");
+      setInstallFeedback("On iPhone or iPad, use Safari over HTTPS, tap Share, then Add to Home Screen. iOS does not show the Chrome-style install popup.");
       return;
     }
 
     if (isAndroidDevice) {
-      setInstallFeedback("On Android, open Chrome menu, choose Install app, then look for Orange MD.");
+      setInstallFeedback(`On Android, open Chrome menu, choose Install app, then look for ${config.label}.`);
       return;
     }
 
-    setInstallFeedback("Use your browser menu to install this page as Orange MD.");
+    setInstallFeedback(`Use Chrome menu, Save and share, then Install page as app for ${config.label}.`);
   };
 
   const installButtonText = installPrompt
@@ -216,6 +219,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
       : isAndroidDevice
         ? "Show Android Steps"
         : "Show Install Steps";
+  const installerStatusText = isIosDevice
+    ? "iPhone install uses Safari Share"
+    : serviceWorkerReady
+      ? "App installer ready"
+      : "Preparing app installer";
 
   const handleLogin = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -263,10 +271,10 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   };
 
   return (
-    <div className={cn("min-h-screen flex flex-col", isDirector ? "bg-[#f4f7f2]" : "bg-background")}>
-      <div className={cn("flex-1 flex flex-col items-center justify-center p-6 text-center", isDirector && "px-4 py-8")}>
-        <div className={cn("mb-12", isDirector && "mb-6")}>
-          <div className={cn("w-40 h-40 bg-white flex items-center justify-center mx-auto shadow-2xl mb-4 overflow-hidden p-4", isDirector ? "h-28 w-28 rounded-lg shadow-xl" : "rounded-3xl")}>
+    <div className={cn("flex min-h-[100dvh] w-full flex-col overflow-x-hidden", isDirector ? "bg-[#f4f7f2]" : "bg-background")}>
+      <div className={cn("flex flex-1 flex-col items-center justify-center p-6 text-center", isDirector && "justify-start px-3 py-4 sm:px-4 sm:py-8 sm:justify-center")}>
+        <div className={cn("mb-12", isDirector && "mb-4 sm:mb-6")}>
+          <div className={cn("w-40 h-40 bg-white flex items-center justify-center mx-auto shadow-2xl mb-4 overflow-hidden p-4", isDirector ? "h-24 w-24 rounded-lg shadow-xl sm:h-28 sm:w-28" : "rounded-3xl")}>
             {logo && (
               <Image
                 src={logo.imageUrl}
@@ -285,11 +293,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
         </div>
 
         <div className={cn("w-full max-w-md", isDirector && "max-w-sm")}>
-          <form className={cn("bg-white border p-8 shadow-sm text-left", isDirector ? "rounded-lg border-black/10 p-5 shadow-xl shadow-black/5" : "rounded-2xl")} onSubmit={handleLogin}>
-            <div className={`${config.color} w-14 h-14 rounded-lg flex items-center justify-center mb-6 shadow-lg shadow-black/5`}>
+          <form className={cn("bg-white border p-8 shadow-sm text-left", isDirector ? "rounded-lg border-black/10 p-4 shadow-xl shadow-black/5 sm:p-5" : "rounded-2xl")} onSubmit={handleLogin}>
+            <div className={cn(`${config.color} w-14 h-14 rounded-lg flex items-center justify-center mb-6 shadow-lg shadow-black/5`, isDirector && "mb-4 h-12 w-12")}>
               <config.icon className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-black mb-2 tracking-tight uppercase">{config.label}</h1>
+            <h1 className={cn("text-2xl font-black mb-2 tracking-tight uppercase", isDirector && "text-xl sm:text-2xl")}>{config.label}</h1>
             <p className="text-sm text-muted-foreground font-medium leading-relaxed mb-6">
               {config.description}
             </p>
@@ -321,7 +329,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
               </div>
             )}
 
-            <div className="space-y-4 mb-6">
+            <div className={cn("space-y-4 mb-6", isDirector && "mb-4")}>
               <div className="space-y-2">
                 <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Username</span>
                 <div className="relative">
@@ -368,7 +376,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
               </div>
             )}
 
-            <div className="mb-6 rounded-xl border bg-muted/20 px-4 py-3">
+            <div className={cn("mb-6 rounded-xl border bg-muted/20 px-4 py-3", isDirector && "mb-4 px-3 py-2")}>
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                 Synced Default Username: {config.username}
               </p>
@@ -388,28 +396,28 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
               Enter Dashboard
             </Button>
 
-            {isDirector && !isStandaloneApp && (
-              <div className="mt-4 rounded-lg border border-emerald-900/10 bg-[#f0f6ef] p-4">
+            {isInstallableRole && !isStandaloneApp && (
+              <div className="mt-4 rounded-lg border border-emerald-900/10 bg-[#f0f6ef] p-3 sm:p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-800 text-white">
                     <Smartphone className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-widest text-emerald-950">Install MD Application</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-emerald-950">Install {config.label} Application</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-emerald-950/70">
                       {installPrompt
-                        ? "Install this managing director profile as a phone app."
+                        ? `Install this ${config.label} profile as a Chrome app.`
                         : isIosDevice
                           ? "Use the phone share menu to add this MD profile to the home screen."
                           : isAndroidDevice
-                            ? "Use the Chrome install option so Orange MD appears with your phone apps."
-                            : "Use this MD login on a supported mobile browser."}
+                            ? `Use the Chrome install option so ${config.label} appears with your phone apps.`
+                            : "Use Chrome on desktop to install this login as an app."}
                     </p>
                   </div>
                 </div>
                 <div className="mt-3 rounded-lg border border-emerald-900/10 bg-white/70 px-3 py-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-900/70">
-                    {serviceWorkerReady ? "App installer ready" : "Preparing app installer"}
+                    {installerStatusText}
                   </p>
                 </div>
                 <Button
@@ -422,7 +430,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                   {installButtonText}
                 </Button>
                 {installFeedback && (
-                  <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-900/70">{installFeedback}</p>
+                  <p className="mt-3 text-xs font-semibold leading-5 text-emerald-900/75">{installFeedback}</p>
                 )}
               </div>
             )}

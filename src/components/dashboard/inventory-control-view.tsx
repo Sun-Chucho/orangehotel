@@ -32,7 +32,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Eye, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { Download, Eye, Pencil, Plus, Search, Trash2, XCircle } from "lucide-react";
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -157,6 +157,37 @@ function normalizeBaristaFinanceTarget(value: string) {
   return normalizeBaristaProductTarget(value);
 }
 
+function matchesInventorySearch(
+  item: {
+    name: string;
+    stock: number;
+    minStock: number;
+    category?: string;
+    subCategory?: string;
+    size?: string;
+    unit?: string;
+  },
+  searchTerm: string,
+) {
+  const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const haystack = [
+    item.name,
+    item.category,
+    item.subCategory,
+    item.size,
+    item.unit,
+    item.stock,
+    item.minStock,
+  ]
+    .filter((value) => value !== undefined && value !== null)
+    .join(" ")
+    .toLowerCase();
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
 function inventoryMatchesStoreItem(entry: InventoryItem, lane: StoreLane, item: Pick<MainStoreItem, "name" | "size" | "subCategory">) {
   const nameMatches =
     normalizeStockName(entry.name) === normalizeStockName(item.name) &&
@@ -201,6 +232,7 @@ export function InventoryControlView({
   const [kitchenDailyHistory, setKitchenDailyHistory] = useState<KitchenDailyStockHistoryEntry[]>([]);
   const [baristaPurchaseHistory, setBaristaPurchaseHistory] = useState<KitchenPurchaseHistoryEntry[]>([]);
   const [historyPreview, setHistoryPreview] = useState<HistoryPreview>(null);
+  const [inventorySearchTerm, setInventorySearchTerm] = useState("");
 
   const [kitchenName, setKitchenName] = useState("");
   const [kitchenSubCategory, setKitchenSubCategory] = useState("");
@@ -299,6 +331,22 @@ export function InventoryControlView({
   const baristaStore = useMemo(() => storeItems.filter((item) => item.lane === "barista"), [storeItems]);
   const kitchenInventoryItems = useMemo(() => items.filter((item) => item.category === "Kitchen"), [items]);
   const baristaInventoryItems = useMemo(() => items.filter((item) => item.category === "Bar"), [items]);
+  const filteredKitchenStore = useMemo(
+    () => kitchenStore.filter((item) => matchesInventorySearch(item, inventorySearchTerm)),
+    [inventorySearchTerm, kitchenStore],
+  );
+  const filteredBaristaStore = useMemo(
+    () => baristaStore.filter((item) => matchesInventorySearch(item, inventorySearchTerm)),
+    [baristaStore, inventorySearchTerm],
+  );
+  const filteredKitchenInventoryItems = useMemo(
+    () => kitchenInventoryItems.filter((item) => matchesInventorySearch(item, inventorySearchTerm)),
+    [inventorySearchTerm, kitchenInventoryItems],
+  );
+  const filteredBaristaInventoryItems = useMemo(
+    () => baristaInventoryItems.filter((item) => matchesInventorySearch(item, inventorySearchTerm)),
+    [baristaInventoryItems, inventorySearchTerm],
+  );
   const canViewBaristaFinance = role === "manager" || role === "director";
 
   const resolveBaristaInventoryMatch = (item: MainStoreItem) =>
@@ -1279,6 +1327,16 @@ export function InventoryControlView({
         </p>
       </header>
 
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={inventorySearchTerm}
+          onChange={(event) => setInventorySearchTerm(event.target.value)}
+          placeholder="Search inventory by item, category, size, unit, or quantity"
+          className="h-11 pl-10"
+        />
+      </div>
+
       {isReadOnlyStock && (
         <Card className="border-emerald-200 bg-emerald-50/60 shadow-none">
           <CardContent className="p-3 text-xs font-black uppercase tracking-widest text-emerald-700">
@@ -1325,8 +1383,8 @@ export function InventoryControlView({
               </Tabs>
               {kitchenManagerPane === "stock" && (
                 <>
-                  {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
-                  {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems, "kitchen")}
+                  {renderStoreCard("kitchen", "Kitchen Stock", filteredKitchenStore)}
+                  {renderInventoryTable("Kitchen Inventory Records", filteredKitchenInventoryItems, "kitchen")}
                 </>
               )}
               {kitchenManagerPane === "expenses" && renderHistoryCards(kitchenPurchaseHistory, "purchase", "kitchen")}
@@ -1334,8 +1392,8 @@ export function InventoryControlView({
             </>
           ) : isReadOnlyStock ? (
             <>
-              {renderStoreCard("kitchen", "Kitchen Stock", kitchenStore)}
-              {renderInventoryTable("Kitchen Inventory Records", kitchenInventoryItems, "kitchen")}
+              {renderStoreCard("kitchen", "Kitchen Stock", filteredKitchenStore)}
+              {renderInventoryTable("Kitchen Inventory Records", filteredKitchenInventoryItems, "kitchen")}
             </>
           ) : (
             <KitchenSessionManager isDirector={isDirector} />
@@ -1358,8 +1416,8 @@ export function InventoryControlView({
           )}
           {(!canViewBaristaFinance || baristaView === "inventory") && (
             <>
-              {renderStoreCard("barista", "Barista Stock", baristaStore)}
-              {renderInventoryTable("Barista Inventory Records", baristaInventoryItems, "barista")}
+              {renderStoreCard("barista", "Barista Stock", filteredBaristaStore)}
+              {renderInventoryTable("Barista Inventory Records", filteredBaristaInventoryItems, "barista")}
             </>
           )}
           {canViewBaristaFinance && baristaView === "finance" && renderBaristaFinance()}

@@ -7,6 +7,8 @@ import { COMPANY_STOCK_SHEET } from "@/app/lib/company-stock-seed";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { mergeKitchenMenuItems } from "@/app/lib/kitchen-menu";
 import { InventoryItem, Role } from "@/app/lib/mock-data";
+import { ExpenseRecord, STORAGE_EXPENSES } from "@/app/lib/expenses";
+import { KitchenPurchaseHistoryEntry, STORAGE_KITCHEN_PURCHASE_HISTORY } from "@/app/lib/kitchen-session-storage";
 import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeBaristaProductTarget, normalizeStockName } from "@/app/lib/inventory-transfer";
 import { getTotLimit } from "@/app/lib/barista-stock";
 import { normalizeRole } from "@/app/lib/auth";
@@ -38,6 +40,8 @@ const BARISTA_SHARED_STATE_FIX_KEY = "orange-hotel-barista-shared-state-fix-v4";
 const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-correction-fix-v5";
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
+const JACK_DANIELS_TOTS_PRICE_FIX_KEY = "orange-hotel-jack-daniels-tots-price-fix-v1";
+const STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY = "orange-hotel-staff-food-dishes-expense-removal-v1";
 
 const BARISTA_STOCK_TARGETS = {
   "Serengeti Lager|330ml": 20,
@@ -82,6 +86,54 @@ function resolveBarInventorySellingPrice(
 
 function normalizeBaristaMenuTarget(value: string) {
   return normalizeBaristaProductTarget(value);
+}
+
+function isJackDaniels700Target(name: string, size?: string) {
+  const normalizedName = normalizeStockName(
+    name
+      .replace(/\s*\(?TOTS?\)?/gi, " ")
+      .replace(/\b700\s*ml\b/gi, " ")
+      .trim(),
+  );
+  return normalizedName === "jack daniels" && normalizeStockName(size ?? "700ml") === "700ml";
+}
+
+function isStaffFoodDishesExpenseDate(value: number | string) {
+  const date = new Date(value);
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === 2026 &&
+    date.getMonth() === 4 &&
+    date.getDate() === 18 &&
+    date.getHours() === 15 &&
+    date.getMinutes() === 22
+  );
+}
+
+function isStaffFoodDishesText(value: string | undefined) {
+  const normalized = normalizeStockName(value ?? "").replace(/&/g, "and");
+  return normalized.includes("staff food") && normalized.includes("dishes");
+}
+
+function isStaffFoodDishesExpense(expense: ExpenseRecord) {
+  return (
+    expense.department === "kitchen" &&
+    expense.amount === 258000 &&
+    isStaffFoodDishesExpenseDate(expense.createdAt) &&
+    (isStaffFoodDishesText(expense.title) || isStaffFoodDishesText(expense.notes))
+  );
+}
+
+function getPurchaseHistoryAmount(entry: KitchenPurchaseHistoryEntry) {
+  return entry.lines.reduce((sum, line) => sum + (line.addedQty || 0) * (line.pricePerUnit || 0), 0);
+}
+
+function isStaffFoodDishesPurchaseHistory(entry: KitchenPurchaseHistoryEntry) {
+  return (
+    isStaffFoodDishesExpenseDate(entry.closedAt) &&
+    getPurchaseHistoryAmount(entry) === 258000 &&
+    entry.lines.some((line) => isStaffFoodDishesText(line.itemName) || isStaffFoodDishesText(line.category))
+  );
 }
 
 function getBaristaInventoryLabel(item: Pick<InventoryItem, "name" | "size">) {
@@ -214,7 +266,7 @@ const BARISTA_ADDITIONAL_ITEMS: AdditionalBaristaItem[] = [
   { barcode: "6200100650065", name: "Captain Morgan Black Rum (TOTS)", category: "Spirit", size: "750ml", stock: 1, totPerBottle: 30, buyingPrice: 30000, sellingPrice: 5000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
   { barcode: "6200100660066", name: "Buttlers Blue Curacao (TOTS)", category: "Liqueur", size: "750ml", stock: 1, totPerBottle: 30, buyingPrice: 35000, sellingPrice: 5000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
   { barcode: "6200100670067", name: "Hennessy VSOP Box", category: "Cognac", size: "700ml", stock: 1, buyingPrice: 160000, sellingPrice: 250000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
-  { barcode: "6200100680068", name: "Jack Daniels", category: "Whisky", size: "700ml", stock: 1, buyingPrice: 70000, sellingPrice: 120000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
+  { barcode: "6200100680068", name: "Jack Daniels", category: "Whisky", size: "700ml", stock: 1, totPerBottle: 30, buyingPrice: 70000, sellingPrice: 10000, minStock: 1, unit: "Bottle", totSold: 0, status: "ACTIVE" },
 ] as const;
 
 const SODA_MERGE_GROUPS = [
@@ -727,6 +779,102 @@ function applyBusinessCorrections() {
     localStorage.setItem(BARISTA_MENU_REMOVAL_FIX_KEY, "1");
   }
 
+  if (!localStorage.getItem(JACK_DANIELS_TOTS_PRICE_FIX_KEY)) {
+    const inventoryItems = readJson<InventoryItem[]>("orange-hotel-inventory-items") ?? [];
+    const storeItems = readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+    const baristaSnapshot = readPosState<{ id: string }, { id: string }, { id: string; name: string; price: number; category: string; prepMinutes: number; barcode?: string }>(
+      STORAGE_BARISTA_STATE,
+      "orange-hotel-barista-orders",
+      "orange-hotel-barista-seq",
+      "orange-hotel-barista-payments",
+      "orange-hotel-barista-menu",
+      490,
+    );
+
+    const nextInventoryItems = inventoryItems.map((item) => {
+      if (!isJackDaniels700Target(item.name, item.size)) return item;
+      return {
+        ...item,
+        name: "Jack Daniels TOTS",
+        category: "Bar",
+        subCategory: "Whisky",
+        size: "700ml",
+        buyingPrice: 70000,
+        sellingPrice: 10000,
+        price: 10000,
+        totPerBottle: 30,
+        totSold: item.totSold ?? 0,
+        unit: item.unit || "Bottle",
+        minStock: item.minStock ?? 1,
+        status: item.status ?? "ACTIVE",
+      };
+    });
+
+    const nextStoreItems = storeItems.map((item) => {
+      if (item.lane !== "barista" || !isJackDaniels700Target(item.name, item.size)) return item;
+      return {
+        ...item,
+        name: "Jack Daniels",
+        subCategory: "Whisky",
+        size: "700ml",
+        buyingPrice: 70000,
+        sellingPrice: 10000,
+        totLimit: 30,
+        totSold: item.totSold ?? 0,
+        unit: item.unit || "Bottle",
+        minStock: item.minStock ?? 1,
+      };
+    });
+
+    const nextMenuItems = baristaSnapshot.menuItems.map((item) => {
+      if (!isJackDaniels700Target(item.name, "700ml")) return item;
+      return {
+        ...item,
+        name: "Jack Daniels 700ml (TOTS)",
+        price: 10000,
+        category: item.category || "Whisky",
+        barcode: item.barcode || "6200100270027",
+      };
+    });
+
+    if (JSON.stringify(nextInventoryItems) !== JSON.stringify(inventoryItems)) {
+      writeJson("orange-hotel-inventory-items", nextInventoryItems);
+    }
+
+    if (JSON.stringify(nextStoreItems) !== JSON.stringify(storeItems)) {
+      writeJson(STORAGE_MAIN_STORE_ITEMS, nextStoreItems);
+    }
+
+    if (JSON.stringify(nextMenuItems) !== JSON.stringify(baristaSnapshot.menuItems)) {
+      writePosState(
+        STORAGE_BARISTA_STATE,
+        baristaSnapshot.tickets,
+        baristaSnapshot.ticketSeq,
+        baristaSnapshot.payments,
+        nextMenuItems,
+      );
+    }
+
+    localStorage.setItem(JACK_DANIELS_TOTS_PRICE_FIX_KEY, "1");
+  }
+
+  if (!localStorage.getItem(STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY)) {
+    const expenses = readJson<ExpenseRecord[]>(STORAGE_EXPENSES) ?? [];
+    const kitchenPurchaseHistory = readJson<KitchenPurchaseHistoryEntry[]>(STORAGE_KITCHEN_PURCHASE_HISTORY) ?? [];
+    const nextExpenses = expenses.filter((expense) => !isStaffFoodDishesExpense(expense));
+    const nextKitchenPurchaseHistory = kitchenPurchaseHistory.filter((entry) => !isStaffFoodDishesPurchaseHistory(entry));
+
+    if (nextExpenses.length !== expenses.length) {
+      writeJson(STORAGE_EXPENSES, nextExpenses);
+    }
+
+    if (nextKitchenPurchaseHistory.length !== kitchenPurchaseHistory.length) {
+      writeJson(STORAGE_KITCHEN_PURCHASE_HISTORY, nextKitchenPurchaseHistory);
+    }
+
+    localStorage.setItem(STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY, "1");
+  }
+
   if (!localStorage.getItem(COMPANY_STOCK_SHEET_FIX_KEY)) {
     writeJson(STORAGE_COMPANY_STOCK, COMPANY_STOCK_SHEET);
     localStorage.setItem(COMPANY_STOCK_SHEET_FIX_KEY, "1");
@@ -769,6 +917,8 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     async function initializeDashboard() {
       const savedRole = normalizeRole(localStorage.getItem('orange-hotel-role'));
       const savedShift = localStorage.getItem('orange-hotel-shift');
@@ -784,20 +934,25 @@ export default function DashboardLayout({
       setRole(savedRole);
       if (savedShift) setShift(savedShift);
 
+      if (typeof window !== "undefined") {
+        setSidebarOpen(window.innerWidth >= 768);
+      }
+      setMounted(true);
+
       try {
         await hydrateDefaultAppStateFromFirebase();
+        if (cancelled) return;
         applyBusinessCorrections();
       } catch (error) {
         console.error("Dashboard hydration failed", error);
-      } finally {
-        if (typeof window !== "undefined") {
-          setSidebarOpen(window.innerWidth >= 768);
-        }
-        setMounted(true);
       }
     }
 
     void initializeDashboard();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -866,10 +1021,10 @@ export default function DashboardLayout({
   if (!mounted) return null;
 
   return (
-    <div className={cn("flex min-h-screen bg-background", isDirector && "bg-[#f4f7f2] md:bg-background")}>
+    <div className={cn("flex min-h-[100dvh] w-full overflow-x-hidden bg-background", isDirector && "bg-[#f4f7f2] md:bg-background")}>
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 h-screen w-64 transition-transform duration-300",
+          "fixed left-0 top-0 z-50 h-[100dvh] w-64 transition-transform duration-300",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -884,11 +1039,11 @@ export default function DashboardLayout({
         />
       )}
       
-      <div className={cn("flex-1 flex flex-col transition-[margin] duration-300", sidebarOpen ? "md:ml-64" : "md:ml-0")}>
+      <div className={cn("flex min-w-0 flex-1 flex-col transition-[margin] duration-300", sidebarOpen ? "md:ml-64" : "md:ml-0")}>
         <header
           className={cn(
             "h-16 bg-white border-b sticky top-0 z-30 flex items-center justify-between px-8 shadow-sm",
-            isDirector && "h-[68px] border-0 bg-[#0f1712] px-4 text-white shadow-lg shadow-black/10 md:h-16 md:border-b md:bg-white md:px-8 md:text-foreground md:shadow-sm",
+            isDirector && "h-auto min-h-[calc(68px+env(safe-area-inset-top))] border-0 bg-[#0f1712] px-4 pt-[env(safe-area-inset-top)] text-white shadow-lg shadow-black/10 md:h-16 md:min-h-[4rem] md:border-b md:bg-white md:px-8 md:pt-0 md:text-foreground md:shadow-sm",
           )}
         >
           <div className={cn("flex items-center gap-4 w-full md:w-1/3", isDirector && "w-auto min-w-0")}>
@@ -960,13 +1115,13 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className={cn("flex-1 p-8", isDirector && "p-4 pb-28 md:p-8")}>
+        <main className={cn("min-w-0 flex-1 p-8", isDirector && "px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 md:p-8")}>
           {children}
         </main>
       </div>
 
       {isDirector && (
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0f1712]/95 px-3 pb-3 pt-2 text-white shadow-[0_-12px_30px_rgba(0,0,0,0.18)] backdrop-blur md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0f1712]/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 text-white shadow-[0_-12px_30px_rgba(0,0,0,0.18)] backdrop-blur md:hidden">
           <div className="grid grid-cols-5 gap-1">
             {DIRECTOR_MOBILE_NAV.map((item) => {
               const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
