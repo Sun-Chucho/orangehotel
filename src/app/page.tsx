@@ -416,6 +416,16 @@ export default function Home() {
     window.localStorage.setItem(CUSTOMER_REVIEWS_STORAGE_KEY, JSON.stringify(reviews));
   }, [reviews, reviewsHydrated]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("review")?.toLowerCase() !== "open") return;
+
+    document.getElementById("reviews")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const openPopupTimer = window.setTimeout(() => setShowReviewPopup(true), 250);
+
+    return () => window.clearTimeout(openPopupTimer);
+  }, []);
+
   const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
   const experienceImages = [MAIN_ROOM_IMAGE, RESTAURANT_IMAGES[1], LUNCH_IMAGES[4], BAR_IMAGES[1]];
   const averageReviewRating = useMemo(
