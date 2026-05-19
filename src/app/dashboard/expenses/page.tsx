@@ -89,6 +89,7 @@ export default function ExpensesPage() {
       notes: notes.trim() || undefined,
       createdAt: Date.now(),
       createdBy: role,
+      payoutStatus: role === "manager" ? "approved" : undefined,
     };
 
     const nextExpenses = [nextExpense, ...expenses];

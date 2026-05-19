@@ -50,7 +50,7 @@ export default function CashRequestsPage() {
   const cashRequests = useMemo(
     () =>
       expenses
-        .filter((expense) => expense.amountType === "cash")
+        .filter((expense) => expense.createdBy === "manager")
         .sort((a, b) => b.createdAt - a.createdAt),
     [expenses],
   );
@@ -86,7 +86,7 @@ export default function CashRequestsPage() {
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tight">Cash Requests</h1>
           <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-            Approved cash expense requests ready for receptionist payout
+            Manager-recorded expenses ready for receptionist payout
           </p>
         </div>
         <Badge variant="outline" className="w-fit px-3 py-1 font-black uppercase tracking-widest">
