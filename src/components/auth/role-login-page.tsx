@@ -205,11 +205,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     }
 
     if (isAndroidDevice) {
-      setInstallFeedback(`On Android, open Chrome menu, choose Install app, then look for ${config.label}.`);
+      setInstallFeedback(`On Android, open your browser menu, choose Install app or Add to Home screen, then look for ${config.label}.`);
       return;
     }
 
-    setInstallFeedback(`Use Chrome menu, Save and share, then Install page as app for ${config.label}.`);
+    setInstallFeedback(`Use your browser menu to install this page as an app for ${config.label}.`);
   };
 
   const installButtonText = installPrompt
@@ -406,12 +406,12 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                     <p className="text-xs font-black uppercase tracking-widest text-emerald-950">Install {config.label} Application</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-emerald-950/70">
                       {installPrompt
-                        ? `Install this ${config.label} profile as a Chrome app.`
+                        ? `Install this ${config.label} profile as a browser app.`
                         : isIosDevice
-                          ? "Use the phone share menu to add this MD profile to the home screen."
+                          ? `Use the phone share menu to add ${config.label} to the home screen.`
                           : isAndroidDevice
-                            ? `Use the Chrome install option so ${config.label} appears with your phone apps.`
-                            : "Use Chrome on desktop to install this login as an app."}
+                            ? `Use the browser install option so ${config.label} appears with your phone apps.`
+                            : "Use your browser on desktop to install this login as an app."}
                     </p>
                   </div>
                 </div>

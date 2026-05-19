@@ -28,6 +28,15 @@ type DummyChatMessage = {
   text: string;
 };
 
+type CustomerReview = {
+  id: string;
+  name: string;
+  rating: number;
+  details: string;
+  stayType: string;
+  createdAt: string;
+};
+
 function LandingImage(props: ImageProps) {
   return <Image {...props} unoptimized />;
 }
@@ -109,6 +118,7 @@ const formatTzs = (value: number) =>
 
 const WHATSAPP_NUMBER = "+255791693901";
 const WHATSAPP_LINK = `https://wa.me/255791693901?text=${encodeURIComponent("Hello Orange Hotel, I would like to ask about booking and room availability.")}`;
+const CUSTOMER_REVIEWS_STORAGE_KEY = "orange-hotel-customer-reviews";
 
 const dayDiff = (checkIn: string, checkOut: string) => {
   const inDate = new Date(checkIn);
@@ -243,6 +253,33 @@ const CONFERENCE_PACKAGES = [
   },
 ] as const;
 
+const INITIAL_CUSTOMER_REVIEWS: CustomerReview[] = [
+  {
+    id: "review-1",
+    name: "Amina K.",
+    rating: 5,
+    details: "Clean rooms, calm reception, and breakfast was ready on time. The location made our Arusha stay very easy.",
+    stayType: "Platinum stay",
+    createdAt: "Verified guest",
+  },
+  {
+    id: "review-2",
+    name: "Daniel M.",
+    rating: 5,
+    details: "The room was quiet and the restaurant service was polished. Booking online was quick.",
+    stayType: "Business trip",
+    createdAt: "Verified guest",
+  },
+  {
+    id: "review-3",
+    name: "Neema S.",
+    rating: 4,
+    details: "Comfortable bed, friendly team, and the bar area was a nice place to relax in the evening.",
+    stayType: "Weekend stay",
+    createdAt: "Verified guest",
+  },
+] as const;
+
 const stories: HighlightStory[] = [
   {
     title: "Chef Specials This Week",
@@ -300,6 +337,12 @@ export default function Home() {
   const [successNote, setSuccessNote] = useState("");
   const [highlightCycle, setHighlightCycle] = useState(0);
   const [formStartedAt, setFormStartedAt] = useState(() => Date.now());
+  const [reviews, setReviews] = useState<CustomerReview[]>(INITIAL_CUSTOMER_REVIEWS);
+  const [reviewsHydrated, setReviewsHydrated] = useState(false);
+  const [reviewName, setReviewName] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewStayType, setReviewStayType] = useState("");
+  const [reviewDetails, setReviewDetails] = useState("");
 
   const nights = useMemo(() => {
     if (!checkIn || !checkOut) return 0;
@@ -352,8 +395,32 @@ export default function Home() {
     return () => window.clearInterval(interval);
   }, [activeStory]);
 
+  useEffect(() => {
+    const savedReviews = window.localStorage.getItem(CUSTOMER_REVIEWS_STORAGE_KEY);
+    if (savedReviews) {
+      try {
+        const parsed = JSON.parse(savedReviews) as CustomerReview[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setReviews(parsed);
+        }
+      } catch {
+        // Keep the curated starter reviews if local data is invalid.
+      }
+    }
+    setReviewsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!reviewsHydrated) return;
+    window.localStorage.setItem(CUSTOMER_REVIEWS_STORAGE_KEY, JSON.stringify(reviews));
+  }, [reviews, reviewsHydrated]);
+
   const chefImages = [...BREAKFAST_IMAGES, ...LUNCH_IMAGES];
   const experienceImages = [MAIN_ROOM_IMAGE, RESTAURANT_IMAGES[1], LUNCH_IMAGES[4], BAR_IMAGES[1]];
+  const averageReviewRating = useMemo(
+    () => reviews.reduce((sum, review) => sum + review.rating, 0) / Math.max(reviews.length, 1),
+    [reviews],
+  );
 
   const submitBooking = async (checkoutAction: CheckoutAction) => {
     setError("");
@@ -466,6 +533,29 @@ export default function Home() {
     ]);
     setChatMessage("");
     setShowChatWidget(true);
+  };
+
+  const submitReview = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = reviewName.trim();
+    const details = reviewDetails.trim();
+    if (!name || !details) return;
+
+    setReviews((current) => [
+      {
+        id: `review-${Date.now()}`,
+        name,
+        rating: reviewRating,
+        stayType: reviewStayType.trim() || "Hotel guest",
+        details,
+        createdAt: "Just now",
+      },
+      ...current,
+    ]);
+    setReviewName("");
+    setReviewRating(5);
+    setReviewStayType("");
+    setReviewDetails("");
   };
 
   return (
@@ -1055,6 +1145,113 @@ export default function Home() {
             </button>
           </div>
         </form>
+      </section>
+
+      <section id="reviews" className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-sm border border-black/10 bg-white p-6 shadow-[0_16px_32px_rgba(0,0,0,0.08)] sm:p-8">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Customer Reviews</p>
+            <h2 className="mt-3 font-headline text-4xl leading-tight">Share Your Orange Hotel Experience</h2>
+            <div className="mt-5 flex items-center gap-3">
+              <div className="flex text-orange-500">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star key={index} className={`h-5 w-5 ${index < Math.round(averageReviewRating) ? "fill-current" : ""}`} />
+                ))}
+              </div>
+              <span className="text-sm font-black">{averageReviewRating.toFixed(1)} / 5</span>
+              <span className="text-sm text-black/55">{reviews.length} reviews</span>
+            </div>
+
+            <form onSubmit={submitReview} className="mt-8 grid gap-4">
+              <label className="text-sm font-semibold">
+                Your name
+                <input
+                  required
+                  value={reviewName}
+                  onChange={(event) => setReviewName(event.target.value)}
+                  className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2"
+                  placeholder="Enter your name"
+                />
+              </label>
+              <label className="text-sm font-semibold">
+                Stay or visit type
+                <input
+                  value={reviewStayType}
+                  onChange={(event) => setReviewStayType(event.target.value)}
+                  className="mt-2 w-full rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2"
+                  placeholder="Room stay, restaurant, conference..."
+                />
+              </label>
+              <div>
+                <p className="text-sm font-semibold">Stars</p>
+                <div className="mt-2 flex gap-2">
+                  {Array.from({ length: 5 }).map((_, index) => {
+                    const value = index + 1;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setReviewRating(value)}
+                        className="flex h-11 w-11 items-center justify-center rounded-sm border border-black/15 text-orange-500 transition hover:border-orange-500"
+                        aria-label={`${value} star review`}
+                      >
+                        <Star className={`h-5 w-5 ${value <= reviewRating ? "fill-current" : ""}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <label className="text-sm font-semibold">
+                Other details
+                <textarea
+                  required
+                  rows={4}
+                  value={reviewDetails}
+                  onChange={(event) => setReviewDetails(event.target.value)}
+                  className="mt-2 w-full resize-none rounded-sm border border-black/20 px-3 py-3 outline-none ring-orange-500 transition focus:ring-2"
+                  placeholder="Tell future guests about your room, food, service, or event experience"
+                />
+              </label>
+              <button
+                type="submit"
+                className="inline-flex min-h-12 items-center justify-center gap-2 bg-black px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:bg-orange-500"
+              >
+                Submit Review
+              </button>
+            </form>
+          </div>
+
+          <div className="rounded-sm border border-black/10 bg-black p-4 text-white shadow-xl sm:p-5">
+            <div className="flex items-center justify-between gap-4 px-2 py-2">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-300">Guest Feedback</p>
+                <h3 className="mt-2 font-headline text-3xl">Recent Reviews</h3>
+              </div>
+              <span className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
+                Scroll
+              </span>
+            </div>
+            <div className="mt-3 max-h-[520px] space-y-3 overflow-y-auto pr-2">
+              {reviews.map((review) => (
+                <article key={review.id} className="rounded-sm border border-white/10 bg-white/[0.06] p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="font-black">{review.name}</h4>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">{review.stayType}</p>
+                    </div>
+                    <div className="flex text-orange-300">
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <Star key={index} className={`h-4 w-4 ${index < review.rating ? "fill-current" : ""}`} />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm leading-7 text-white/78">{review.details}</p>
+                  <p className="mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/70">{review.createdAt}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <footer className="border-t border-white/10 bg-[#0b0b0b] text-white">
