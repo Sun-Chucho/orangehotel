@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Save, WalletCards } from "lucide-react";
 
 function formatDate(value: number) {
@@ -43,6 +44,8 @@ export default function ExpensesPage() {
   const [amountType, setAmountType] = useState<ExpenseAmountType>("cash");
   const [notes, setNotes] = useState("");
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [movingExpense, setMovingExpense] = useState<ExpenseRecord | null>(null);
+  const [moveTarget, setMoveTarget] = useState<ExpenseDepartment>("kitchen");
 
   useEffect(() => {
     const storedRole = readStoredRole();
@@ -99,6 +102,22 @@ export default function ExpensesPage() {
     setAmount("");
     setAmountType("cash");
     setNotes("");
+  };
+
+  const openMoveDialog = (expense: ExpenseRecord) => {
+    const fallbackTarget = EXPENSE_DEPARTMENTS.find((item) => item.value !== expense.department)?.value ?? "kitchen";
+    setMovingExpense(expense);
+    setMoveTarget(fallbackTarget);
+  };
+
+  const moveExpense = () => {
+    if (!movingExpense || moveTarget === movingExpense.department) return;
+    const nextExpenses = expenses.map((expense) =>
+      expense.id === movingExpense.id ? { ...expense, department: moveTarget } : expense,
+    );
+    setExpenses(nextExpenses);
+    writeJson(STORAGE_EXPENSES, nextExpenses);
+    setMovingExpense(null);
   };
 
   return (
@@ -199,6 +218,7 @@ export default function ExpensesPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Type</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Notes</TableHead>
                 <TableHead className="text-right font-black uppercase text-[10px] tracking-widest">Amount</TableHead>
+                <TableHead className="text-right font-black uppercase text-[10px] tracking-widest">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -209,11 +229,16 @@ export default function ExpensesPage() {
                   <TableCell className="font-bold">{getExpenseAmountTypeLabel(expense.amountType)}</TableCell>
                   <TableCell className="max-w-xs font-medium text-muted-foreground">{expense.notes ?? "-"}</TableCell>
                   <TableCell className="text-right font-black">TSh {expense.amount.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" onClick={() => openMoveDialog(expense)} className="font-black uppercase tracking-widest text-[10px]">
+                      Move
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {filteredExpenses.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     No expenses saved for this group
                   </TableCell>
                 </TableRow>
@@ -222,6 +247,37 @@ export default function ExpensesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!movingExpense} onOpenChange={(open) => !open && setMovingExpense(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase tracking-tight">Move Expense</DialogTitle>
+            <DialogDescription>
+              Move {movingExpense?.title ?? "this entry"} from {movingExpense ? getExpenseDepartmentLabel(movingExpense.department) : ""} to another lane.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Move To</Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={moveTarget}
+              onChange={(event) => setMoveTarget(event.target.value as ExpenseDepartment)}
+            >
+              {EXPENSE_DEPARTMENTS.filter((item) => item.value !== movingExpense?.department).map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMovingExpense(null)} className="font-black uppercase tracking-widest text-[10px]">
+              Cancel
+            </Button>
+            <Button onClick={moveExpense} className="font-black uppercase tracking-widest text-[10px]">
+              Move Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,13 @@
 export const STORAGE_EXPENSES = "orange-hotel-expenses";
 
-export type ExpenseDepartment = "kitchen" | "barista" | "rooms" | "others";
+export type ExpenseDepartment =
+  | "kitchen"
+  | "barista"
+  | "rooms"
+  | "staff-salary-allowance"
+  | "staff-food"
+  | "others"
+  | "utilities-government";
 export type ExpenseAmountType = "cash" | "mobile-money" | "card" | "bank" | "credit";
 
 export interface ExpenseRecord {
@@ -21,7 +28,10 @@ export const EXPENSE_DEPARTMENTS: Array<{ value: ExpenseDepartment; label: strin
   { value: "kitchen", label: "Kitchen" },
   { value: "barista", label: "Barista" },
   { value: "rooms", label: "Rooms" },
-  { value: "others", label: "Others" },
+  { value: "staff-salary-allowance", label: "Staff Salary/Allowance" },
+  { value: "staff-food", label: "Staff Food" },
+  { value: "others", label: "MD/Maintenance" },
+  { value: "utilities-government", label: "Utilities and Government" },
 ];
 
 export const EXPENSE_AMOUNT_TYPES: Array<{ value: ExpenseAmountType; label: string }> = [
@@ -33,7 +43,7 @@ export const EXPENSE_AMOUNT_TYPES: Array<{ value: ExpenseAmountType; label: stri
 ];
 
 export function getExpenseDepartmentLabel(department: ExpenseDepartment) {
-  return EXPENSE_DEPARTMENTS.find((item) => item.value === department)?.label ?? "Others";
+  return EXPENSE_DEPARTMENTS.find((item) => item.value === department)?.label ?? "MD/Maintenance";
 }
 
 export function getExpenseAmountTypeLabel(amountType: ExpenseAmountType) {
