@@ -42,7 +42,8 @@ const BARISTA_INVENTORY_CORRECTION_FIX_KEY = "orange-hotel-barista-inventory-cor
 const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
 const JACK_DANIELS_TOTS_PRICE_FIX_KEY = "orange-hotel-jack-daniels-tots-price-fix-v1";
-const STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY = "orange-hotel-staff-food-dishes-expense-removal-v1";
+const STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY = "orange-hotel-staff-food-dishes-expense-removal-v2";
+const KALUSE_KIANGI_BOOKING_FIX_KEY = "orange-hotel-kaluse-kiangi-booking-fix-v1";
 
 const BARISTA_STOCK_TARGETS = {
   "Serengeti Lager|330ml": 20,
@@ -113,7 +114,7 @@ function isStaffFoodDishesExpenseDate(value: number | string) {
 
 function isStaffFoodDishesText(value: string | undefined) {
   const normalized = normalizeStockName(value ?? "").replace(/&/g, "and");
-  return normalized.includes("staff food") && normalized.includes("dishes");
+  return normalized.includes("staff foo") && normalized.includes("dishes");
 }
 
 function isStaffFoodDishesExpense(expense: ExpenseRecord) {
@@ -236,6 +237,18 @@ type InventorySeedUpdate = {
   stockDelta?: number;
 };
 
+type StoredBookingRecord = {
+  id: string;
+  receiptNo?: string;
+  guestName?: string;
+  roomNumber?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  total?: number;
+  ratePerNight?: number;
+  paymentBreakdown?: Array<{ method: string; nights: number; amount: number }>;
+};
+
 const BARISTA_PRICE_UPDATES: InventorySeedUpdate[] = [
   { name: "Classic Dompo", size: "750ml", buyingPrice: 11000, stockDelta: 3 },
   { name: "Kilimanjaro Water", size: "1L", buyingPrice: 833 },
@@ -293,6 +306,41 @@ const SODA_MERGE_GROUPS = [
 
 function applyBusinessCorrections() {
   if (typeof window === "undefined") return;
+
+  if (!localStorage.getItem(KALUSE_KIANGI_BOOKING_FIX_KEY)) {
+    const cashierSnapshot = readJson<{ transactions?: StoredBookingRecord[]; receiptSeq?: number }>("orange-hotel-cashier-state");
+    if (cashierSnapshot && Array.isArray(cashierSnapshot.transactions)) {
+      const nextTransactions = cashierSnapshot.transactions.map((booking) => {
+        const isTargetBooking =
+          normalizeStockName(booking.guestName ?? "") === "kaluse kiangi" &&
+          booking.roomNumber === "4009" &&
+          booking.checkInDate === "2026-05-15" &&
+          booking.checkOutDate === "2026-05-16" &&
+          booking.total === 100000;
+
+        if (!isTargetBooking) return booking;
+
+        return {
+          ...booking,
+          total: 70000,
+          ratePerNight: booking.ratePerNight === 100000 ? 70000 : booking.ratePerNight,
+          paymentBreakdown: booking.paymentBreakdown?.map((entry) => ({
+            ...entry,
+            amount: entry.amount === 100000 ? 70000 : entry.amount,
+          })),
+        };
+      });
+
+      if (JSON.stringify(nextTransactions) !== JSON.stringify(cashierSnapshot.transactions)) {
+        writeJson("orange-hotel-cashier-state", {
+          ...cashierSnapshot,
+          transactions: nextTransactions,
+        });
+      }
+    }
+
+    localStorage.setItem(KALUSE_KIANGI_BOOKING_FIX_KEY, "1");
+  }
 
   if (!localStorage.getItem(KITCHEN_TRANSACTIONS_RESET_KEY)) {
     const kitchenSnapshot = readPosState<unknown, unknown, unknown>(
