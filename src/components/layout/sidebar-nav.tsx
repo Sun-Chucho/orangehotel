@@ -22,7 +22,9 @@ import {
   MonitorSmartphone,
   LogOut,
   ReceiptText,
-  HandCoins
+  HandCoins,
+  Shirt,
+  Calculator
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role } from "@/app/lib/mock-data";
@@ -47,10 +49,12 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
   { label: 'Cash Requests', href: '/dashboard/cash-requests', icon: HandCoins, roles: ['cashier'] },
+  { label: 'Laundry', href: '/dashboard/laundry', icon: Shirt, roles: ['manager', 'director', 'cashier'] },
   { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['director', 'cashier'] },
   { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['director', 'cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
   { label: 'Expenses', href: '/dashboard/expenses', icon: ReceiptText, roles: ['manager', 'director'] },
+  { label: 'Finances', href: '/dashboard/finances', icon: Calculator, roles: ['manager', 'director'] },
   { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['director', 'kitchen', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['director'] },
@@ -58,7 +62,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ROLE_NAV_PRIORITY: Partial<Record<Role, string[]>> = {
-  cashier: ['/dashboard/cashier', '/dashboard/cash-requests', '/dashboard/website-bookings', '/dashboard/live-chat'],
+  cashier: ['/dashboard/cashier', '/dashboard/laundry', '/dashboard/cash-requests', '/dashboard/website-bookings', '/dashboard/live-chat'],
   kitchen: ['/dashboard/kitchen'],
   barista: ['/dashboard/barista'],
 };

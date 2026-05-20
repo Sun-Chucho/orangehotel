@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { readStoredRole } from "@/app/lib/auth";
 import { Role, ROOMS } from "@/app/lib/mock-data";
-import { readCashierState, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
+import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
+import { LaundryRecord, STORAGE_LAUNDRY_RECORDS } from "@/app/lib/laundry";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ export default function OverviewPage() {
   const [activeKitchen, setActiveKitchen] = useState(0);
   const [activeBarista, setActiveBarista] = useState(0);
   const [foodRevenue, setFoodRevenue] = useState(0);
+  const [laundryRevenue, setLaundryRevenue] = useState(0);
   const [creditExposure, setCreditExposure] = useState(0);
   const [settledToday, setSettledToday] = useState(0);
   const [rooms, setRooms] = useState(ROOMS);
@@ -77,6 +79,7 @@ export default function OverviewPage() {
       const cashierSnapshot = readCashierState<CashierTransaction>("orange-hotel-cashier-transactions", "orange-hotel-cashier-seq", 84920);
       const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
       const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
+      const laundry = readJson<LaundryRecord[]>(STORAGE_LAUNDRY_RECORDS) ?? [];
       setRooms(
         deriveRoomsStateFromBookings(
           cashierSnapshot.transactions.filter((tx): tx is CashierTransaction & { roomNumber: string } => Boolean(tx.roomNumber)),
@@ -99,6 +102,7 @@ export default function OverviewPage() {
       const baristaMetrics = collectPaymentMetrics(baristaSnapshot.payments);
 
       setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
+      setLaundryRevenue(laundry.filter((record) => record.status !== "credit").reduce((sum, record) => sum + record.totalAmount, 0));
       setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
       setSettledToday(kitchenMetrics.settledCount + baristaMetrics.settledCount);
       setMounted(true);
@@ -109,12 +113,14 @@ export default function OverviewPage() {
     const unsubscribeCashier = subscribeToSyncedStorageKey("orange-hotel-cashier-state", refreshOverview);
     const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, refreshOverview);
     const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, refreshOverview);
+    const unsubscribeLaundry = subscribeToSyncedStorageKey(STORAGE_LAUNDRY_RECORDS, refreshOverview);
     const unsubscribeRooms = subscribeToSyncedStorageKey("orange-hotel-rooms-state", refreshOverview);
 
     return () => {
       unsubscribeCashier();
       unsubscribeKitchen();
       unsubscribeBarista();
+      unsubscribeLaundry();
       unsubscribeRooms();
     };
   }, []);
@@ -123,7 +129,7 @@ export default function OverviewPage() {
   const recentRooms = useMemo(() => rooms.slice(0, 4), [rooms]);
   const isDirector = role === "director";
   const occupancyPct = Math.round((occupiedRooms / Math.max(rooms.length, 1)) * 100);
-  const totalRevenue = bookingRevenue + foodRevenue;
+  const totalRevenue = bookingRevenue + foodRevenue + laundryRevenue;
   const revPar = Math.round(totalRevenue / Math.max(rooms.length, 1));
 
   const stats = useMemo(
@@ -138,14 +144,15 @@ export default function OverviewPage() {
 
   const executiveStats = useMemo(
     () => [
-      { label: "Total Revenue", value: `TSh ${totalRevenue.toLocaleString()}`, note: "Rooms + F&B collections" },
+      { label: "Total Revenue", value: `TSh ${totalRevenue.toLocaleString()}`, note: "Rooms + F&B + laundry collections" },
       { label: "F&B Revenue", value: `TSh ${foodRevenue.toLocaleString()}`, note: "Kitchen and Barista settlements" },
+      { label: "Laundry Revenue", value: `TSh ${laundryRevenue.toLocaleString()}`, note: "Completed laundry collections" },
       { label: "Credit Exposure", value: `TSh ${creditExposure.toLocaleString()}`, note: "Outstanding unsettled balances" },
       { label: "RevPAR", value: `TSh ${revPar.toLocaleString()}`, note: "Revenue per available room" },
       { label: "Occupancy", value: `${occupancyPct}%`, note: `${occupiedRooms}/${rooms.length} occupied rooms` },
       { label: "Settled Today", value: `${settledToday}`, note: "Completed POS settlements today" },
     ],
-    [creditExposure, foodRevenue, occupancyPct, occupiedRooms, revPar, rooms.length, settledToday, totalRevenue],
+    [creditExposure, foodRevenue, laundryRevenue, occupancyPct, occupiedRooms, revPar, rooms.length, settledToday, totalRevenue],
   );
 
   const generateReport = () => {
@@ -153,6 +160,7 @@ export default function OverviewPage() {
       `Operations Report (${new Date().toLocaleString()})`,
       `Role: ${role}${shift ? ` (${shift} shift)` : ""}`,
       `Booking Revenue: TSh ${bookingRevenue.toLocaleString()}`,
+      `Laundry Revenue: TSh ${laundryRevenue.toLocaleString()}`,
       `Occupied Rooms: ${occupiedRooms}/${rooms.length}`,
       `Active Kitchen Tickets: ${activeKitchen}`,
       `Active Barista Tickets: ${activeBarista}`,
@@ -209,6 +217,8 @@ export default function OverviewPage() {
             {[
               { label: "Kitchen Stock", href: "/dashboard/inventory/kitchen-stock" },
               { label: "Barista Stock", href: "/dashboard/inventory/barista-stock" },
+              { label: "Laundry", href: "/dashboard/laundry" },
+              { label: "Finances", href: "/dashboard/finances" },
             ].map((item) => (
               <Link
                 key={item.href}
@@ -272,6 +282,8 @@ export default function OverviewPage() {
             {[
               { label: "Reports", href: "/dashboard/analytics", note: "Daily, weekly, monthly" },
               { label: "Payments", href: "/dashboard/payments", note: "Collections and credits" },
+              { label: "Laundry", href: "/dashboard/laundry", note: "Laundry income" },
+              { label: "Finances", href: "/dashboard/finances", note: "Income and expenses" },
               { label: "Rooms", href: "/dashboard/rooms", note: "Occupancy status" },
               { label: "Expenses", href: "/dashboard/expenses", note: "Grouped spending" },
             ].map((item) => (

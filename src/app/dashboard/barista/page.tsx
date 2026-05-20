@@ -1382,44 +1382,6 @@ export default function BaristaPage() {
         </Card>
       </div>
 
-      <Card className="border-none shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Barista Sales</CardTitle>
-          <CardDescription>Live completed and credit sales captured from the barista POS</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/10">
-              <TableRow>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentSales.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell className="font-black">{payment.code}</TableCell>
-                  <TableCell className="font-bold">{payment.destination}</TableCell>
-                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
-                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
-                  <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
-                </TableRow>
-              ))}
-              {recentSales.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                    No barista sales yet
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <div className="xl:col-span-2 space-y-6">
           <Card className="border-none shadow-sm">
@@ -1767,6 +1729,44 @@ export default function BaristaPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">Recent Barista Sales</CardTitle>
+          <CardDescription>Live completed and credit sales captured from the barista POS</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/10">
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recentSales.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell className="font-black">{payment.code}</TableCell>
+                  <TableCell className="font-bold">{payment.destination}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
+                  <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+              {recentSales.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No barista sales yet
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {!isDirector && showSettlementPopup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
