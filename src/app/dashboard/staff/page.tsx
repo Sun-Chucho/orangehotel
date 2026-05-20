@@ -46,18 +46,70 @@ interface StaffMember {
 
 const ROLE_OPTIONS: Role[] = ["manager", "director", "inventory", "cashier", "kitchen", "barista"];
 const STAFF_STORAGE_KEY = "orange-hotel-staff-members";
+const BARISTA_STAFF_MIGRATION_KEY = "orange-hotel-barista-staff-visible-v1";
+const DEFAULT_BARISTA_STAFF: StaffMember[] = [
+  {
+    id: "barista-1",
+    name: "ALI",
+    role: "barista",
+    avatar: "/logo.jpeg",
+    phone: "+255 000 000 001",
+    email: "ali@orange.hotel",
+    shift: "Day",
+    blocked: false,
+  },
+  {
+    id: "barista-2",
+    name: "USER 2",
+    role: "barista",
+    avatar: "/logo.jpeg",
+    phone: "+255 000 000 002",
+    email: "user.2@orange.hotel",
+    shift: "Day",
+    blocked: false,
+  },
+];
 
 function toEmail(name: string) {
   return `${name.toLowerCase().replace(/\s+/g, ".")}@orange.hotel`;
 }
 
 function getDefaultMembers(): StaffMember[] {
-  return USERS.map((user) => ({
-    ...user,
-    phone: `+1 (555) 000-00${user.id.slice(-1)}`,
-    email: toEmail(user.name),
-    shift: user.id === "u4" ? "Night" : "Day",
-  }));
+  return [
+    ...USERS.map((user) => ({
+      ...user,
+      phone: `+1 (555) 000-00${user.id.slice(-1)}`,
+      email: toEmail(user.name),
+      shift: user.id === "u4" ? "Night" as const : "Day" as const,
+    })),
+    ...DEFAULT_BARISTA_STAFF,
+  ];
+}
+
+function normalizeStaffName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function mergeMissingMembers(currentMembers: StaffMember[], missingMembers: StaffMember[]) {
+  const existingNames = new Set(currentMembers.map((member) => `${member.role}:${normalizeStaffName(member.name)}`));
+  const additions = missingMembers.filter((member) => !existingNames.has(`${member.role}:${normalizeStaffName(member.name)}`));
+  return additions.length > 0 ? [...currentMembers, ...additions] : currentMembers;
+}
+
+function getProfileMembers(profiles: LoginProfiles | null): StaffMember[] {
+  if (!profiles) return [];
+  return ROLE_OPTIONS.flatMap((role) =>
+    (profiles[role]?.users ?? []).map((user) => ({
+      id: `${role}-${normalizeStaffName(user.username).replace(/\s+/g, "-")}`,
+      name: user.username,
+      role,
+      avatar: "/logo.jpeg",
+      phone: "+255 000 000 000",
+      email: toEmail(user.username),
+      shift: profiles[role]?.shift === "night" ? "Night" as const : "Day" as const,
+      blocked: user.blocked === true,
+    })),
+  );
 }
 
 export default function StaffPage() {
@@ -114,24 +166,35 @@ export default function StaffPage() {
   };
 
   useEffect(() => {
-    const storedMembers = readJson<StaffMember[]>(STAFF_STORAGE_KEY);
-    if (Array.isArray(storedMembers) && storedMembers.length > 0) {
-      setMembers(storedMembers);
-    } else {
-      const defaultMembers = getDefaultMembers();
-      setMembers(defaultMembers);
-      writeJson(STAFF_STORAGE_KEY, defaultMembers);
-    }
+    const applyMembers = (incomingMembers?: StaffMember[] | null) => {
+      const storedMembers = incomingMembers ?? readJson<StaffMember[]>(STAFF_STORAGE_KEY);
+      const profiles = readLocalLoginProfiles();
+      let nextMembers = Array.isArray(storedMembers) && storedMembers.length > 0 ? storedMembers : getDefaultMembers();
 
-    return subscribeToSyncedStorageKey<StaffMember[]>(STAFF_STORAGE_KEY, (value) => {
-      if (Array.isArray(value)) {
-        setMembers(value);
-        return;
+      if (!localStorage.getItem(BARISTA_STAFF_MIGRATION_KEY)) {
+        nextMembers = mergeMissingMembers(nextMembers, DEFAULT_BARISTA_STAFF);
+        localStorage.setItem(BARISTA_STAFF_MIGRATION_KEY, "1");
       }
 
-      const defaultMembers = getDefaultMembers();
-      setMembers(defaultMembers);
+      nextMembers = mergeMissingMembers(nextMembers, getProfileMembers(profiles));
+      setMembers(nextMembers);
+      if (JSON.stringify(nextMembers) !== JSON.stringify(storedMembers ?? [])) {
+        writeJson(STAFF_STORAGE_KEY, nextMembers);
+      }
+    };
+
+    applyMembers();
+    const unsubscribeStaff = subscribeToSyncedStorageKey<StaffMember[]>(STAFF_STORAGE_KEY, (value) => {
+      applyMembers(value);
     });
+    const unsubscribeProfiles = subscribeToSyncedStorageKey<LoginProfiles>("orange-hotel-login-profiles", () => {
+      applyMembers();
+    });
+
+    return () => {
+      unsubscribeStaff();
+      unsubscribeProfiles();
+    };
   }, []);
 
   const filteredMembers = useMemo(() => {
