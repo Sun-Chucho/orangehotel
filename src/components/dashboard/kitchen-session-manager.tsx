@@ -177,6 +177,18 @@ function getDailyEntryTotals(entry: KitchenDailyStockHistoryEntry) {
   );
 }
 
+function matchesSessionSearch(values: Array<string | number | null | undefined>, searchTerm: string) {
+  const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const haystack = values
+    .filter((value) => value !== undefined && value !== null)
+    .join(" ")
+    .toLowerCase();
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
 function escapeCsvValue(value: string | number | null | undefined) {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) {
@@ -209,9 +221,11 @@ function downloadCsvFile(filename: string, rows: Array<Array<string | number | n
 export function KitchenSessionManager({
   isDirector,
   department = "kitchen",
+  externalSearchTerm = "",
 }: {
   isDirector: boolean;
   department?: SessionDepartment;
+  externalSearchTerm?: string;
 }) {
   const [activeTab, setActiveTab] = useState<KitchenWorkflowTab>("purchase");
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
@@ -281,16 +295,67 @@ export function KitchenSessionManager({
     [purchaseSession],
   );
   const filteredPurchaseLines = useMemo(() => {
-    const query = purchaseSearch.trim().toLowerCase();
+    const query = [externalSearchTerm, purchaseSearch].filter(Boolean).join(" ");
     const lines = purchaseSession?.lines ?? [];
-    if (!query) return lines;
 
     return lines.filter((line) =>
-      [line.itemName, line.category, line.unit]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(query)),
+      matchesSessionSearch(
+        [line.itemName, line.category, line.unit, line.previousBalance, line.addedQty, line.pricePerUnit],
+        query,
+      ),
     );
-  }, [purchaseSearch, purchaseSession]);
+  }, [externalSearchTerm, purchaseSearch, purchaseSession]);
+
+  const filteredDailyLines = useMemo(() => {
+    const query = externalSearchTerm;
+    const lines = dailySession?.lines ?? [];
+
+    return lines.filter((line) =>
+      matchesSessionSearch(
+        [line.itemName, line.category, line.unit, line.openingStock, line.received, line.used, line.wastage],
+        query,
+      ),
+    );
+  }, [dailySession, externalSearchTerm]);
+
+  const filteredPurchaseHistory = useMemo(
+    () =>
+      purchaseHistory.filter((entry) =>
+        matchesSessionSearch(
+          [
+            entry.closedAt,
+            entry.signoff.preparedBy,
+            entry.signoff.checkedBy,
+            entry.signoff.approvedBy,
+            entry.signoff.cashier,
+            entry.lines.length,
+            getPurchaseEntryAmount(entry),
+            ...entry.lines.flatMap((line) => [line.itemName, line.category, line.unit, line.addedQty, line.pricePerUnit]),
+          ],
+          externalSearchTerm,
+        ),
+      ),
+    [externalSearchTerm, purchaseHistory],
+  );
+
+  const filteredDailyHistory = useMemo(
+    () =>
+      dailyHistory.filter((entry) =>
+        matchesSessionSearch(
+          [
+            entry.closedAt,
+            entry.signoff.preparedBy,
+            entry.signoff.checkedBy,
+            entry.signoff.approvedBy,
+            entry.signoff.cashier,
+            entry.lines.length,
+            ...entry.lines.flatMap((line) => [line.itemName, line.category, line.unit, line.openingStock, line.received, line.used, line.wastage]),
+          ],
+          externalSearchTerm,
+        ),
+      ),
+    [dailyHistory, externalSearchTerm],
+  );
 
   const dailyTotals = useMemo(() => {
     return (dailySession?.lines ?? []).reduce(
@@ -1059,7 +1124,7 @@ export function KitchenSessionManager({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {purchaseHistory.map((entry) => (
+                  {filteredPurchaseHistory.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell className="font-bold">{formatDateTime(entry.closedAt)}</TableCell>
                       <TableCell className="font-bold">{entry.lines.length}</TableCell>
@@ -1080,10 +1145,10 @@ export function KitchenSessionManager({
                       </TableCell>
                     </TableRow>
                   ))}
-                  {purchaseHistory.length === 0 && (
+                  {filteredPurchaseHistory.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        No saved purchase sessions
+                        No saved purchase sessions match your search
                       </TableCell>
                     </TableRow>
                   )}
@@ -1145,7 +1210,7 @@ export function KitchenSessionManager({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dailySession.lines.map((line) => {
+                      {filteredDailyLines.map((line) => {
                         const closingStock = roundStock(line.openingStock + line.received - line.used - line.wastage);
                         return (
                           <TableRow key={line.id}>
@@ -1179,6 +1244,13 @@ export function KitchenSessionManager({
                           </TableRow>
                         );
                       })}
+                      {filteredDailyLines.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={9} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
+                            No daily stock rows match your search
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   <div className="grid gap-3 md:grid-cols-3">
@@ -1226,7 +1298,7 @@ export function KitchenSessionManager({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dailyHistory.map((entry) => {
+                  {filteredDailyHistory.map((entry) => {
                     const totals = getDailyEntryTotals(entry);
 
                     return (
@@ -1251,10 +1323,10 @@ export function KitchenSessionManager({
                       </TableRow>
                     );
                   })}
-                  {dailyHistory.length === 0 && (
+                  {filteredDailyHistory.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="py-10 text-center text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        No saved daily sheets
+                        No saved daily sheets match your search
                       </TableCell>
                     </TableRow>
                   )}

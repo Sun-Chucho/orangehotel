@@ -1396,7 +1396,7 @@ export function InventoryControlView({
               {renderInventoryTable("Kitchen Inventory Records", filteredKitchenInventoryItems, "kitchen")}
             </>
           ) : (
-            <KitchenSessionManager isDirector={isDirector} />
+            <KitchenSessionManager isDirector={isDirector} externalSearchTerm={inventorySearchTerm} />
           )}
         </div>
       )}
@@ -1423,7 +1423,7 @@ export function InventoryControlView({
           {canViewBaristaFinance && baristaView === "finance" && renderBaristaFinance()}
           {role === "manager" && baristaView === "purchase" && (
             <>
-              <KitchenSessionManager isDirector={isDirector} department="barista" />
+              <KitchenSessionManager isDirector={isDirector} department="barista" externalSearchTerm={inventorySearchTerm} />
               <section className="space-y-3">
                 <div>
                   <h2 className="text-xl font-black uppercase tracking-tight">Saved Barista Daily Purchases</h2>

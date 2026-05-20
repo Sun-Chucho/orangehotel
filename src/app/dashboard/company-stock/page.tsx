@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
-import { Pencil } from "lucide-react";
+import { Pencil, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type InventoryActionMode = "received" | "issued" | "damaged";
@@ -38,6 +38,28 @@ function calculateBalance(openingStock: number, received: number, issued: number
   return Math.max(0, openingStock + received - issued - damaged);
 }
 
+function matchesCompanyStockSearch(item: CompanyStockItem, searchTerm: string) {
+  const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const haystack = [
+    item.name,
+    item.category,
+    item.openingStock,
+    item.received,
+    item.issued,
+    item.damaged,
+    item.damageReason,
+    item.balance,
+    new Date(item.createdAt).toLocaleDateString(),
+  ]
+    .filter((value) => value !== undefined && value !== null)
+    .join(" ")
+    .toLowerCase();
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
 export default function CompanyStockPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
@@ -56,6 +78,7 @@ export default function CompanyStockPage() {
   const [selectedItemId, setSelectedItemId] = useState("");
   const [movementQty, setMovementQty] = useState("");
   const [damageReason, setDamageReason] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const isInventoryRole = role === "inventory";
 
@@ -79,7 +102,11 @@ export default function CompanyStockPage() {
     return () => unsubscribeCompanyStock();
   }, []);
 
-  const filteredItems = useMemo(() => items.filter((item) => item.category === tab), [items, tab]);
+  const searchedItems = useMemo(
+    () => items.filter((item) => matchesCompanyStockSearch(item, searchTerm)),
+    [items, searchTerm],
+  );
+  const filteredItems = useMemo(() => searchedItems.filter((item) => item.category === tab), [searchedItems, tab]);
 
   const resetForm = () => {
     setEditingItemId(null);
@@ -270,6 +297,16 @@ export default function CompanyStockPage() {
           <CardDescription>Company stock sheet shared across the app and synced to the backend store</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search company stock by item, category, quantity, reason, or date"
+              className="h-11 pl-10"
+            />
+          </div>
+
           {!isDirector && !isInventoryRole && (
             <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-7 gap-2">
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Item Name" />
@@ -325,7 +362,7 @@ export default function CompanyStockPage() {
                   }}
                 >
                   <option value="">{inventoryMode === "received" ? "Select existing item (optional)" : "Select item"}</option>
-                  {items.map((item) => (
+                  {searchedItems.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name} ({item.category})
                     </option>
