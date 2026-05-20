@@ -854,15 +854,6 @@ export default function BookingPage() {
                   <TableCell className="text-right">
                     {!isDirector ? (
                       <div className="flex justify-end gap-2">
-                        {!isManager && (
-                          <Button
-                            variant="outline"
-                            onClick={() => openEditBooking(tx)}
-                            className="h-9 font-black uppercase text-[10px] tracking-widest"
-                          >
-                            Edit
-                          </Button>
-                        )}
                         {tx.status !== "checked-out" && (
                           <>
                         <Button
