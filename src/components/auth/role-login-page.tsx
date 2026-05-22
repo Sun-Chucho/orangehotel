@@ -76,11 +76,6 @@ const ROLE_CONFIG: Record<Role, { label: string; username: string; description: 
   },
 };
 
-const BARISTA_USERS = [
-  { id: "barista-1", name: "ALI" },
-  { id: "barista-2", name: "USER 2" },
-] as const;
-
 export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
@@ -91,16 +86,16 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     () =>
       role === "cashier"
         ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name }))
-        : role === "barista"
-          ? [...BARISTA_USERS]
-          : [],
+        : [],
     [role],
   );
   const selectableUsers = useMemo(() => {
-    const profileUsersByName = new Map(profileUsers.map((user) => [user.name.trim().toLowerCase(), user]));
-    return defaultSelectableUsers.filter((user) => !profileUsersByName.get(user.name.trim().toLowerCase())?.blocked);
+    if (profileUsers.length > 0) {
+      return profileUsers.filter((user) => !user.blocked);
+    }
+    return defaultSelectableUsers;
   }, [defaultSelectableUsers, profileUsers]);
-  const [username, setUsername] = useState(role === "barista" ? BARISTA_USERS[0].name : config.username);
+  const [username, setUsername] = useState(config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -115,21 +110,24 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const applyProfiles = () => {
       const profiles = readLocalLoginProfiles();
       const profile = profiles?.[role];
-      setProfileUsers(
-        (profile?.users ?? []).map((user) => ({
+      const nextProfileUsers = (profile?.users ?? []).map((user) => ({
           id: `${role}-${user.username}`,
           name: user.username,
           blocked: user.blocked,
-        })),
-      );
+        }));
+      const nextSelectableUsers = nextProfileUsers.length > 0
+        ? nextProfileUsers.filter((user) => !user.blocked)
+        : defaultSelectableUsers;
+
+      setProfileUsers(nextProfileUsers);
       if (!profile) {
-        if (defaultSelectableUsers.length > 0) {
-          setUsername(defaultSelectableUsers[0].name);
+        if (nextSelectableUsers.length > 0) {
+          setUsername(nextSelectableUsers[0].name);
         }
         return;
       }
-      const listedUser = defaultSelectableUsers.find((user) => user.name.trim().toLowerCase() === profile.username?.trim().toLowerCase());
-      setUsername(listedUser?.name || defaultSelectableUsers[0]?.name || profile.username || config.username);
+      const listedUser = nextSelectableUsers.find((user) => user.name.trim().toLowerCase() === profile.username?.trim().toLowerCase());
+      setUsername(listedUser?.name || nextSelectableUsers[0]?.name || profile.username || config.username);
       if (role === "cashier" && (profile.shift === "day" || profile.shift === "night")) {
         setShift(profile.shift);
       }
@@ -235,6 +233,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const destination = ${JSON.stringify(config.destination)};
   const defaultPassword = ${JSON.stringify(DEFAULT_LOGIN_PASSWORD)};
   const defaultUsername = ${JSON.stringify(config.username)};
+  const allowedUsernames = ${JSON.stringify(selectableUsers.map((user) => user.name.trim().toLowerCase()))};
   const runLogin = (event) => {
     event?.preventDefault();
     const form = document.querySelector("[data-role-login-form='${role}']");
@@ -244,7 +243,9 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const error = form.querySelector("[data-login-error]");
     const username = (usernameInput?.value || defaultUsername).trim();
     const password = passwordInput?.value || "";
-    if (!username || password !== defaultPassword) {
+    const listedUserRequired = role === "barista" || allowedUsernames.length > 0;
+    const usernameAllowed = !listedUserRequired || allowedUsernames.includes(username.toLowerCase());
+    if (!username || !usernameAllowed || password !== defaultPassword) {
       if (error) {
         error.textContent = "Invalid username or password.";
         error.classList.remove("hidden");
@@ -280,13 +281,16 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const profiles = readLocalLoginProfiles() ?? {};
     const currentProfile = profiles[role];
     const expectedPassword = getProfilePassword(currentProfile, username, DEFAULT_LOGIN_PASSWORD);
+    const normalizedUsername = username.trim().toLowerCase();
+    const allowedUsernames = selectableUsers.map((user) => user.name.trim().toLowerCase());
+    const listedUserRequired = role === "barista" || allowedUsernames.length > 0;
 
     if (isProfileUserBlocked(currentProfile, username)) {
       setError("This user is blocked. Contact the manager.");
       return;
     }
 
-    if (!username.trim() || password !== expectedPassword) {
+    if (!username.trim() || (listedUserRequired && !allowedUsernames.includes(normalizedUsername)) || password !== expectedPassword) {
       setError("Invalid username or password.");
       return;
     }
