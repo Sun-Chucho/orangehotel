@@ -39,6 +39,7 @@ type ServiceMode = "restaurant" | "room-service" | "take-away";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentStatus = "completed" | "credit";
 type BaristaOrderLine = { name: string; qty: number };
+type SalesDateFilter = "day" | "week" | "month" | "all";
 
 interface BaristaMenuItem {
   id: string;
@@ -98,6 +99,37 @@ const STORAGE_SEQ = "orange-hotel-barista-seq";
 const STORAGE_MENU = "orange-hotel-barista-menu";
 const STORAGE_PAYMENTS = "orange-hotel-barista-payments";
 const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
+
+function matchesSalesDateFilter(createdAt: number | undefined, filter: SalesDateFilter) {
+  if (filter === "all") return true;
+  if (!createdAt) return false;
+
+  const saleDate = new Date(createdAt);
+  if (!Number.isFinite(saleDate.getTime())) return false;
+
+  const now = new Date();
+  const saleDay = new Date(saleDate.getFullYear(), saleDate.getMonth(), saleDate.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  if (filter === "day") return saleDay === today;
+
+  if (filter === "week") {
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    return saleDate >= startOfWeek && saleDate < endOfWeek;
+  }
+
+  return saleDate.getFullYear() === now.getFullYear() && saleDate.getMonth() === now.getMonth();
+}
+
+function formatPaymentDate(createdAt: number | undefined) {
+  if (!createdAt) return "-";
+  const date = new Date(createdAt);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : "-";
+}
 
 const normalizeCategory = (value: string, itemName = ""): Exclude<BaristaCategory, "all"> => {
   const normalizedValue = value.trim().toLowerCase();
@@ -232,8 +264,9 @@ export default function BaristaPage() {
   const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<Role | null>(null);
   const isManager = role === "manager";
-  const [managerTab, setManagerTab] = useState<"inventory" | "finance">("finance");
-  const [directorTab, setDirectorTab] = useState<"inventory" | "finance" | "purchases">("finance");
+  const [managerTab, setManagerTab] = useState<"inventory" | "finance" | "sales">("finance");
+  const [directorTab, setDirectorTab] = useState<"inventory" | "finance" | "purchases" | "sales">("finance");
+  const [directorSalesDateFilter, setDirectorSalesDateFilter] = useState<SalesDateFilter>("day");
   const [category, setCategory] = useState<BaristaCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -709,6 +742,63 @@ export default function BaristaPage() {
     () => totalBaristaRevenue - baristaCapitalTotal,
     [baristaCapitalTotal, totalBaristaRevenue],
   );
+  const filteredDirectorSalesPayments = useMemo(
+    () =>
+      [...baristaPayments]
+        .filter((payment) => matchesSalesDateFilter(payment.createdAt, directorSalesDateFilter))
+        .sort((a, b) => b.createdAt - a.createdAt),
+    [baristaPayments, directorSalesDateFilter],
+  );
+  const directorSalesRows = useMemo(
+    () =>
+      filteredDirectorSalesPayments.flatMap((payment) => {
+        if (!Array.isArray(payment.lines) || payment.lines.length === 0) {
+          return [
+            {
+              id: payment.id,
+              code: payment.code,
+              createdAt: payment.createdAt,
+              itemName: "Unitemized sale",
+              quantity: 1,
+              destination: payment.destination,
+              method: payment.method,
+              status: payment.status,
+              amount: payment.total,
+            },
+          ];
+        }
+
+        return payment.lines.map((line, index) => {
+          const price = baristaMenuPriceByItem.get(normalizeBaristaTarget(line.name)) ?? 0;
+          const amount = price > 0
+            ? line.qty * price
+            : payment.lines?.length === 1
+              ? payment.total
+              : 0;
+
+          return {
+            id: `${payment.id}-${index}`,
+            code: payment.code,
+            createdAt: payment.createdAt,
+            itemName: line.name,
+            quantity: line.qty,
+            destination: payment.destination,
+            method: payment.method,
+            status: payment.status,
+            amount,
+          };
+        });
+      }),
+    [baristaMenuPriceByItem, filteredDirectorSalesPayments],
+  );
+  const directorSalesQuantityTotal = useMemo(
+    () => directorSalesRows.reduce((sum, row) => sum + row.quantity, 0),
+    [directorSalesRows],
+  );
+  const directorSalesAmountTotal = useMemo(
+    () => filteredDirectorSalesPayments.reduce((sum, payment) => sum + payment.total, 0),
+    [filteredDirectorSalesPayments],
+  );
 
   const renderFinanceTable = () => (
     <Card className="border-none shadow-sm">
@@ -762,6 +852,92 @@ export default function BaristaPage() {
         </Table>
       </CardContent>
     </Card>
+  );
+
+  const renderDirectorSalesTable = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black uppercase tracking-tight">Barista Sales</h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Itemized sales captured from barista POS settlements.
+          </p>
+        </div>
+        <Tabs value={directorSalesDateFilter} onValueChange={(value) => setDirectorSalesDateFilter(value as SalesDateFilter)}>
+          <TabsList className="h-10">
+            <TabsTrigger value="day" className="font-black uppercase text-[10px] tracking-widest">Day</TabsTrigger>
+            <TabsTrigger value="week" className="font-black uppercase text-[10px] tracking-widest">Week</TabsTrigger>
+            <TabsTrigger value="month" className="font-black uppercase text-[10px] tracking-widest">Month</TabsTrigger>
+            <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">All Time</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Records</p>
+            <p className="mt-2 text-2xl font-black">{filteredDirectorSalesPayments.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Items Sold</p>
+            <p className="mt-2 text-2xl font-black">{directorSalesQuantityTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Total</p>
+            <p className="mt-2 text-2xl font-black">TSh {directorSalesAmountTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-none shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-black uppercase tracking-tight">Sold Items</CardTitle>
+          <CardDescription>Filter by day, week, month, or all time.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/10">
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Item Sold</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Qty</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {directorSalesRows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-bold text-sm">{formatPaymentDate(row.createdAt)}</TableCell>
+                  <TableCell className="font-black">{row.code}</TableCell>
+                  <TableCell className="font-bold">{row.itemName}</TableCell>
+                  <TableCell className="font-bold">{row.quantity}</TableCell>
+                  <TableCell className="font-bold">{row.destination}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{row.method}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{row.status}</TableCell>
+                  <TableCell className="font-bold">TSh {row.amount.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+              {directorSalesRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No sales found for this filter
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const activeBaristaProfile = useMemo(() => readLocalLoginProfiles()?.barista ?? null, [activeUsername, role]);
@@ -1073,13 +1249,14 @@ export default function BaristaPage() {
             </CardContent>
           </Card>
         </div>
-        <Tabs value={managerTab} onValueChange={(value) => setManagerTab(value as "inventory" | "finance")}>
+        <Tabs value={managerTab} onValueChange={(value) => setManagerTab(value as "inventory" | "finance" | "sales")}>
           <TabsList className="h-10">
             <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
             <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+            <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
           </TabsList>
         </Tabs>
-        {managerTab === "finance" ? renderFinanceTable() : (
+        {managerTab === "finance" ? renderFinanceTable() : managerTab === "sales" ? renderDirectorSalesTable() : (
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Inventory from Store</CardTitle>
@@ -1178,10 +1355,11 @@ export default function BaristaPage() {
           </Card>
         </div>
 
-        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "finance" | "purchases")}>
+        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "finance" | "purchases" | "sales")}>
           <TabsList className="h-10">
             <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Stock / Inventory</TabsTrigger>
             <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finances</TabsTrigger>
+            <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
             <TabsTrigger value="purchases" className="font-black uppercase text-[10px] tracking-widest">Purchases</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1287,6 +1465,8 @@ export default function BaristaPage() {
               </CardContent>
             </Card>
           </div>
+        ) : directorTab === "sales" ? (
+          renderDirectorSalesTable()
         ) : (
           <KitchenSessionManager isDirector department="barista" visibleTabs={["purchase"]} />
         )}

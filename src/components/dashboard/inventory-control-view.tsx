@@ -43,7 +43,8 @@ export type InventoryTab =
   | "barista-stock";
 
 type KitchenManagerPane = "stock" | "expenses" | "entries";
-type BaristaManagerPane = "finance" | "inventory" | "purchase";
+type BaristaManagerPane = "finance" | "inventory" | "purchase" | "sales";
+type SalesDateFilter = "day" | "week" | "month" | "all";
 type HistoryPreview =
   | { department: "kitchen" | "barista"; kind: "purchase"; entry: KitchenPurchaseHistoryEntry }
   | { department: "kitchen"; kind: "daily"; entry: KitchenDailyStockHistoryEntry }
@@ -52,6 +53,13 @@ type HistoryPreview =
 type ItemCategory = "Kitchen" | "Bar";
 
 interface PosPaymentRecord {
+  id?: string;
+  code?: string;
+  createdAt?: number;
+  mode?: string;
+  destination?: string;
+  status?: "completed" | "credit";
+  method?: string;
   total: number;
   lines?: Array<{ name: string; qty: number }>;
 }
@@ -157,6 +165,37 @@ function normalizeBaristaFinanceTarget(value: string) {
   return normalizeBaristaProductTarget(value);
 }
 
+function matchesSalesDateFilter(createdAt: number | undefined, filter: SalesDateFilter) {
+  if (filter === "all") return true;
+  if (!createdAt) return false;
+
+  const saleDate = new Date(createdAt);
+  if (!Number.isFinite(saleDate.getTime())) return false;
+
+  const now = new Date();
+  const saleDay = new Date(saleDate.getFullYear(), saleDate.getMonth(), saleDate.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  if (filter === "day") return saleDay === today;
+
+  if (filter === "week") {
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    return saleDate >= startOfWeek && saleDate < endOfWeek;
+  }
+
+  return saleDate.getFullYear() === now.getFullYear() && saleDate.getMonth() === now.getMonth();
+}
+
+function formatPaymentDate(createdAt: number | undefined) {
+  if (!createdAt) return "-";
+  const date = new Date(createdAt);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : "-";
+}
+
 function matchesInventorySearch(
   item: {
     name: string;
@@ -224,6 +263,7 @@ export function InventoryControlView({
   const [activeTab, setActiveTab] = useState<InventoryTab | null>(initialTab);
   const [kitchenManagerPane, setKitchenManagerPane] = useState<KitchenManagerPane>("stock");
   const [baristaView, setBaristaView] = useState<BaristaManagerPane>("finance");
+  const [baristaSalesDateFilter, setBaristaSalesDateFilter] = useState<SalesDateFilter>("day");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
@@ -451,6 +491,63 @@ export function InventoryControlView({
   const baristaProfitLossTotal = useMemo(
     () => baristaRevenueTotal - baristaCapitalTotal,
     [baristaCapitalTotal, baristaRevenueTotal],
+  );
+  const filteredBaristaSalesPayments = useMemo(
+    () =>
+      [...baristaPayments]
+        .filter((payment) => matchesSalesDateFilter(payment.createdAt, baristaSalesDateFilter))
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
+    [baristaPayments, baristaSalesDateFilter],
+  );
+  const baristaSalesRows = useMemo(
+    () =>
+      filteredBaristaSalesPayments.flatMap((payment) => {
+        if (!Array.isArray(payment.lines) || payment.lines.length === 0) {
+          return [
+            {
+              id: payment.id ?? `${payment.code ?? "sale"}-${payment.createdAt ?? 0}`,
+              code: payment.code ?? "-",
+              createdAt: payment.createdAt,
+              itemName: "Unitemized sale",
+              quantity: 1,
+              destination: payment.destination ?? payment.mode ?? "-",
+              method: payment.method ?? "-",
+              status: payment.status ?? "completed",
+              amount: payment.total || 0,
+            },
+          ];
+        }
+
+        return payment.lines.map((line, index) => {
+          const price = baristaMenuPriceByItem.get(normalizeBaristaFinanceTarget(line.name)) ?? 0;
+          const amount = price > 0
+            ? line.qty * price
+            : payment.lines?.length === 1
+              ? payment.total || 0
+              : 0;
+
+          return {
+            id: `${payment.id ?? payment.code ?? "sale"}-${index}`,
+            code: payment.code ?? "-",
+            createdAt: payment.createdAt,
+            itemName: line.name,
+            quantity: line.qty,
+            destination: payment.destination ?? payment.mode ?? "-",
+            method: payment.method ?? "-",
+            status: payment.status ?? "completed",
+            amount,
+          };
+        });
+      }),
+    [baristaMenuPriceByItem, filteredBaristaSalesPayments],
+  );
+  const baristaSalesQuantityTotal = useMemo(
+    () => baristaSalesRows.reduce((sum, row) => sum + row.quantity, 0),
+    [baristaSalesRows],
+  );
+  const baristaSalesAmountTotal = useMemo(
+    () => filteredBaristaSalesPayments.reduce((sum, payment) => sum + (payment.total || 0), 0),
+    [filteredBaristaSalesPayments],
   );
 
   const resetStoreForm = (lane: StoreLane) => {
@@ -1089,6 +1186,92 @@ export function InventoryControlView({
     </div>
   );
 
+  const renderBaristaSales = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black uppercase tracking-tight">Barista Sales</h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Itemized sales captured from barista POS settlements.
+          </p>
+        </div>
+        <Tabs value={baristaSalesDateFilter} onValueChange={(value) => setBaristaSalesDateFilter(value as SalesDateFilter)}>
+          <TabsList className="h-10">
+            <TabsTrigger value="day" className="font-black uppercase text-[10px] tracking-widest">Day</TabsTrigger>
+            <TabsTrigger value="week" className="font-black uppercase text-[10px] tracking-widest">Week</TabsTrigger>
+            <TabsTrigger value="month" className="font-black uppercase text-[10px] tracking-widest">Month</TabsTrigger>
+            <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">All Time</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Records</p>
+            <p className="mt-2 text-2xl font-black">{filteredBaristaSalesPayments.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Items Sold</p>
+            <p className="mt-2 text-2xl font-black">{baristaSalesQuantityTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Total</p>
+            <p className="mt-2 text-2xl font-black">TSh {baristaSalesAmountTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg uppercase font-black">Sold Items</CardTitle>
+          <CardDescription>Filter by day, week, month, or all time.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Code</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Item Sold</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Destination</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Method</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {baristaSalesRows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-bold text-sm">{formatPaymentDate(row.createdAt)}</TableCell>
+                  <TableCell className="font-black">{row.code}</TableCell>
+                  <TableCell className="font-bold">{row.itemName}</TableCell>
+                  <TableCell className="font-bold">{row.quantity}</TableCell>
+                  <TableCell className="font-bold">{row.destination}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{row.method}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{row.status}</TableCell>
+                  <TableCell className="font-bold">TSh {row.amount.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+              {baristaSalesRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No sales found for this filter
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   const downloadPurchaseHistoryEntry = (department: "kitchen" | "barista", entry: KitchenPurchaseHistoryEntry) => {
     downloadCsvFile(`${department}-daily-purchases-${getHistoryFileDate(entry.closedAt)}.csv`, [
       ["Department", department === "kitchen" ? "Kitchen" : "Barista"],
@@ -1408,6 +1591,7 @@ export function InventoryControlView({
               <TabsList className="h-11">
                 <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Barista Finances</TabsTrigger>
                 <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+                <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
                 {role === "manager" && (
                   <TabsTrigger value="purchase" className="font-black uppercase text-[10px] tracking-widest">Daily Purchase</TabsTrigger>
                 )}
@@ -1421,6 +1605,7 @@ export function InventoryControlView({
             </>
           )}
           {canViewBaristaFinance && baristaView === "finance" && renderBaristaFinance()}
+          {canViewBaristaFinance && baristaView === "sales" && renderBaristaSales()}
           {role === "manager" && baristaView === "purchase" && (
             <>
               <KitchenSessionManager isDirector={isDirector} department="barista" externalSearchTerm={inventorySearchTerm} />
