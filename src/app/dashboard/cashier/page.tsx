@@ -519,11 +519,7 @@ export default function BookingPage() {
 
       setTransactions(nextTransactions);
       writeCashierState(nextTransactions, receiptSeq);
-
-      if (existingBooking.roomNumber !== selectedRoomNumber) {
-        markRoomStatus(existingBooking.roomNumber, "available");
-      }
-      markRoomStatus(selectedRoomNumber, "occupied");
+      setRooms(syncRoomsStateFromBookings(nextTransactions, rooms));
 
       setTransactionTab(status === "credit" ? "credit" : "completed");
       resetBookingForm();
@@ -561,7 +557,7 @@ export default function BookingPage() {
     setTransactions(nextTransactions);
     setReceiptSeq(nextReceipt);
     writeCashierState(nextTransactions, nextReceipt);
-    markRoomStatus(selectedRoomNumber, "occupied");
+    setRooms(syncRoomsStateFromBookings(nextTransactions, rooms));
     setTransactionTab(status === "credit" ? "credit" : "completed");
     resetBookingForm();
   };

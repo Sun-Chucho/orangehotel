@@ -630,6 +630,51 @@ function getLocalFallbackForSync(key: string) {
   return null;
 }
 
+function getLocalSyncedValue(key: string) {
+  if (typeof window === "undefined") return null;
+  return sanitizeForStorage(sanitizeSyncedValue(key, getLocalFallbackForSync(key) ?? readParsedLocalValue(key) ?? null));
+}
+
+function getLocalCashierTransactionsForRooms() {
+  const canonical = readParsedLocalValue<{ transactions?: unknown[] }>("orange-hotel-cashier-state");
+  if (Array.isArray(canonical?.transactions)) return canonical.transactions;
+  return readParsedLocalValue<unknown[]>("orange-hotel-cashier-transactions") ?? [];
+}
+
+function getActiveLocalBookedRoomNumbers() {
+  return new Set(
+    getLocalCashierTransactionsForRooms()
+      .filter((booking) => {
+        if (typeof booking !== "object" || booking === null) return false;
+        const roomNumber = (booking as { roomNumber?: unknown }).roomNumber;
+        const status = (booking as { status?: unknown }).status;
+        return typeof roomNumber === "string" && roomNumber.trim().length > 0 && status !== "checked-out";
+      })
+      .map((booking) => (booking as { roomNumber: string }).roomNumber),
+  );
+}
+
+function applyLocalBookingOccupancy(key: string, value: unknown) {
+  if (key !== "orange-hotel-rooms-state" || !Array.isArray(value)) return value;
+
+  const occupiedRooms = getActiveLocalBookedRoomNumbers();
+  if (occupiedRooms.size === 0) return value;
+
+  return value.map((room) => {
+    if (typeof room !== "object" || room === null) return room;
+    const roomNumber = (room as { number?: unknown }).number;
+    if (typeof roomNumber !== "string" || !occupiedRooms.has(roomNumber)) return room;
+    return (room as { status?: unknown }).status === "occupied" ? room : { ...room, status: "occupied" };
+  });
+}
+
+function mergeRemoteValueForLocalApply(key: string, remoteValue: unknown) {
+  const localValue = getLocalSyncedValue(key);
+  if (!hasUsableSyncedValue(key, localValue)) return applyLocalBookingOccupancy(key, remoteValue);
+  if (!hasUsableSyncedValue(key, remoteValue)) return applyLocalBookingOccupancy(key, localValue);
+  return applyLocalBookingOccupancy(key, protectSyncedValueBeforeWrite(key, localValue, remoteValue));
+}
+
 function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value: T | null) => void) {
   if (typeof window === "undefined") return;
   if (rawValue === null) {
@@ -697,7 +742,11 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
   try {
     const serverValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue(key).catch(() => null)));
     if (hasUsableSyncedValue(key, serverValue)) {
-      applyHydratedValue(serverValue);
+      const mergedServerValue = sanitizeForStorage(sanitizeSyncedValue(key, mergeRemoteValueForLocalApply(key, serverValue)));
+      const sanitizedServerValue = applyHydratedValue(mergedServerValue);
+      if (sanitizedServerValue !== null && !areSnapshotsEqual(serverValue, sanitizedServerValue)) {
+        await writeServerSyncedStorageValue(key, sanitizedServerValue).catch(() => undefined);
+      }
       markSyncHealthy(key);
       return;
     }
@@ -705,8 +754,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     await ensureFirebaseAuthReady();
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
     const remoteValue = snapshot.exists() ? sanitizeForStorage(sanitizeSyncedValue(key, snapshot.val())) : null;
-    const fallbackValue = getLocalFallbackForSync(key);
-    const localValue = sanitizeForStorage(sanitizeSyncedValue(key, fallbackValue ?? readParsedLocalValue(key) ?? null));
+    const localValue = getLocalSyncedValue(key);
 
     const canonicalValue = sanitizeForStorage(getCanonicalDefaultValue(key));
     if (remoteValue === null && localValue === null && canonicalValue === null) return;
@@ -715,9 +763,9 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     const localScore = getSnapshotScore(key, localValue);
     const canonicalScore = getSnapshotScore(key, canonicalValue);
 
-    let preferredValue = canonicalValue;
+    let preferredValue: unknown = canonicalValue;
     if (remoteScore > 0) {
-      preferredValue = remoteValue;
+      preferredValue = mergeRemoteValueForLocalApply(key, remoteValue);
     } else if (localScore >= remoteScore && localScore >= canonicalScore) {
       preferredValue = localValue;
     }
@@ -799,12 +847,16 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
       const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue<T>(key)));
       if (remoteValue === null) return;
       if (shouldIgnoreRemoteValue(key, remoteValue)) return;
+      const nextValue = sanitizeForStorage(sanitizeSyncedValue(key, mergeRemoteValueForLocalApply(key, remoteValue)));
       const currentValue = sanitizeForStorage(readParsedLocalValue<T>(key));
-      if (!areSnapshotsEqual(currentValue, remoteValue)) {
-        localStorage.setItem(key, JSON.stringify(remoteValue));
-        mirrorCanonicalStateToLegacyLocal(key, remoteValue);
+      if (!areSnapshotsEqual(currentValue, nextValue)) {
+        localStorage.setItem(key, JSON.stringify(nextValue));
+        mirrorCanonicalStateToLegacyLocal(key, nextValue);
         dispatchStorageUpdated(key);
-        onChange(remoteValue);
+        onChange(nextValue as T);
+      }
+      if (!areSnapshotsEqual(remoteValue, nextValue)) {
+        await writeServerSyncedStorageValue(key, nextValue).catch(() => undefined);
       }
       markSyncHealthy(key);
     } catch {
@@ -846,8 +898,13 @@ export function subscribeToSyncedStorageKey<T>(key: string, onChange: (value: T 
           if (shouldIgnoreRemoteValue(key, nextValue)) {
             return;
           }
-          mirrorCanonicalStateToLegacyLocal(key, nextValue);
-          readSnapshotValue<T>(key, nextValue, onChange);
+          const mergedValue = sanitizeForStorage(sanitizeSyncedValue(key, mergeRemoteValueForLocalApply(key, nextValue)));
+          mirrorCanonicalStateToLegacyLocal(key, mergedValue);
+          readSnapshotValue<T>(key, mergedValue as T, onChange);
+          if (!areSnapshotsEqual(nextValue, mergedValue)) {
+            void set(ref(firebaseDatabase, toStoragePath(key)), mergedValue).catch(() => undefined);
+            void writeServerSyncedStorageValue(key, mergedValue).catch(() => undefined);
+          }
           markSyncHealthy(key);
           stopFallbackPolling();
         },
