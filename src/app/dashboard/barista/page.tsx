@@ -62,6 +62,8 @@ interface BaristaTicket {
   destination: string;
   lines: BaristaOrderLine[];
   total: number;
+  status?: "active" | "delivered";
+  deliveredAt?: number;
 }
 
 interface BaristaPaymentRecord {
@@ -589,6 +591,18 @@ export default function BaristaPage() {
     () => [...baristaPayments].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
     [baristaPayments],
   );
+  const activeTickets = useMemo(() => tickets.filter((ticket) => ticket.status !== "delivered"), [tickets]);
+  const orderedTickets = useMemo(
+    () =>
+      [...tickets].sort((a, b) => {
+        const aDelivered = a.status === "delivered";
+        const bDelivered = b.status === "delivered";
+
+        if (aDelivered !== bDelivered) return aDelivered ? 1 : -1;
+        return b.createdAt - a.createdAt;
+      }),
+    [tickets],
+  );
   const resolveBaristaInventoryItem = (item: MainStoreItem) =>
     inventoryItems.find((entry) => {
       if ((entry.category ?? "").toLowerCase() === "kitchen") return false;
@@ -973,7 +987,10 @@ export default function BaristaPage() {
       const sourceTickets = snapshot.tickets.length > 0 ? snapshot.tickets : tickets;
       const sourcePayments = snapshot.payments.length > 0 ? snapshot.payments : baristaPayments;
       const sourceMenuItems = snapshot.menuItems.length > 0 ? snapshot.menuItems : storedMenuItems;
-      const nextTickets = sourceTickets.filter((ticket) => ticket.id !== id);
+      const deliveredAt = Date.now();
+      const nextTickets = sourceTickets.map((ticket) =>
+        ticket.id === id ? { ...ticket, status: "delivered" as const, deliveredAt } : ticket,
+      );
 
       setTickets(nextTickets);
       setTicketSeq(snapshot.ticketSeq);
@@ -989,6 +1006,7 @@ export default function BaristaPage() {
     if (isDirector) return;
     const ticket = tickets.find((t) => t.id === id);
     if (!ticket) return;
+    if (ticket.status === "delivered") return;
     const approved = await confirm({
       title: "Cancel Barista Order",
       description: "Are you sure you want to cancel this barista order?",
@@ -1295,7 +1313,7 @@ export default function BaristaPage() {
         <div className="flex flex-wrap items-center gap-3">
           <SyncStatusIndicator />
           <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
-            {tickets.length} Active Orders
+            {activeTickets.length} Active Orders
           </Badge>
         </div>
       </header>
@@ -1494,7 +1512,7 @@ export default function BaristaPage() {
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Barista Operations</CardTitle>
-              <CardDescription>Queue and stock received from Main Store</CardDescription>
+              <CardDescription>Queue, delivered records, and stock received from Main Store</CardDescription>
               <Tabs value={queueTab} onValueChange={(value) => setQueueTab(value as "queue" | "from-store")}>
                 <TabsList className="w-full md:w-[280px] grid grid-cols-2 h-10 bg-muted/30 rounded-xl">
                   <TabsTrigger value="queue" className="font-black uppercase text-[10px] tracking-widest">Queue</TabsTrigger>
@@ -1514,32 +1532,47 @@ export default function BaristaPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tickets.map((ticket) => (
-                      <TableRow key={ticket.id}>
-                        <TableCell className="font-black">
-                          <p>{ticket.code}</p>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                            {ticket.mode} | {ticket.destination}
-                          </p>
-                        </TableCell>
-                        <TableCell className="font-bold text-sm">
-                          {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
-                        </TableCell>
-                        <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector || deliveringTicketId === ticket.id} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
-                              <CheckCircle2 className="w-4 h-4 mr-1" /> {deliveringTicketId === ticket.id ? "Saving" : "Delivered"}
-                            </Button>
-                            <Button onClick={() => cancelTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
-                              <XCircle className="w-4 h-4 mr-1" /> Cancelled
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {orderedTickets.map((ticket) => {
+                      const isDelivered = ticket.status === "delivered";
 
-                    {tickets.length === 0 && (
+                      return (
+                        <TableRow key={ticket.id} className={isDelivered ? "bg-green-50/50" : undefined}>
+                          <TableCell className="font-black">
+                            <p>{ticket.code}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                              {ticket.mode} | {ticket.destination}
+                            </p>
+                            {isDelivered && (
+                              <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-green-700">
+                                Delivered {ticket.deliveredAt ? new Date(ticket.deliveredAt).toLocaleString() : ""}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-bold text-sm">
+                            {ticket.lines.map((line) => `${line.name} x${line.qty}`).join(" | ")}
+                          </TableCell>
+                          <TableCell className="font-black">TSh {ticket.total.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            {isDelivered ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                <CheckCircle2 className="w-4 h-4 mr-1" /> Delivered
+                              </Badge>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <Button onClick={() => deliverTicket(ticket.id)} disabled={isDirector || deliveringTicketId === ticket.id} className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90">
+                                  <CheckCircle2 className="w-4 h-4 mr-1" /> {deliveringTicketId === ticket.id ? "Saving" : "Delivered"}
+                                </Button>
+                                <Button onClick={() => cancelTicket(ticket.id)} disabled={isDirector} className="h-9 font-black uppercase text-[10px] tracking-widest bg-red-600 hover:bg-red-600/90 text-white">
+                                  <XCircle className="w-4 h-4 mr-1" /> Cancelled
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+
+                    {orderedTickets.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={4} className="py-12 text-center opacity-40">
                           <Coffee className="w-12 h-12 mx-auto mb-3" />

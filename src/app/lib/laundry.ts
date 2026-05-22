@@ -11,5 +11,6 @@ export interface LaundryRecord {
   status: LaundryPaymentStatus;
   paymentMethod: LaundryPaymentMethod;
   createdAt: number;
+  bookingDate?: string;
   createdBy?: string;
 }

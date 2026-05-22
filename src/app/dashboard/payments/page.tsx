@@ -16,6 +16,7 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentsTab = "reception" | "kitchen" | "barista";
+type PaymentDateFilter = "all" | "day" | "week" | "month";
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
@@ -115,6 +116,30 @@ function formatDate(value: string): string {
   });
 }
 
+function matchesPaymentDateFilter(createdAt: number, filter: PaymentDateFilter) {
+  if (filter === "all") return true;
+
+  const createdDate = new Date(createdAt);
+  if (!Number.isFinite(createdDate.getTime())) return false;
+
+  const now = new Date();
+  const createdDay = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  if (filter === "day") return createdDay === today;
+
+  if (filter === "week") {
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    return createdDate >= startOfWeek && createdDate < endOfWeek;
+  }
+
+  return createdDate.getFullYear() === now.getFullYear() && createdDate.getMonth() === now.getMonth();
+}
+
 function normalizeReceiptNo(value: string) {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
@@ -145,6 +170,7 @@ export default function PaymentsPage() {
   const isDirector = useIsDirector();
   const [role, setRole] = useState<Role>("manager");
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("reception");
+  const [paymentDateFilter, setPaymentDateFilter] = useState<PaymentDateFilter>("all");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
@@ -342,8 +368,10 @@ export default function PaymentsPage() {
         : paymentsTab === "kitchen"
         ? kitchenRows
         : baristaRows;
-    return [...base].sort((a, b) => b.createdAt - a.createdAt);
-  }, [paymentsTab, bookingRows, kitchenRows, baristaRows]);
+    return base
+      .filter((row) => matchesPaymentDateFilter(row.createdAt, paymentDateFilter))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [paymentDateFilter, paymentsTab, bookingRows, kitchenRows, baristaRows]);
 
   const canViewAllTabs = role === "manager" || role === "director";
   const headerDescription =
@@ -396,21 +424,31 @@ export default function PaymentsPage() {
               <CardTitle className="text-xl font-black uppercase tracking-tight">Payment Transactions</CardTitle>
               <CardDescription>{cardDescription}</CardDescription>
             </div>
-            {canViewAllTabs && (
-              <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)} className="w-full md:w-auto">
-                <TabsList className="h-10 w-full md:w-auto">
-                  <TabsTrigger value="reception" className="text-[10px] font-black uppercase tracking-widest">
-                    Reception
-                  </TabsTrigger>
-                  <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">
-                    Kitchen
-                  </TabsTrigger>
-                  <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">
-                    Barista
-                  </TabsTrigger>
+            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+              <Tabs value={paymentDateFilter} onValueChange={(value) => setPaymentDateFilter(value as PaymentDateFilter)} className="w-full md:w-auto">
+                <TabsList className="grid h-10 w-full grid-cols-4 md:w-auto">
+                  <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
+                  <TabsTrigger value="day" className="text-[10px] font-black uppercase tracking-widest">Day</TabsTrigger>
+                  <TabsTrigger value="week" className="text-[10px] font-black uppercase tracking-widest">Week</TabsTrigger>
+                  <TabsTrigger value="month" className="text-[10px] font-black uppercase tracking-widest">Month</TabsTrigger>
                 </TabsList>
               </Tabs>
-            )}
+              {canViewAllTabs && (
+                <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)} className="w-full md:w-auto">
+                  <TabsList className="h-10 w-full md:w-auto">
+                    <TabsTrigger value="reception" className="text-[10px] font-black uppercase tracking-widest">
+                      Reception
+                    </TabsTrigger>
+                    <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">
+                      Kitchen
+                    </TabsTrigger>
+                    <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">
+                      Barista
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              )}
+            </div>
           </div>
         </CardHeader>
 

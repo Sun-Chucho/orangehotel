@@ -27,6 +27,7 @@ import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/ap
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type TransactionTab = "completed" | "credit";
+type BookingDateFilter = "all" | "day" | "week" | "month";
 type RoomType = "standard" | "platinum";
 type TransactionStatus = "completed" | "credit" | "checked-out";
 type BookingCurrency = "TSh" | "$";
@@ -136,6 +137,30 @@ function getDateTimeMs(dateText: string, timeText: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function matchesBookingDateFilter(createdAt: number, filter: BookingDateFilter) {
+  if (filter === "all") return true;
+
+  const createdDate = new Date(createdAt);
+  if (!Number.isFinite(createdDate.getTime())) return false;
+
+  const now = new Date();
+  const createdDay = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  if (filter === "day") return createdDay === today;
+
+  if (filter === "week") {
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    return createdDate >= startOfWeek && createdDate < endOfWeek;
+  }
+
+  return createdDate.getFullYear() === now.getFullYear() && createdDate.getMonth() === now.getMonth();
+}
+
 function isOverstay(record: BookingRecord): boolean {
   if (record.status === "checked-out") return false;
   const checkoutAt = new Date(`${record.checkOutDate}T${record.checkOutTime || "00:00"}:00`);
@@ -157,6 +182,7 @@ export default function BookingPage() {
   const defaultCheckOutDate = addDays(today, 1);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");
+  const [bookingDateFilter, setBookingDateFilter] = useState<BookingDateFilter>("all");
   const [roomType, setRoomType] = useState<RoomType>("standard");
   const [roomPickerOpen, setRoomPickerOpen] = useState(false);
 
@@ -299,6 +325,10 @@ export default function BookingPage() {
     () => transactions.filter((tx) => tx.status === "credit"),
     [transactions],
   );
+  const visibleTransactions = useMemo(() => {
+    const source = transactionTab === "completed" ? completedTransactions : creditTransactions;
+    return source.filter((tx) => matchesBookingDateFilter(tx.createdAt, bookingDateFilter));
+  }, [bookingDateFilter, completedTransactions, creditTransactions, transactionTab]);
   const activeBookedRoomNumbers = useMemo(
     () =>
       new Set(
@@ -837,17 +867,27 @@ export default function BookingPage() {
 
       <Card id="booked-rooms" className="border-none shadow-sm">
         <CardHeader>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Booked Rooms</CardTitle>
-              <CardDescription>Completed and credit booking records</CardDescription>
+              <CardDescription>Completed and credit booking records filtered by payment date</CardDescription>
             </div>
-            <Tabs value={transactionTab} onValueChange={(value) => setTransactionTab(value as TransactionTab)}>
-              <TabsList className="h-10">
-                <TabsTrigger value="completed" className="text-[10px] font-black uppercase tracking-widest">Completed Transactions</TabsTrigger>
-                <TabsTrigger value="credit" className="text-[10px] font-black uppercase tracking-widest">Credit Transactions</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <Tabs value={bookingDateFilter} onValueChange={(value) => setBookingDateFilter(value as BookingDateFilter)}>
+                <TabsList className="grid h-10 grid-cols-4">
+                  <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
+                  <TabsTrigger value="day" className="text-[10px] font-black uppercase tracking-widest">Day</TabsTrigger>
+                  <TabsTrigger value="week" className="text-[10px] font-black uppercase tracking-widest">Week</TabsTrigger>
+                  <TabsTrigger value="month" className="text-[10px] font-black uppercase tracking-widest">Month</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Tabs value={transactionTab} onValueChange={(value) => setTransactionTab(value as TransactionTab)}>
+                <TabsList className="h-10">
+                  <TabsTrigger value="completed" className="text-[10px] font-black uppercase tracking-widest">Completed Transactions</TabsTrigger>
+                  <TabsTrigger value="credit" className="text-[10px] font-black uppercase tracking-widest">Credit Transactions</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -864,7 +904,7 @@ export default function BookingPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(transactionTab === "completed" ? completedTransactions : creditTransactions).map((tx) => (
+              {visibleTransactions.map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell className="font-black">{tx.roomNumber}</TableCell>
                   <TableCell className="font-bold">{tx.guestName}</TableCell>
@@ -926,13 +966,13 @@ export default function BookingPage() {
                 </TableRow>
               ))}
 
-              {(transactionTab === "completed" ? completedTransactions : creditTransactions).length === 0 && (
+              {visibleTransactions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center">
+                  <TableCell colSpan={7} className="py-12 text-center">
                     <div className="opacity-40">
                       <Receipt className="w-10 h-10 mx-auto mb-2" />
                       <p className="font-black uppercase tracking-widest text-xs">
-                        No bookings found
+                        No bookings found for this date filter
                       </p>
                     </div>
                   </TableCell>

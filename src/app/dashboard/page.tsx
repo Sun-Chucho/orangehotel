@@ -7,6 +7,7 @@ import { readStoredRole } from "@/app/lib/auth";
 import { Role, ROOMS } from "@/app/lib/mock-data";
 import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 import { LaundryRecord, STORAGE_LAUNDRY_RECORDS } from "@/app/lib/laundry";
+import { ExpenseRecord, STORAGE_EXPENSES } from "@/app/lib/expenses";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { deriveRoomsStateFromBookings, readRoomsState } from "@/app/lib/rooms-storage";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface CashierTransaction {
   roomNumber?: string;
@@ -51,8 +53,11 @@ export default function OverviewPage() {
   const [bookingRevenue, setBookingRevenue] = useState(0);
   const [activeKitchen, setActiveKitchen] = useState(0);
   const [activeBarista, setActiveBarista] = useState(0);
+  const [kitchenRevenue, setKitchenRevenue] = useState(0);
+  const [baristaRevenue, setBaristaRevenue] = useState(0);
   const [foodRevenue, setFoodRevenue] = useState(0);
   const [laundryRevenue, setLaundryRevenue] = useState(0);
+  const [expensesTotal, setExpensesTotal] = useState(0);
   const [creditExposure, setCreditExposure] = useState(0);
   const [settledToday, setSettledToday] = useState(0);
   const [rooms, setRooms] = useState(ROOMS);
@@ -80,6 +85,7 @@ export default function OverviewPage() {
       const kitchenSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_KITCHEN_STATE, "orange-hotel-kitchen-tickets", "orange-hotel-kitchen-seq", "orange-hotel-kitchen-payments", "orange-hotel-kitchen-menu", 300);
       const baristaSnapshot = readPosState<QueueTicket, POSPaymentRecord, unknown>(STORAGE_BARISTA_STATE, "orange-hotel-barista-orders", "orange-hotel-barista-seq", "orange-hotel-barista-payments", "orange-hotel-barista-menu", 490);
       const laundry = readJson<LaundryRecord[]>(STORAGE_LAUNDRY_RECORDS) ?? [];
+      const expenses = readJson<ExpenseRecord[]>(STORAGE_EXPENSES) ?? [];
       setRooms(
         deriveRoomsStateFromBookings(
           cashierSnapshot.transactions.filter((tx): tx is CashierTransaction & { roomNumber: string } => Boolean(tx.roomNumber)),
@@ -101,8 +107,11 @@ export default function OverviewPage() {
       const kitchenMetrics = collectPaymentMetrics(kitchenSnapshot.payments);
       const baristaMetrics = collectPaymentMetrics(baristaSnapshot.payments);
 
+      setKitchenRevenue(kitchenMetrics.paid);
+      setBaristaRevenue(baristaMetrics.paid);
       setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
       setLaundryRevenue(laundry.filter((record) => record.status !== "credit").reduce((sum, record) => sum + record.totalAmount, 0));
+      setExpensesTotal(expenses.reduce((sum, expense) => sum + (expense.amount || 0), 0));
       setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
       setSettledToday(kitchenMetrics.settledCount + baristaMetrics.settledCount);
       setMounted(true);
@@ -114,6 +123,7 @@ export default function OverviewPage() {
     const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, refreshOverview);
     const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, refreshOverview);
     const unsubscribeLaundry = subscribeToSyncedStorageKey(STORAGE_LAUNDRY_RECORDS, refreshOverview);
+    const unsubscribeExpenses = subscribeToSyncedStorageKey(STORAGE_EXPENSES, refreshOverview);
     const unsubscribeRooms = subscribeToSyncedStorageKey("orange-hotel-rooms-state", refreshOverview);
 
     return () => {
@@ -121,6 +131,7 @@ export default function OverviewPage() {
       unsubscribeKitchen();
       unsubscribeBarista();
       unsubscribeLaundry();
+      unsubscribeExpenses();
       unsubscribeRooms();
     };
   }, []);
@@ -130,7 +141,19 @@ export default function OverviewPage() {
   const isDirector = role === "director";
   const occupancyPct = Math.round((occupiedRooms / Math.max(rooms.length, 1)) * 100);
   const totalRevenue = bookingRevenue + foodRevenue + laundryRevenue;
+  const actualNetRevenue = totalRevenue - expensesTotal;
   const revPar = Math.round(totalRevenue / Math.max(rooms.length, 1));
+  const netRevenueChartData = useMemo(
+    () => [
+      { name: "Booking", value: bookingRevenue, fill: "#F57C00" },
+      { name: "Kitchen", value: kitchenRevenue, fill: "#111111" },
+      { name: "Barista", value: baristaRevenue, fill: "#00A676" },
+      { name: "Laundry", value: laundryRevenue, fill: "#2F80ED" },
+      { name: "Expenses", value: expensesTotal, fill: "#D92D20" },
+      { name: "Net", value: actualNetRevenue, fill: actualNetRevenue >= 0 ? "#15803D" : "#B42318" },
+    ],
+    [actualNetRevenue, baristaRevenue, bookingRevenue, expensesTotal, kitchenRevenue, laundryRevenue],
+  );
 
   const stats = useMemo(
     () => [
@@ -145,6 +168,8 @@ export default function OverviewPage() {
   const executiveStats = useMemo(
     () => [
       { label: "Total Revenue", value: `TSh ${totalRevenue.toLocaleString()}`, note: "Rooms + F&B + laundry collections" },
+      { label: "Actual Net Revenue", value: `TSh ${actualNetRevenue.toLocaleString()}`, note: "All income minus all expenses" },
+      { label: "Total Expenses", value: `TSh ${expensesTotal.toLocaleString()}`, note: "Every saved expense record" },
       { label: "F&B Revenue", value: `TSh ${foodRevenue.toLocaleString()}`, note: "Kitchen and Barista settlements" },
       { label: "Laundry Revenue", value: `TSh ${laundryRevenue.toLocaleString()}`, note: "Completed laundry collections" },
       { label: "Credit Exposure", value: `TSh ${creditExposure.toLocaleString()}`, note: "Outstanding unsettled balances" },
@@ -152,7 +177,7 @@ export default function OverviewPage() {
       { label: "Occupancy", value: `${occupancyPct}%`, note: `${occupiedRooms}/${rooms.length} occupied rooms` },
       { label: "Settled Today", value: `${settledToday}`, note: "Completed POS settlements today" },
     ],
-    [creditExposure, foodRevenue, laundryRevenue, occupancyPct, occupiedRooms, revPar, rooms.length, settledToday, totalRevenue],
+    [actualNetRevenue, creditExposure, expensesTotal, foodRevenue, laundryRevenue, occupancyPct, occupiedRooms, revPar, rooms.length, settledToday, totalRevenue],
   );
 
   const generateReport = () => {
@@ -278,8 +303,67 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
 
+          <Card className="rounded-lg border border-black/5 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-black uppercase tracking-tight">Actual Net Revenue</CardTitle>
+              <CardDescription>
+                Booking + kitchen + barista + laundry income minus all saved expenses
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-3">
+                <div className="rounded-lg border bg-[#f7faf6] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">All Income</p>
+                  <p className="mt-2 text-2xl font-black">TSh {totalRevenue.toLocaleString()}</p>
+                  <p className="mt-2 text-xs font-bold text-muted-foreground">
+                    Booking {bookingRevenue.toLocaleString()} + Kitchen {kitchenRevenue.toLocaleString()} + Barista {baristaRevenue.toLocaleString()} + Laundry {laundryRevenue.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-red-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-red-700">All Expenses</p>
+                  <p className="mt-2 text-2xl font-black text-red-700">TSh {expensesTotal.toLocaleString()}</p>
+                  <p className="mt-2 text-xs font-bold text-red-700/80">Every saved expense record is deducted here.</p>
+                </div>
+                <div className={`rounded-lg border p-4 ${actualNetRevenue >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${actualNetRevenue >= 0 ? "text-green-700" : "text-red-700"}`}>Net Revenue</p>
+                  <p className={`mt-2 text-3xl font-black ${actualNetRevenue >= 0 ? "text-green-700" : "text-red-700"}`}>
+                    TSh {actualNetRevenue.toLocaleString()}
+                  </p>
+                  <p className={`mt-2 text-xs font-bold ${actualNetRevenue >= 0 ? "text-green-700/80" : "text-red-700/80"}`}>
+                    Actual net = all income minus all expenses.
+                  </p>
+                </div>
+              </div>
+              <div className="min-h-[320px] rounded-lg border p-3">
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={netRevenueChartData} margin={{ top: 10, right: 12, left: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 800 }} />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 10, fontWeight: 700 }}
+                      tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`}
+                    />
+                    <Tooltip
+                      formatter={(value) => [`TSh ${Number(value).toLocaleString()}`, "Amount"]}
+                      labelStyle={{ fontWeight: 800, textTransform: "uppercase" }}
+                    />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                      {netRevenueChartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
+              { label: "Booking", href: "/dashboard/cashier", note: "Reception bookings" },
+              { label: "Staff", href: "/dashboard/staff", note: "Actual system users" },
               { label: "Reports", href: "/dashboard/analytics", note: "Daily, weekly, monthly" },
               { label: "Payments", href: "/dashboard/payments", note: "Collections and credits" },
               { label: "Kitchen Stock", href: "/dashboard/kitchen", note: "Stock, purchases, entries" },

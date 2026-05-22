@@ -94,7 +94,8 @@ function CrossfadeStoryImage({
         alt={alt}
         fill
         sizes={sizes}
-        className={`object-cover transition-opacity duration-[1800ms] ease-in-out ${isFading ? "opacity-0" : "opacity-100"}`}
+        className={`object-cover transition-opacity ease-in-out ${isFading ? "opacity-0" : "opacity-100"}`}
+        style={{ transitionDuration: "1800ms" }}
       />
       {incomingSrc ? (
         <LandingImage
@@ -102,7 +103,8 @@ function CrossfadeStoryImage({
           alt={alt}
           fill
           sizes={sizes}
-          className={`object-cover transition-opacity duration-[1800ms] ease-in-out ${showIncoming ? "opacity-100" : "opacity-0"}`}
+          className={`object-cover transition-opacity ease-in-out ${showIncoming ? "opacity-100" : "opacity-0"}`}
+          style={{ transitionDuration: "1800ms" }}
         />
       ) : null}
     </>
@@ -675,7 +677,8 @@ export default function Home() {
             alt={`Orange Hotel featured experience ${restaurantShowcaseIndex + 1}`}
             fill
             sizes="100vw"
-            className="object-cover transition-all duration-[2800ms] ease-in-out"
+            className="object-cover transition-all ease-in-out"
+            style={{ transitionDuration: "2800ms" }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(0,0,0,0.5),rgba(0,0,0,0.2))]" />
           <div className="relative flex h-full flex-col items-start justify-center gap-4 px-4 py-8 text-white sm:flex-row sm:items-center sm:justify-between md:px-8">
@@ -914,7 +917,8 @@ export default function Home() {
             alt={`Orange Experience ${experienceShowcaseIndex + 1}`}
             fill
             sizes="100vw"
-            className="object-cover transition-all duration-[1800ms]"
+            className="object-cover transition-all"
+            style={{ transitionDuration: "1800ms" }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.48)_45%,rgba(245,124,0,0.28)_100%)]" />
           <div className="relative">

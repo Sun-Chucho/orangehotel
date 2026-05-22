@@ -23,11 +23,20 @@ function formatDate(value: number) {
   return new Date(value).toLocaleString();
 }
 
+function todayText() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatBookingDate(record: LaundryRecord) {
+  return record.bookingDate || new Date(record.createdAt).toISOString().slice(0, 10);
+}
+
 export default function LaundryPage() {
   const [role, setRole] = useState<Role>("cashier");
   const [records, setRecords] = useState<LaundryRecord[]>([]);
   const [tab, setTab] = useState<LaundryPaymentStatus>("completed");
   const [clientName, setClientName] = useState("");
+  const [bookingDate, setBookingDate] = useState(todayText());
   const [itemCount, setItemCount] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<LaundryPaymentMethod>("cash");
@@ -66,12 +75,14 @@ export default function LaundryPage() {
       status,
       paymentMethod: status === "credit" ? "credit" : paymentMethod,
       createdAt: Date.now(),
+      bookingDate,
       createdBy: role,
     };
     const nextRecords = [nextRecord, ...records];
     setRecords(nextRecords);
     writeJson(STORAGE_LAUNDRY_RECORDS, nextRecords);
     setClientName("");
+    setBookingDate(todayText());
     setItemCount("");
     setTotalAmount("");
     setPaymentMethod("cash");
@@ -121,6 +132,10 @@ export default function LaundryPage() {
             <div className="space-y-1">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Client Name</Label>
               <Input value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="Client name" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Booking Date</Label>
+              <Input type="date" value={bookingDate} onChange={(event) => setBookingDate(event.target.value)} />
             </div>
             <div className="space-y-1">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Number of Items</Label>
@@ -174,7 +189,8 @@ export default function LaundryPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Booking Date</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Recorded</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Client</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Items</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Method</TableHead>
@@ -184,6 +200,7 @@ export default function LaundryPage() {
             <TableBody>
               {filteredRecords.map((record) => (
                 <TableRow key={record.id}>
+                  <TableCell className="font-bold">{formatBookingDate(record)}</TableCell>
                   <TableCell className="font-bold">{formatDate(record.createdAt)}</TableCell>
                   <TableCell className="font-bold">{record.clientName}</TableCell>
                   <TableCell className="font-bold">{record.itemCount}</TableCell>
@@ -193,7 +210,7 @@ export default function LaundryPage() {
               ))}
               {filteredRecords.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     No laundry records in this status
                   </TableCell>
                 </TableRow>
