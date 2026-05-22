@@ -4,7 +4,7 @@ import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Building2, Coffee, Download, Lock, Package, ShieldCheck, ShoppingCart, Smartphone, Sun, Moon, User, Utensils } from "lucide-react";
-import { Role, USERS } from "@/app/lib/mock-data";
+import { Role } from "@/app/lib/mock-data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,19 +82,9 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const isDirector = role === "director";
   const isInstallableRole = role === "director" || role === "kitchen" || role === "barista";
   const [profileUsers, setProfileUsers] = useState<Array<{ id: string; name: string; blocked?: boolean }>>([]);
-  const defaultSelectableUsers = useMemo(
-    () =>
-      role === "cashier"
-        ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name }))
-        : [],
-    [role],
-  );
   const selectableUsers = useMemo(() => {
-    if (profileUsers.length > 0) {
-      return profileUsers.filter((user) => !user.blocked);
-    }
-    return defaultSelectableUsers;
-  }, [defaultSelectableUsers, profileUsers]);
+    return profileUsers.filter((user) => !user.blocked);
+  }, [profileUsers]);
   const [username, setUsername] = useState(config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -115,9 +105,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
           name: user.username,
           blocked: user.blocked,
         }));
-      const nextSelectableUsers = nextProfileUsers.length > 0
-        ? nextProfileUsers.filter((user) => !user.blocked)
-        : defaultSelectableUsers;
+      const nextSelectableUsers = nextProfileUsers.filter((user) => !user.blocked);
 
       setProfileUsers(nextProfileUsers);
       if (!profile) {
@@ -144,7 +132,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
     return () => window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
-  }, [config.username, defaultSelectableUsers, role]);
+  }, [config.username, role]);
 
   useEffect(() => {
     if (!isInstallableRole || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -234,6 +222,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const defaultPassword = ${JSON.stringify(DEFAULT_LOGIN_PASSWORD)};
   const defaultUsername = ${JSON.stringify(config.username)};
   const allowedUsernames = ${JSON.stringify(selectableUsers.map((user) => user.name.trim().toLowerCase()))};
+  const profileUserCount = ${JSON.stringify(profileUsers.length)};
   const runLogin = (event) => {
     event?.preventDefault();
     const form = document.querySelector("[data-role-login-form='${role}']");
@@ -243,7 +232,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const error = form.querySelector("[data-login-error]");
     const username = (usernameInput?.value || defaultUsername).trim();
     const password = passwordInput?.value || "";
-    const listedUserRequired = role === "barista" || allowedUsernames.length > 0;
+    const listedUserRequired = profileUserCount > 0;
     const usernameAllowed = !listedUserRequired || allowedUsernames.includes(username.toLowerCase());
     if (!username || !usernameAllowed || password !== defaultPassword) {
       if (error) {
@@ -283,7 +272,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const expectedPassword = getProfilePassword(currentProfile, username, DEFAULT_LOGIN_PASSWORD);
     const normalizedUsername = username.trim().toLowerCase();
     const allowedUsernames = selectableUsers.map((user) => user.name.trim().toLowerCase());
-    const listedUserRequired = role === "barista" || allowedUsernames.length > 0;
+    const listedUserRequired = profileUsers.length > 0;
 
     if (isProfileUserBlocked(currentProfile, username)) {
       setError("This user is blocked. Contact the manager.");
