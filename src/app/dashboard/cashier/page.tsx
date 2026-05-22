@@ -131,6 +131,11 @@ function addDays(dateText: string, days: number): string {
   return baseDate.toISOString().slice(0, 10);
 }
 
+function getDateTimeMs(dateText: string, timeText: string): number {
+  const parsed = new Date(`${dateText}T${timeText || "00:00"}:00`).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function isOverstay(record: BookingRecord): boolean {
   if (record.status === "checked-out") return false;
   const checkoutAt = new Date(`${record.checkOutDate}T${record.checkOutTime || "00:00"}:00`);
@@ -332,17 +337,29 @@ export default function BookingPage() {
     () => transactions.find((entry) => entry.id === selectedExtendBookingId) ?? null,
     [selectedExtendBookingId, transactions],
   );
+  const extendCheckoutIsLater = useMemo(
+    () =>
+      selectedExtendBooking
+        ? getDateTimeMs(extendCheckOutDate, extendCheckOutTime) >
+          getDateTimeMs(selectedExtendBooking.checkOutDate, selectedExtendBooking.checkOutTime || "12:00")
+        : false,
+    [extendCheckOutDate, extendCheckOutTime, selectedExtendBooking],
+  );
+  const extendAddedNights = useMemo(
+    () => (selectedExtendBooking && extendCheckoutIsLater ? daysBetween(selectedExtendBooking.checkOutDate, extendCheckOutDate) : 0),
+    [extendCheckOutDate, extendCheckoutIsLater, selectedExtendBooking],
+  );
   const extendNights = useMemo(
     () => (selectedExtendBooking ? daysBetween(selectedExtendBooking.checkInDate, extendCheckOutDate) : 0),
     [extendCheckOutDate, selectedExtendBooking],
   );
-  const extendTotal = useMemo(
-    () => (selectedExtendBooking && extendNights > 0 ? extendNights * (selectedExtendBooking.ratePerNight ?? 0) : 0),
-    [extendNights, selectedExtendBooking],
-  );
   const extendIncrement = useMemo(
-    () => (selectedExtendBooking ? Math.max(0, extendTotal - selectedExtendBooking.total) : 0),
-    [extendTotal, selectedExtendBooking],
+    () => (selectedExtendBooking ? extendAddedNights * (selectedExtendBooking.ratePerNight ?? 0) : 0),
+    [extendAddedNights, selectedExtendBooking],
+  );
+  const extendTotal = useMemo(
+    () => (selectedExtendBooking ? selectedExtendBooking.total + extendIncrement : 0),
+    [extendIncrement, selectedExtendBooking],
   );
 
   const totalTransactions = transactions.length;
@@ -553,7 +570,7 @@ export default function BookingPage() {
   const openExtendStay = (booking: BookingRecord) => {
     if (isDirector || booking.status === "checked-out") return;
     setSelectedExtendBookingId(booking.id);
-    setExtendCheckOutDate(booking.checkOutDate);
+    setExtendCheckOutDate(addDays(booking.checkOutDate, 1));
     setExtendCheckOutTime(booking.checkOutTime || "12:00");
     setShowExtendPaymentPopup(false);
   };
@@ -571,8 +588,7 @@ export default function BookingPage() {
     const booking = selectedExtendBooking;
     if (!booking) return;
 
-    const nextNights = extendNights;
-    if (nextNights < 1) return;
+    if (!extendCheckoutIsLater || extendAddedNights < 1) return;
 
     const approved = await confirm({
       title: "Extend Stay",
@@ -591,7 +607,7 @@ export default function BookingPage() {
     if (!booking) return;
 
     const nextNights = extendNights;
-    if (nextNights < 1) return;
+    if (!extendCheckoutIsLater || extendAddedNights < 1 || nextNights < 1) return;
 
     const nextStatus: TransactionStatus =
       paymentMethod === "credit"
@@ -995,7 +1011,12 @@ export default function BookingPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">New Check-Out Date</p>
-                <Input type="date" value={extendCheckOutDate} onChange={(event) => setExtendCheckOutDate(event.target.value)} />
+                <Input
+                  type="date"
+                  min={selectedExtendBooking?.checkOutDate}
+                  value={extendCheckOutDate}
+                  onChange={(event) => setExtendCheckOutDate(event.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">New Check-Out Time</p>
@@ -1008,8 +1029,12 @@ export default function BookingPage() {
                     <span>{selectedExtendBooking.currency ?? "TSh"} {(selectedExtendBooking.ratePerNight ?? 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    <span>Days</span>
+                    <span>Total Days</span>
                     <span>{extendNights}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <span>Added Days</span>
+                    <span>{extendAddedNights}</span>
                   </div>
                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <span>Added Amount</span>
@@ -1031,7 +1056,7 @@ export default function BookingPage() {
                 >
                   Close
                 </Button>
-                <Button onClick={() => void openExtendPaymentDialog()} disabled={extendNights < 1} className="h-11 font-black uppercase text-[10px] tracking-widest">
+                <Button onClick={() => void openExtendPaymentDialog()} disabled={!extendCheckoutIsLater || extendAddedNights < 1} className="h-11 font-black uppercase text-[10px] tracking-widest">
                   Save Extension
                 </Button>
               </div>
@@ -1053,7 +1078,7 @@ export default function BookingPage() {
               <div className="rounded-lg border bg-muted/20 p-3">
                 <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                   <span>Added Nights</span>
-                  <span>{Math.max(0, extendNights - selectedExtendBooking.nights)}</span>
+                  <span>{extendAddedNights}</span>
                 </div>
                 <div className="mt-2 flex justify-between text-sm font-black uppercase tracking-widest">
                   <span>Added Amount</span>
