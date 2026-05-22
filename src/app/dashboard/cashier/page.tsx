@@ -178,7 +178,13 @@ function toAccountingRate(rate: number, currency: BookingCurrency) {
 export default function BookingPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (() => {
+    const eatOffsetMs = 3 * 60 * 60 * 1000;
+    const eatDate = new Date(Date.now() + eatOffsetMs);
+    return eatDate.getUTCFullYear() + "-" + 
+           String(eatDate.getUTCMonth() + 1).padStart(2, '0') + "-" + 
+           String(eatDate.getUTCDate()).padStart(2, '0');
+  })();
   const defaultCheckOutDate = addDays(today, 1);
 
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("completed");

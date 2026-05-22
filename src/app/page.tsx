@@ -355,7 +355,14 @@ export default function Home() {
 
   const pricePerNight = roomType === "standard" ? INVENTORY.standard.price : INVENTORY.platinum.price;
   const total = nights * pricePerNight;
-  const minDate = new Date().toISOString().split("T")[0];
+  
+  const minDate = useMemo(() => {
+    const eatOffsetMs = 3 * 60 * 60 * 1000;
+    const eatDate = new Date(Date.now() + eatOffsetMs);
+    return eatDate.getUTCFullYear() + "-" + 
+           String(eatDate.getUTCMonth() + 1).padStart(2, '0') + "-" + 
+           String(eatDate.getUTCDate()).padStart(2, '0');
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

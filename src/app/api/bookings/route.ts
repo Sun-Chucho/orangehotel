@@ -35,9 +35,9 @@ const BLOCKED_UA_PATTERNS = [
 ] as const;
 
 const bookingSchema = z.object({
-  fullName: z.string().trim().min(2).max(80).regex(/^[a-zA-Z\s.'-]+$/, "Name contains invalid characters"),
+  fullName: z.string().trim().min(2).max(80).regex(/^[\p{L}\s.'-]+$/u, "Name contains invalid characters"),
   email: z.string().trim().toLowerCase().email().max(120),
-  phone: z.string().trim().min(7).max(24).regex(/^[+0-9\s-]+$/, "Phone number format is invalid"),
+  phone: z.string().trim().min(7).max(24).regex(/^[+0-9\s().-]+$/, "Phone number format is invalid"),
   roomType: z.enum(["standard", "platinum"]),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -164,14 +164,19 @@ export async function POST(request: NextRequest) {
 
     const checkInDate = asUtcDate(data.checkIn);
     const checkOutDate = asUtcDate(data.checkOut);
-    const today = new Date();
-    const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
 
     if (Number.isNaN(checkInDate.getTime()) || Number.isNaN(checkOutDate.getTime())) {
       return NextResponse.json({ error: "Invalid dates provided." }, { status: 400 });
     }
 
-    if (checkInDate < todayUtc) {
+    // Get today's date in East Africa Time (EAT), UTC+3
+    const eatOffsetMs = 3 * 60 * 60 * 1000;
+    const eatDate = new Date(Date.now() + eatOffsetMs);
+    const todayEATStr = eatDate.getUTCFullYear() + "-" + 
+         String(eatDate.getUTCMonth() + 1).padStart(2, '0') + "-" + 
+         String(eatDate.getUTCDate()).padStart(2, '0');
+
+    if (data.checkIn < todayEATStr) {
       return NextResponse.json({ error: "Check-in date cannot be in the past." }, { status: 400 });
     }
 
