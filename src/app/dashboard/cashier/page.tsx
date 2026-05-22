@@ -137,6 +137,11 @@ function getDateTimeMs(dateText: string, timeText: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getBookingReportTimestamp(dateText: string, timeText: string, fallback = Date.now()) {
+  const parsed = getDateTimeMs(dateText, timeText);
+  return parsed > 0 ? parsed : fallback;
+}
+
 function matchesBookingDateFilter(createdAt: number, filter: BookingDateFilter) {
   if (filter === "all") return true;
 
@@ -499,6 +504,7 @@ export default function BookingPage() {
               ...entry,
               guestName: guestName.trim(),
               phone: phone.trim(),
+              createdAt: getBookingReportTimestamp(checkInDate, checkInTime, entry.createdAt),
               roomType,
               roomNumber: selectedRoomNumber,
               specialPackage: selectedPackage === "none" ? undefined : selectedPackage,
@@ -531,7 +537,7 @@ export default function BookingPage() {
     const tx: BookingRecord = {
       id: `tx-${Date.now()}`,
       receiptNo: `#${nextReceipt}`,
-      createdAt: Date.now(),
+      createdAt: getBookingReportTimestamp(checkInDate, checkInTime),
       guestName: guestName.trim(),
       phone: phone.trim(),
       roomType,
@@ -722,7 +728,7 @@ export default function BookingPage() {
         <CardHeader>
           <CardTitle className="text-xl font-black uppercase tracking-tight">{editingBookingId ? "Edit Booking" : "New Booking"}</CardTitle>
           <CardDescription>
-            {editingBookingId ? "Update an existing booking record, including past booking dates." : "Guest details, room selection, stay dates, and payment"}
+            {editingBookingId ? "Update an existing booking record, including past booking dates." : "Guest details, room selection, stay dates, and payment. Past dates are allowed for backdated entries."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
