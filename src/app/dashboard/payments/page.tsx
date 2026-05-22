@@ -70,6 +70,7 @@ interface BaristaPaymentRecord {
   total: number;
   status: BaristaPaymentStatus;
   method: BaristaPaymentMethod;
+  lines?: Array<{ name: string; qty: number }>;
 }
 
 interface PaymentRow {
@@ -133,6 +134,11 @@ function getBookingPaymentLabel(tx: BookingRecord) {
     return tx.status === "credit" ? "pending" : "unassigned";
   }
   return tx.payment;
+}
+
+function formatPaymentItems(lines: Array<{ name: string; qty: number }> | undefined) {
+  if (!Array.isArray(lines) || lines.length === 0) return "";
+  return lines.map((line) => `${line.name} x${line.qty}`).join(" | ");
 }
 
 export default function PaymentsPage() {
@@ -250,7 +256,7 @@ export default function PaymentsPage() {
         id: tx.id,
         ref: tx.code,
         payer: "Barista Order",
-        context: tx.destination,
+        context: formatPaymentItems(tx.lines) || tx.destination,
         dateLabel: formatDate(new Date(tx.createdAt).toISOString()),
         method: tx.method,
         amount: tx.total,
