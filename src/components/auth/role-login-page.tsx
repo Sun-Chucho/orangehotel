@@ -3,7 +3,6 @@
 import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Building2, Coffee, Download, Lock, Package, ShieldCheck, ShoppingCart, Smartphone, Sun, Moon, User, Utensils } from "lucide-react";
 import { Role, USERS } from "@/app/lib/mock-data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -83,18 +82,23 @@ const BARISTA_USERS = [
 ] as const;
 
 export function RoleLoginPage({ role }: RoleLoginPageProps) {
-  const router = useRouter();
   const [shift, setShift] = useState<"day" | "night">("day");
   const config = ROLE_CONFIG[role];
   const isDirector = role === "director";
   const isInstallableRole = role === "director" || role === "kitchen" || role === "barista";
   const [profileUsers, setProfileUsers] = useState<Array<{ id: string; name: string; blocked?: boolean }>>([]);
-  const defaultSelectableUsers = role === "cashier" ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name })) : role === "barista" ? [...BARISTA_USERS] : [];
+  const defaultSelectableUsers = useMemo(
+    () =>
+      role === "cashier"
+        ? USERS.filter((user) => user.role === "cashier").map((user) => ({ id: user.id, name: user.name }))
+        : role === "barista"
+          ? [...BARISTA_USERS]
+          : [],
+    [role],
+  );
   const selectableUsers = useMemo(() => {
-    const usersByName = new Map<string, { id: string; name: string; blocked?: boolean }>();
-    defaultSelectableUsers.forEach((user) => usersByName.set(user.name.trim().toLowerCase(), user));
-    profileUsers.forEach((user) => usersByName.set(user.name.trim().toLowerCase(), user));
-    return Array.from(usersByName.values()).filter((user) => !user.blocked);
+    const profileUsersByName = new Map(profileUsers.map((user) => [user.name.trim().toLowerCase(), user]));
+    return defaultSelectableUsers.filter((user) => !profileUsersByName.get(user.name.trim().toLowerCase())?.blocked);
   }, [defaultSelectableUsers, profileUsers]);
   const [username, setUsername] = useState(role === "barista" ? BARISTA_USERS[0].name : config.username);
   const [password, setPassword] = useState("");
@@ -119,12 +123,13 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
         })),
       );
       if (!profile) {
-        if (role === "barista") {
-          setUsername(BARISTA_USERS[0].name);
+        if (defaultSelectableUsers.length > 0) {
+          setUsername(defaultSelectableUsers[0].name);
         }
         return;
       }
-      setUsername(profile.username || config.username);
+      const listedUser = defaultSelectableUsers.find((user) => user.name.trim().toLowerCase() === profile.username?.trim().toLowerCase());
+      setUsername(listedUser?.name || defaultSelectableUsers[0]?.name || profile.username || config.username);
       if (role === "cashier" && (profile.shift === "day" || profile.shift === "night")) {
         setShift(profile.shift);
       }
@@ -141,7 +146,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
     return () => window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
-  }, [config.username, role]);
+  }, [config.username, defaultSelectableUsers, role]);
 
   useEffect(() => {
     if (!isInstallableRole || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -224,6 +229,50 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     : serviceWorkerReady
       ? "App installer ready"
       : "Preparing app installer";
+  const fallbackLoginScript = `
+(() => {
+  const role = ${JSON.stringify(role)};
+  const destination = ${JSON.stringify(config.destination)};
+  const defaultPassword = ${JSON.stringify(DEFAULT_LOGIN_PASSWORD)};
+  const defaultUsername = ${JSON.stringify(config.username)};
+  const runLogin = (event) => {
+    event?.preventDefault();
+    const form = document.querySelector("[data-role-login-form='${role}']");
+    if (!form) return;
+    const usernameInput = form.querySelector("[name='username']");
+    const passwordInput = form.querySelector("[name='password']");
+    const error = form.querySelector("[data-login-error]");
+    const username = (usernameInput?.value || defaultUsername).trim();
+    const password = passwordInput?.value || "";
+    if (!username || password !== defaultPassword) {
+      if (error) {
+        error.textContent = "Invalid username or password.";
+        error.classList.remove("hidden");
+      }
+      return;
+    }
+    localStorage.setItem("orange-hotel-username", username);
+    localStorage.setItem("orange-hotel-role", role);
+    if (role === "cashier") {
+      localStorage.setItem("orange-hotel-shift", "day");
+    } else {
+      localStorage.removeItem("orange-hotel-shift");
+    }
+    window.location.assign(destination);
+  };
+  const attach = () => {
+    const form = document.querySelector("[data-role-login-form='${role}']");
+    const button = form?.querySelector("[data-role-login-submit]");
+    form?.addEventListener("submit", runLogin);
+    button?.addEventListener("click", runLogin);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", attach, { once: true });
+  } else {
+    attach();
+  }
+})();
+`;
 
   const handleLogin = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -267,7 +316,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     writeLocalLoginProfiles(nextProfiles);
     void saveLoginProfileToServer(role, nextProfiles[role]!).catch(() => undefined);
 
-    router.push(config.destination);
+    window.location.assign(config.destination);
   };
 
   return (
@@ -293,7 +342,8 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
         </div>
 
         <div className={cn("w-full max-w-md", isDirector && "max-w-sm")}>
-          <form className={cn("bg-white border p-8 shadow-sm text-left", isDirector ? "rounded-lg border-black/10 p-4 shadow-xl shadow-black/5 sm:p-5" : "rounded-2xl")} onSubmit={handleLogin}>
+          <form data-role-login-form={role} className={cn("bg-white border p-8 shadow-sm text-left", isDirector ? "rounded-lg border-black/10 p-4 shadow-xl shadow-black/5 sm:p-5" : "rounded-2xl")} onSubmit={handleLogin}>
+            <script dangerouslySetInnerHTML={{ __html: fallbackLoginScript }} />
             <div className={cn(`${config.color} w-14 h-14 rounded-lg flex items-center justify-center mb-6 shadow-lg shadow-black/5`, isDirector && "mb-4 h-12 w-12")}>
               <config.icon className="w-8 h-8 text-white" />
             </div>
@@ -335,6 +385,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
+                    name="username"
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     className="pl-10 h-12"
@@ -349,6 +400,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
+                    name="password"
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
@@ -386,11 +438,14 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
             </div>
 
             {error && (
-              <p className="mb-4 text-xs font-bold text-red-600">{error}</p>
+              <p className="mb-4 text-xs font-bold text-red-600" data-login-error>{error}</p>
             )}
+            {!error && <p className="mb-4 hidden text-xs font-bold text-red-600" data-login-error />}
 
             <Button
-              type="submit"
+              type="button"
+              data-role-login-submit
+              onClick={() => handleLogin()}
               className={cn("w-full bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest h-14 shadow-lg shadow-primary/20", isDirector ? "rounded-lg" : "rounded-xl")}
             >
               Enter Dashboard

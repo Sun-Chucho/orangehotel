@@ -28,6 +28,8 @@ function hasSavedRoomsState(): boolean {
 }
 
 export function writeRoomsState(rooms: Room[]) {
+  const saved = readJson<Room[]>(STORAGE_ROOMS);
+  if (Array.isArray(saved) && JSON.stringify(saved) === JSON.stringify(rooms)) return;
   writeJson(STORAGE_ROOMS, rooms);
 }
 
@@ -78,12 +80,7 @@ export function updateRoomStatusById(roomId: string, status: Room["status"], bas
 }
 
 export function isBookingStillActive(booking: ActiveBookingRoom) {
-  if (booking.status === "checked-out") return false;
-  if (!booking.checkOutDate) return true;
-
-  const checkoutAt = new Date(`${booking.checkOutDate}T${booking.checkOutTime || "00:00"}:00`);
-  if (!Number.isFinite(checkoutAt.getTime())) return true;
-  return Date.now() <= checkoutAt.getTime();
+  return booking.status !== "checked-out";
 }
 
 export function deriveRoomsStateFromBookings(bookings: ActiveBookingRoom[], baseRooms?: Room[]): Room[] {

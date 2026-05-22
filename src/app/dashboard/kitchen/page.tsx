@@ -32,7 +32,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 import { ChefHat, Minus, Plus, Receipt, Search, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type KitchenCategory = "all" | KitchenMenuCategory;
 type ServiceMode = "restaurant" | "room-service" | "take-away";
@@ -101,6 +101,7 @@ export default function KitchenPage() {
   const [ticketSeq, setTicketSeq] = useState(300);
   const [menuItems, setMenuItems] = useState<KitchenMenuItem[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
+  const [posHydrated, setPosHydrated] = useState(false);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
   const [kitchenStoreItems, setKitchenStoreItems] = useState<MainStoreItem[]>([]);
   const [fromStoreEntries, setFromStoreEntries] = useState<StoreMovementLog[]>([]);
@@ -124,7 +125,9 @@ export default function KitchenPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const applyKitchenSnapshot = () => {
+      if (cancelled) return;
       const snapshot = readPosState<KitchenTicket, KitchenPaymentRecord, KitchenMenuItem>(
         STORAGE_KITCHEN_STATE,
         STORAGE_TICKETS,
@@ -138,15 +141,19 @@ export default function KitchenPage() {
       setKitchenPayments(snapshot.payments);
       const nextMenuItems = mergeKitchenMenuItems(snapshot.menuItems);
       setMenuItems(nextMenuItems);
+      setPosHydrated(true);
       if (JSON.stringify(nextMenuItems) !== JSON.stringify(snapshot.menuItems)) {
         writePosState(STORAGE_KITCHEN_STATE, snapshot.tickets, snapshot.ticketSeq, snapshot.payments, nextMenuItems);
       }
     };
 
-    applyKitchenSnapshot();
+    void hydrateStorageKeyFromFirebase(STORAGE_KITCHEN_STATE).finally(applyKitchenSnapshot);
     const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, applyKitchenSnapshot);
 
-    return () => unsubscribeKitchen();
+    return () => {
+      cancelled = true;
+      unsubscribeKitchen();
+    };
   }, []);
 
   const loadFromStoreData = () => {
@@ -246,6 +253,17 @@ export default function KitchenPage() {
     () => [...kitchenPayments].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8),
     [kitchenPayments],
   );
+
+  if (!posHydrated) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <p className="text-xs font-black uppercase tracking-[0.3em] text-muted-foreground">Syncing Kitchen POS</p>
+          <h1 className="mt-3 text-2xl font-black uppercase tracking-tight">Loading live menu...</h1>
+        </div>
+      </div>
+    );
+  }
 
   const addToCart = (item: KitchenMenuItem) => {
     if (isDirector) return;

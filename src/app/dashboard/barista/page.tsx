@@ -29,7 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import { CheckCircle2, Coffee, Lock, Minus, Plus, Receipt, Search, Trash2, User, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { BARISTA_INVENTORY_SEED } from "@/app/lib/seed-barista-data";
 import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, readActiveSessionUsername, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, subscribeToSessionIdentity, upsertProfileUser } from "@/app/lib/login-profiles";
 
@@ -243,6 +243,7 @@ export default function BaristaPage() {
   const [storedMenuItems, setStoredMenuItems] = useState<BaristaMenuItem[]>(BARISTA_MENU);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [posHydrated, setPosHydrated] = useState(false);
   const [queueTab, setQueueTab] = useState<"queue" | "from-store">("queue");
   const [baristaStoreItems, setBaristaStoreItems] = useState<MainStoreItem[]>([]);
   const [fromStoreEntries, setFromStoreEntries] = useState<StoreMovementLog[]>([]);
@@ -298,7 +299,9 @@ export default function BaristaPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const applyBaristaSnapshot = () => {
+      if (cancelled) return;
       const snapshot = readPosState<BaristaTicket, BaristaPaymentRecord, BaristaMenuItem>(
         STORAGE_BARISTA_STATE,
         STORAGE_TICKETS,
@@ -325,13 +328,19 @@ export default function BaristaPage() {
       } else {
         setStoredMenuItems(syncBaristaMenuItemsWithSharedInventory(snapshot.menuItems, inventory, readJson<MainStoreItem[]>(STORAGE_MAIN_STORE_ITEMS) ?? []));
       }
+      setPosHydrated(true);
     };
 
-    applyBaristaSnapshot();
+    void Promise.all([
+      hydrateStorageKeyFromFirebase(STORAGE_BARISTA_STATE).catch(() => undefined),
+      hydrateStorageKeyFromFirebase(STORAGE_INVENTORY_ITEMS).catch(() => undefined),
+      hydrateStorageKeyFromFirebase(STORAGE_MAIN_STORE_ITEMS).catch(() => undefined),
+    ]).finally(applyBaristaSnapshot);
     const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyBaristaSnapshot);
     const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyBaristaSnapshot);
 
     return () => {
+      cancelled = true;
       unsubscribeBarista();
       unsubscribeInventory();
     };
@@ -741,6 +750,17 @@ export default function BaristaPage() {
   );
 
   const activeBaristaProfile = useMemo(() => readLocalLoginProfiles()?.barista ?? null, [activeUsername, role]);
+
+  if (!posHydrated) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <p className="text-xs font-black uppercase tracking-[0.3em] text-muted-foreground">Syncing Barista POS</p>
+          <h1 className="mt-3 text-2xl font-black uppercase tracking-tight">Loading live menu...</h1>
+        </div>
+      </div>
+    );
+  }
 
   const updateBaristaPassword = async () => {
     if (role !== "barista") {

@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import { Manrope, Playfair_Display } from 'next/font/google';
 import { Toaster } from "@/components/ui/toaster";
 import './globals.css';
@@ -19,7 +19,25 @@ export const metadata: Metadata = {
   icons: {
     icon: '/logo.jpeg',
     shortcut: '/logo.jpeg',
+    apple: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
   },
+  appleWebApp: {
+    capable: true,
+    title: 'Orange Hotel',
+    statusBarStyle: 'black-translucent',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'application-name': 'Orange Hotel',
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#f57c00',
 };
 
 export default function RootLayout({

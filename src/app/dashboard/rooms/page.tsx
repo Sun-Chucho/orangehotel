@@ -224,50 +224,50 @@ export default function RoomsPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Card className="bg-green-50/50 border-green-100 shadow-none">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
-              <CheckCircle2 className="w-6 h-6" />
+          <CardContent className="flex items-center gap-3 p-3 md:gap-4 md:p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-500 text-white shadow-lg shadow-green-500/20 md:h-10 md:w-10">
+              <CheckCircle2 className="h-5 w-5 md:h-6 md:w-6" />
             </div>
-            <div>
-              <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Available</p>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase leading-4 tracking-wider text-green-700">Available</p>
               <h3 className="text-2xl font-black">{counts.available}</h3>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-blue-50/50 border-blue-100 shadow-none">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-              <BedDouble className="w-6 h-6" />
+          <CardContent className="flex items-center gap-3 p-3 md:gap-4 md:p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/20 md:h-10 md:w-10">
+              <BedDouble className="h-5 w-5 md:h-6 md:w-6" />
             </div>
-            <div>
-              <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Occupied</p>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase leading-4 tracking-wider text-blue-700">Occupied</p>
               <h3 className="text-2xl font-black">{counts.occupied}</h3>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-orange-50/50 border-orange-100 shadow-none">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
-              <Clock className="w-6 h-6" />
+          <CardContent className="flex items-center gap-3 p-3 md:gap-4 md:p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-lg shadow-orange-500/20 md:h-10 md:w-10">
+              <Clock className="h-5 w-5 md:h-6 md:w-6" />
             </div>
-            <div>
-              <p className="text-[10px] font-black text-orange-700 uppercase tracking-widest">Cleaning</p>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase leading-4 tracking-wider text-orange-700">Cleaning</p>
               <h3 className="text-2xl font-black">{counts.cleaning}</h3>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gray-50/50 border-gray-100 shadow-none">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-gray-500 flex items-center justify-center text-white shadow-lg shadow-gray-500/20">
-              <Wrench className="w-6 h-6" />
+          <CardContent className="flex items-center gap-3 p-3 md:gap-4 md:p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-500 text-white shadow-lg shadow-gray-500/20 md:h-10 md:w-10">
+              <Wrench className="h-5 w-5 md:h-6 md:w-6" />
             </div>
-            <div>
-              <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Maintenance</p>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase leading-4 tracking-wider text-gray-700">Maintenance</p>
               <h3 className="text-2xl font-black">{counts.maintenance}</h3>
             </div>
           </CardContent>

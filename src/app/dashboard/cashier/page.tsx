@@ -23,7 +23,7 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { toast } from "@/hooks/use-toast";
 import { isBookingStillActive, readRoomsState, syncRoomsStateFromBookings, updateRoomStatusByNumber } from "@/app/lib/rooms-storage";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type TransactionTab = "completed" | "credit";
@@ -94,6 +94,27 @@ const USD_TO_TSH_RATE = 2500;
 const STORAGE_TX = "orange-hotel-cashier-transactions";
 const STORAGE_SEQ = "orange-hotel-cashier-seq";
 
+async function hydrateCashierStateFromServer() {
+  if (typeof window === "undefined") return;
+
+  const response = await fetch(`/api/storage-sync/${encodeURIComponent(STORAGE_CASHIER_STATE)}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) return;
+
+  const payload = (await response.json()) as { value?: { transactions?: BookingRecord[]; receiptSeq?: number } | null };
+  const remoteSnapshot = payload.value;
+  if (!remoteSnapshot || !Array.isArray(remoteSnapshot.transactions)) return;
+
+  const localSnapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
+  if (remoteSnapshot.transactions.length < localSnapshot.transactions.length) return;
+
+  localStorage.setItem(STORAGE_CASHIER_STATE, JSON.stringify(remoteSnapshot));
+  localStorage.setItem(STORAGE_TX, JSON.stringify(remoteSnapshot.transactions));
+  localStorage.setItem(STORAGE_SEQ, String(Number.isFinite(remoteSnapshot.receiptSeq) ? remoteSnapshot.receiptSeq : 84920));
+  window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key: STORAGE_CASHIER_STATE } }));
+}
+
 function daysBetween(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 0;
   const inDate = new Date(`${checkIn}T00:00:00`);
@@ -159,8 +180,10 @@ export default function BookingPage() {
   const isManager = role === "manager";
 
   useEffect(() => {
+    let cancelled = false;
     setRole(readStoredRole() ?? "cashier");
     const applyCashierSnapshot = (incomingRooms?: Room[]) => {
+      if (cancelled) return;
       const snapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
       const normalizedTransactions: BookingRecord[] = snapshot.transactions.map((tx): BookingRecord => ({
           ...tx,
@@ -173,7 +196,9 @@ export default function BookingPage() {
 
       // Historical Recovery Logic
       const existingIds = new Set(snapshot.transactions.map((t) => t.id));
-      const missingBookings = HISTORICAL_BOOKINGS.filter((hb) => !existingIds.has(hb.id));
+      const missingBookings = snapshot.transactions.length > 0
+        ? HISTORICAL_BOOKINGS.filter((hb) => !existingIds.has(hb.id))
+        : [];
 
       if (missingBookings.length > 0) {
         const recoveredTransactions = [...snapshot.transactions, ...missingBookings].sort(
@@ -189,7 +214,12 @@ export default function BookingPage() {
       }
     };
 
-    applyCashierSnapshot();
+    void Promise.all([
+      hydrateStorageKeyFromFirebase(STORAGE_CASHIER_STATE).catch(() => undefined),
+      hydrateCashierStateFromServer().catch(() => undefined),
+    ]).finally(() => {
+      applyCashierSnapshot();
+    });
 
     const unsubscribeCashier = subscribeToSyncedStorageKey(STORAGE_CASHIER_STATE, () => {
       applyCashierSnapshot();
@@ -199,6 +229,7 @@ export default function BookingPage() {
     });
 
     return () => {
+      cancelled = true;
       unsubscribeCashier();
       unsubscribeRooms();
     };

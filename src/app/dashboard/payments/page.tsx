@@ -366,11 +366,11 @@ export default function PaymentsPage() {
             {headerDescription}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
+          <Badge variant="outline" className="h-10 justify-center px-3 text-center border-primary text-primary font-black uppercase text-[10px] tracking-widest sm:px-4">
             Completed TSh {totalCompleted.toLocaleString()}
           </Badge>
-          <Badge variant="outline" className="h-10 px-4 justify-center font-black uppercase text-[10px] tracking-widest bg-white">
+          <Badge variant="outline" className="h-10 justify-center px-3 text-center font-black uppercase text-[10px] tracking-widest bg-white sm:px-4">
             Credit TSh {totalCredit.toLocaleString()}
           </Badge>
         </div>
@@ -385,14 +385,14 @@ export default function PaymentsPage() {
 
       <Card className="border-none shadow-sm">
         <CardHeader>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
             <div>
               <CardTitle className="text-xl font-black uppercase tracking-tight">Payment Transactions</CardTitle>
               <CardDescription>{cardDescription}</CardDescription>
             </div>
             {canViewAllTabs && (
-              <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)}>
-                <TabsList className="h-10">
+              <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)} className="w-full md:w-auto">
+                <TabsList className="h-10 w-full md:w-auto">
                   <TabsTrigger value="reception" className="text-[10px] font-black uppercase tracking-widest">
                     Reception
                   </TabsTrigger>
@@ -409,6 +409,88 @@ export default function PaymentsPage() {
         </CardHeader>
 
         <CardContent className="p-0">
+          <div className="space-y-3 p-3 md:hidden">
+            {rows.map((tx) => (
+              <div key={`${tx.source}-${tx.id}`} className="rounded-lg border bg-white p-3 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black">{tx.ref}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-muted-foreground">{tx.payer}</p>
+                  </div>
+                  <Badge className={tx.status === "credit" ? "shrink-0 bg-red-600 text-white border-red-600 hover:bg-red-600" : "shrink-0 bg-blue-600 text-white border-blue-600 hover:bg-blue-600"}>
+                    {tx.status}
+                  </Badge>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Context</p>
+                    <p className="mt-1 font-bold">{tx.context}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                      {paymentsTab === "reception" ? "Dates" : "Created"}
+                    </p>
+                    <p className="mt-1 font-bold">{tx.dateLabel}</p>
+                    {tx.dateDetail && (
+                      <p className="mt-0.5 text-[10px] font-bold text-muted-foreground">{tx.dateDetail}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Method</p>
+                    <p className="mt-1 font-black uppercase">{tx.method}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Amount</p>
+                    <p className="mt-1 font-black">TSh {tx.amount.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    {formatAgo(tx.createdAt)}
+                  </p>
+                  {!isDirector && tx.source === "booking" ? (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => openEditPayerDialog(tx)}
+                        className="h-9 font-black uppercase text-[10px] tracking-widest"
+                      >
+                        Edit
+                      </Button>
+                      {tx.status === "credit" && (
+                        <Button
+                          onClick={() => openPaidFlow(tx)}
+                          className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
+                        >
+                          Paid
+                        </Button>
+                      )}
+                    </div>
+                  ) : tx.status === "credit" && !isDirector ? (
+                    <Button
+                      onClick={() => openPaidFlow(tx)}
+                      className="h-9 font-black uppercase text-[10px] tracking-widest bg-green-600 hover:bg-green-600/90"
+                    >
+                      Paid
+                    </Button>
+                  ) : (
+                    <Badge className="shrink-0 bg-gray-200 text-gray-700 border-gray-200 hover:bg-gray-200">View</Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {rows.length === 0 && (
+              <div className="py-12 text-center opacity-40">
+                <Receipt className="w-10 h-10 mx-auto mb-2" />
+                <p className="font-black uppercase tracking-widest text-xs">No payments found</p>
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block">
           <Table>
             <TableHeader className="bg-muted/10">
               <TableRow>
@@ -495,6 +577,7 @@ export default function PaymentsPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

@@ -12,7 +12,7 @@ import { KitchenPurchaseHistoryEntry, STORAGE_KITCHEN_PURCHASE_HISTORY } from "@
 import { MainStoreItem, STORAGE_MAIN_STORE_ITEMS, getStoreItemLabel, normalizeBaristaProductTarget, normalizeStockName } from "@/app/lib/inventory-transfer";
 import { getTotLimit } from "@/app/lib/barista-stock";
 import { normalizeRole } from "@/app/lib/auth";
-import { hydrateDefaultAppStateFromFirebase } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase } from "@/app/lib/firebase-sync";
 import { readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson, writePosState } from "@/app/lib/storage";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, Bell, Home, Hotel, Search, User, Clock, Menu, WalletCards, ReceiptText } from "lucide-react";
@@ -43,6 +43,23 @@ const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
 const JACK_DANIELS_TOTS_PRICE_FIX_KEY = "orange-hotel-jack-daniels-tots-price-fix-v1";
 const STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY = "orange-hotel-staff-food-dishes-expense-removal-v2";
+
+const STARTUP_SYNC_KEYS_BY_ROLE: Record<Role, string[]> = {
+  manager: ["orange-hotel-settings", "orange-hotel-login-profiles"],
+  director: ["orange-hotel-settings", "orange-hotel-login-profiles"],
+  inventory: ["orange-hotel-settings", "orange-hotel-login-profiles", "orange-hotel-main-store-items", "orange-hotel-inventory-items"],
+  cashier: ["orange-hotel-settings", "orange-hotel-login-profiles", "orange-hotel-cashier-state", "orange-hotel-rooms-state"],
+  kitchen: ["orange-hotel-settings", "orange-hotel-login-profiles", "orange-hotel-kitchen-state", "orange-hotel-main-store-items", "orange-hotel-inventory-items", "orange-hotel-store-movements", "orange-hotel-store-usage"],
+  barista: ["orange-hotel-settings", "orange-hotel-login-profiles", "orange-hotel-barista-state", "orange-hotel-main-store-items", "orange-hotel-inventory-items", "orange-hotel-store-movements", "orange-hotel-store-usage"],
+};
+
+async function hydrateStartupStateForRole(role: Role) {
+  const keys = STARTUP_SYNC_KEYS_BY_ROLE[role] ?? ["orange-hotel-settings", "orange-hotel-login-profiles"];
+  await Promise.race([
+    Promise.all(keys.map((key) => hydrateStorageKeyFromFirebase(key).catch(() => undefined))),
+    new Promise((resolve) => window.setTimeout(resolve, 5000)),
+  ]);
+}
 const KALUSE_KIANGI_BOOKING_FIX_KEY = "orange-hotel-kaluse-kiangi-booking-fix-v2";
 
 const BARISTA_STOCK_TARGETS = {
@@ -1029,7 +1046,7 @@ export default function DashboardLayout({
       setMounted(true);
 
       try {
-        await hydrateDefaultAppStateFromFirebase();
+        await hydrateStartupStateForRole(savedRole);
         if (cancelled) return;
         applyBusinessCorrections();
       } catch (error) {

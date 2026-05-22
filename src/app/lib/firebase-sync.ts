@@ -12,7 +12,7 @@ let _firebaseRealtimeConnected = false;
 const _connectionListeners = new Set<(connected: boolean) => void>();
 const _lastSyncedAt: Record<string, number> = {};
 const _pendingLocalWrites: Record<string, { value: unknown; createdAt: number }> = {};
-const FALLBACK_POLL_INTERVAL_MS = 60000;
+const FALLBACK_POLL_INTERVAL_MS = 10000;
 const PENDING_LOCAL_WRITE_TTL_MS = 15000;
 
 function dispatchStorageUpdated(key: string) {
@@ -307,6 +307,33 @@ function getSnapshotScore(key: string, value: unknown): number {
   return 1;
 }
 
+function hasUsableSyncedValue(key: string, value: unknown) {
+  if (value === null || value === undefined) return false;
+
+  if (key === "orange-hotel-cashier-state") {
+    const snapshot = value as { transactions?: unknown[]; receiptSeq?: number };
+    return Array.isArray(snapshot.transactions) && snapshot.transactions.length > 0;
+  }
+
+  if (key === "orange-hotel-rooms-state") {
+    return Array.isArray(value) && value.length >= ROOMS.length;
+  }
+
+  if (key === "orange-hotel-kitchen-state" || key === "orange-hotel-barista-state") {
+    const snapshot = value as { tickets?: unknown[]; payments?: unknown[]; menuItems?: unknown[]; ticketSeq?: number };
+    return (
+      (Array.isArray(snapshot.tickets) && snapshot.tickets.length > 0) ||
+      (Array.isArray(snapshot.payments) && snapshot.payments.length > 0) ||
+      (Array.isArray(snapshot.menuItems) && snapshot.menuItems.length > 0) ||
+      Number.isFinite(snapshot.ticketSeq)
+    );
+  }
+
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
+  return true;
+}
+
 function areSnapshotsEqual(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -327,6 +354,161 @@ function shouldIgnoreRemoteValue(key: string, remoteValue: unknown) {
 
   const localValue = sanitizeForStorage(sanitizeSyncedValue(key, readParsedLocalValue(key)));
   return areSnapshotsEqual(localValue, pending.value);
+}
+
+function mergeCashierStateForSync(localValue: unknown, remoteValue: unknown) {
+  const localSnapshot = localValue as { transactions?: unknown[]; receiptSeq?: number };
+  const remoteSnapshot = remoteValue as { transactions?: unknown[]; receiptSeq?: number };
+
+  if (!Array.isArray(localSnapshot?.transactions) || !Array.isArray(remoteSnapshot?.transactions)) {
+    return localValue;
+  }
+
+  const localTransactions = localSnapshot.transactions;
+  const remoteTransactions = remoteSnapshot.transactions;
+  if (remoteTransactions.length <= localTransactions.length) {
+    return localValue;
+  }
+
+  const mergedById = new Map<string, unknown>();
+
+  for (const transaction of remoteTransactions) {
+    const id = typeof transaction === "object" && transaction !== null ? (transaction as { id?: unknown }).id : null;
+    if (typeof id === "string" && id.trim()) {
+      mergedById.set(id, transaction);
+    }
+  }
+
+  for (const transaction of localTransactions) {
+    const id = typeof transaction === "object" && transaction !== null ? (transaction as { id?: unknown }).id : null;
+    if (typeof id === "string" && id.trim()) {
+      mergedById.set(id, transaction);
+    }
+  }
+
+  const mergedTransactions = Array.from(mergedById.values()).sort((a, b) => {
+    const left = typeof a === "object" && a !== null ? Number((a as { createdAt?: unknown }).createdAt) : 0;
+    const right = typeof b === "object" && b !== null ? Number((b as { createdAt?: unknown }).createdAt) : 0;
+    return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
+  });
+
+  if (mergedTransactions.length === localTransactions.length) {
+    return localValue;
+  }
+
+  return {
+    ...localSnapshot,
+    transactions: mergedTransactions,
+    receiptSeq: Math.max(
+      Number.isFinite(localSnapshot.receiptSeq) ? Number(localSnapshot.receiptSeq) : 0,
+      Number.isFinite(remoteSnapshot.receiptSeq) ? Number(remoteSnapshot.receiptSeq) : 0,
+    ),
+  };
+}
+
+function getRecordId(record: unknown) {
+  if (typeof record !== "object" || record === null) return null;
+  const id = (record as { id?: unknown }).id;
+  return typeof id === "string" && id.trim() ? id : null;
+}
+
+function mergeRecordsById(localRecords: unknown[], remoteRecords: unknown[]) {
+  if (remoteRecords.length <= localRecords.length) return localRecords;
+
+  const mergedById = new Map<string, unknown>();
+  const recordsWithoutId: unknown[] = [];
+
+  for (const record of remoteRecords) {
+    const id = getRecordId(record);
+    if (id) {
+      mergedById.set(id, record);
+    } else {
+      recordsWithoutId.push(record);
+    }
+  }
+
+  for (const record of localRecords) {
+    const id = getRecordId(record);
+    if (id) {
+      mergedById.set(id, record);
+    } else {
+      recordsWithoutId.push(record);
+    }
+  }
+
+  return [...Array.from(mergedById.values()), ...recordsWithoutId].sort((a, b) => {
+    const left = typeof a === "object" && a !== null ? Number((a as { createdAt?: unknown; movedAt?: unknown; usedAt?: unknown; closedAt?: unknown }).createdAt ?? (a as { movedAt?: unknown }).movedAt ?? (a as { usedAt?: unknown }).usedAt ?? Date.parse(String((a as { closedAt?: unknown }).closedAt ?? ""))) : 0;
+    const right = typeof b === "object" && b !== null ? Number((b as { createdAt?: unknown; movedAt?: unknown; usedAt?: unknown; closedAt?: unknown }).createdAt ?? (b as { movedAt?: unknown }).movedAt ?? (b as { usedAt?: unknown }).usedAt ?? Date.parse(String((b as { closedAt?: unknown }).closedAt ?? ""))) : 0;
+    return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
+  });
+}
+
+function mergeArrayRecordsForSync(localValue: unknown, remoteValue: unknown) {
+  if (!Array.isArray(localValue) || !Array.isArray(remoteValue)) return localValue;
+  return mergeRecordsById(localValue, remoteValue);
+}
+
+function mergePosStateForSync(localValue: unknown, remoteValue: unknown) {
+  const localSnapshot = localValue as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+  const remoteSnapshot = remoteValue as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+
+  if (!localSnapshot || typeof localSnapshot !== "object" || !remoteSnapshot || typeof remoteSnapshot !== "object") {
+    return localValue;
+  }
+
+  const localTickets = Array.isArray(localSnapshot.tickets) ? localSnapshot.tickets : [];
+  const remoteTickets = Array.isArray(remoteSnapshot.tickets) ? remoteSnapshot.tickets : [];
+  const localPayments = Array.isArray(localSnapshot.payments) ? localSnapshot.payments : [];
+  const remotePayments = Array.isArray(remoteSnapshot.payments) ? remoteSnapshot.payments : [];
+
+  return {
+    ...localSnapshot,
+    tickets: mergeRecordsById(localTickets, remoteTickets),
+    payments: mergeRecordsById(localPayments, remotePayments),
+    ticketSeq: Math.max(
+      Number.isFinite(localSnapshot.ticketSeq) ? Number(localSnapshot.ticketSeq) : 0,
+      Number.isFinite(remoteSnapshot.ticketSeq) ? Number(remoteSnapshot.ticketSeq) : 0,
+    ),
+  };
+}
+
+function protectSyncedValueBeforeWrite(key: string, localValue: unknown, remoteValue: unknown) {
+  if (key === "orange-hotel-cashier-state") {
+    return mergeCashierStateForSync(localValue, remoteValue);
+  }
+
+  if (key === "orange-hotel-kitchen-state" || key === "orange-hotel-barista-state") {
+    return mergePosStateForSync(localValue, remoteValue);
+  }
+
+  if (
+    key === "orange-hotel-website-bookings" ||
+    key === "orange-hotel-live-chat" ||
+    key === "orange-hotel-expenses" ||
+    key === "orange-hotel-laundry-records" ||
+    key === "orange-hotel-cancelled-tickets" ||
+    key === "orange-hotel-menu-audit-trail" ||
+    key === "orange-hotel-store-movements" ||
+    key === "orange-hotel-store-usage" ||
+    key === "orange-hotel-kitchen-purchase-history" ||
+    key === "orange-hotel-kitchen-daily-stock-history" ||
+    key === "orange-hotel-barista-purchase-history" ||
+    key === "orange-hotel-barista-daily-stock-history"
+  ) {
+    return mergeArrayRecordsForSync(localValue, remoteValue);
+  }
+
+  return localValue;
+}
+
+function isDangerouslySmallCashierWrite(key: string, localValue: unknown, remoteValue: unknown) {
+  if (key !== "orange-hotel-cashier-state") return false;
+  const localTransactions = (localValue as { transactions?: unknown[] } | null)?.transactions;
+  const remoteTransactions = (remoteValue as { transactions?: unknown[] } | null)?.transactions;
+  const localCount = Array.isArray(localTransactions) ? localTransactions.length : 0;
+  const remoteCount = Array.isArray(remoteTransactions) ? remoteTransactions.length : 0;
+
+  return localCount > 0 && localCount < 50 && remoteCount === 0;
 }
 
 function getCanonicalDefaultValue(key: string) {
@@ -464,16 +646,33 @@ function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value:
 
 export function syncStorageValueToFirebase<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
-  const sanitizedValue = sanitizeForStorage(value);
+  let sanitizedValue: unknown = sanitizeForStorage(value);
   _pendingLocalWrites[key] = { value: sanitizedValue, createdAt: Date.now() };
   void ensureFirebaseAuthReady()
-    .then(() => set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue))
+    .then(async () => {
+      const snapshot = await get(ref(firebaseDatabase, toStoragePath(key))).catch(() => null);
+      const remoteValue = snapshot?.exists() ? sanitizeForStorage(sanitizeSyncedValue(key, snapshot.val())) : null;
+      if (isDangerouslySmallCashierWrite(key, sanitizedValue, remoteValue)) {
+        console.warn(`Blocked unsafe cashier sync for ${key}: local snapshot is too small and remote could not be verified.`);
+        return;
+      }
+      sanitizedValue = sanitizeForStorage(sanitizeSyncedValue(key, protectSyncedValueBeforeWrite(key, sanitizedValue, remoteValue)));
+      _pendingLocalWrites[key] = { value: sanitizedValue, createdAt: Date.now() };
+      await set(ref(firebaseDatabase, toStoragePath(key)), sanitizedValue);
+    })
     .then(() => {
       markSyncHealthy(key);
     })
     .catch(async (error) => {
       console.error(`Firebase sync failed for ${key}`, error);
       try {
+        const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue(key).catch(() => null)));
+        if (isDangerouslySmallCashierWrite(key, sanitizedValue, remoteValue)) {
+          console.warn(`Blocked unsafe server cashier sync for ${key}: local snapshot is too small and remote could not be verified.`);
+          return;
+        }
+        sanitizedValue = sanitizeForStorage(sanitizeSyncedValue(key, protectSyncedValueBeforeWrite(key, sanitizedValue, remoteValue)));
+        _pendingLocalWrites[key] = { value: sanitizedValue, createdAt: Date.now() };
         await writeServerSyncedStorageValue(key, sanitizedValue);
         markSyncHealthy(key);
       } catch (serverError) {
@@ -486,7 +685,23 @@ export function syncStorageValueToFirebase<T>(key: string, value: T) {
 export async function hydrateStorageKeyFromFirebase(key: string) {
   if (typeof window === "undefined") return;
 
+  const applyHydratedValue = (value: unknown) => {
+    const sanitizedValue = sanitizeForStorage(sanitizeSyncedValue(key, value));
+    if (sanitizedValue === null || sanitizedValue === undefined) return null;
+    localStorage.setItem(key, JSON.stringify(sanitizedValue));
+    mirrorCanonicalStateToLegacyLocal(key, sanitizedValue);
+    dispatchStorageUpdated(key);
+    return sanitizedValue;
+  };
+
   try {
+    const serverValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue(key).catch(() => null)));
+    if (hasUsableSyncedValue(key, serverValue)) {
+      applyHydratedValue(serverValue);
+      markSyncHealthy(key);
+      return;
+    }
+
     await ensureFirebaseAuthReady();
     const snapshot = await get(ref(firebaseDatabase, toStoragePath(key)));
     const remoteValue = snapshot.exists() ? sanitizeForStorage(sanitizeSyncedValue(key, snapshot.val())) : null;
@@ -496,12 +711,12 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     const canonicalValue = sanitizeForStorage(getCanonicalDefaultValue(key));
     if (remoteValue === null && localValue === null && canonicalValue === null) return;
 
-    const remoteScore = getSnapshotScore(key, remoteValue);
+    const remoteScore = hasUsableSyncedValue(key, remoteValue) ? getSnapshotScore(key, remoteValue) : 0;
     const localScore = getSnapshotScore(key, localValue);
     const canonicalScore = getSnapshotScore(key, canonicalValue);
 
     let preferredValue = canonicalValue;
-    if (remoteScore >= localScore && remoteScore >= canonicalScore) {
+    if (remoteScore > 0) {
       preferredValue = remoteValue;
     } else if (localScore >= remoteScore && localScore >= canonicalScore) {
       preferredValue = localValue;
@@ -509,13 +724,12 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
 
     if (preferredValue === null) return;
 
-    const sanitizedPreferredValue = sanitizeForStorage(sanitizeSyncedValue(key, preferredValue));
-    localStorage.setItem(key, JSON.stringify(sanitizedPreferredValue));
-    mirrorCanonicalStateToLegacyLocal(key, sanitizedPreferredValue);
-    dispatchStorageUpdated(key);
+    const sanitizedPreferredValue = applyHydratedValue(preferredValue);
+    if (sanitizedPreferredValue === null) return;
 
     if (!areSnapshotsEqual(remoteValue, sanitizedPreferredValue)) {
       await set(ref(firebaseDatabase, toStoragePath(key)), sanitizedPreferredValue);
+      await writeServerSyncedStorageValue(key, sanitizedPreferredValue).catch(() => undefined);
     }
 
     markSyncHealthy(key);
@@ -524,9 +738,7 @@ export async function hydrateStorageKeyFromFirebase(key: string) {
     try {
       const remoteValue = sanitizeForStorage(sanitizeSyncedValue(key, await fetchServerSyncedStorageValue(key)));
       if (remoteValue !== null) {
-        localStorage.setItem(key, JSON.stringify(remoteValue));
-        mirrorCanonicalStateToLegacyLocal(key, remoteValue);
-        dispatchStorageUpdated(key);
+        applyHydratedValue(remoteValue);
       }
       markSyncHealthy(key);
     } catch (serverError) {
