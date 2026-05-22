@@ -1127,7 +1127,7 @@ export default function DashboardLayout({
   if (!mounted) return null;
 
   return (
-    <div className={cn("flex min-h-[100dvh] w-full overflow-x-hidden bg-background", isDirector && "bg-[#f4f7f2] md:bg-background")}>
+    <div className={cn("flex h-[100dvh] w-full overflow-hidden bg-background", isDirector && "bg-[#f4f7f2] md:bg-background")}>
       <aside
         className={cn(
           "fixed left-0 top-0 z-50 h-[100dvh] w-64 transition-transform duration-300",
@@ -1145,10 +1145,10 @@ export default function DashboardLayout({
         />
       )}
       
-      <div className={cn("flex min-w-0 flex-1 flex-col transition-[margin] duration-300", sidebarOpen ? "md:ml-64" : "md:ml-0")}>
+      <div className={cn("flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-300", sidebarOpen ? "md:ml-64" : "md:ml-0")}>
         <header
           className={cn(
-            "h-16 bg-white border-b sticky top-0 z-30 flex items-center justify-between px-8 shadow-sm",
+            "h-16 shrink-0 bg-white border-b sticky top-0 z-30 flex items-center justify-between px-8 shadow-sm",
             isDirector && "h-auto min-h-[calc(68px+env(safe-area-inset-top))] border-0 bg-[#0f1712] px-4 pt-[env(safe-area-inset-top)] text-white shadow-lg shadow-black/10 md:h-16 md:min-h-[4rem] md:border-b md:bg-white md:px-8 md:pt-0 md:text-foreground md:shadow-sm",
           )}
         >
@@ -1221,7 +1221,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className={cn("min-w-0 flex-1 p-8", isDirector && "px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 md:p-8")}>
+        <main className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto p-8 [-webkit-overflow-scrolling:touch]", isDirector && "px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 md:p-8")}>
           {children}
         </main>
       </div>

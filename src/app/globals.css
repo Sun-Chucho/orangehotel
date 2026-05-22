@@ -76,7 +76,6 @@
     @apply border-border;
   }
   html {
-    height: 100%;
     min-height: 100%;
     width: 100%;
     overflow-x: hidden;
@@ -87,7 +86,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    height: 100%;
     min-height: 100dvh;
     width: 100%;
     overflow-x: hidden;
