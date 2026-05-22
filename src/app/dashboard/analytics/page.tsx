@@ -15,8 +15,11 @@ import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -34,6 +37,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EXPENSE_DEPARTMENTS, ExpenseRecord, getExpenseAmountTypeLabel, STORAGE_EXPENSES } from "@/app/lib/expenses";
+import { LaundryRecord, STORAGE_LAUNDRY_RECORDS } from "@/app/lib/laundry";
 
 type ReportRange = "daily" | "weekly" | "monthly" | "all-time";
 
@@ -57,16 +62,19 @@ type RevenueHistoryRow = {
   roomRevenue: number;
   kitchenRevenue: number;
   baristaRevenue: number;
+  laundryRevenue: number;
+  expenses: number;
+  netRevenue: number;
 };
 
-type RevenueEvent = {
+type BusinessEvent = {
   date: string;
   timestamp: number;
-  source: "rooms" | "kitchen" | "barista";
+  source: "rooms" | "kitchen" | "barista" | "laundry" | "expense";
   total: number;
 };
 
-const COLORS = ["#F57C00", "#000000", "#FFB74D", "#757575"];
+const COLORS = ["#F57C00", "#111111", "#00A676", "#2F80ED", "#D92D20", "#8E44AD", "#64748B"];
 
 function formatShortDate(dateText: string) {
   if (/^\d{4}-\d{2}$/.test(dateText)) {
@@ -139,6 +147,8 @@ export default function AnalyticsPage() {
   const [beverageRows, setBeverageRows] = useState<BeverageCostRow[]>([]);
   const [recipeRows, setRecipeRows] = useState<RecipeCostRow[]>([]);
   const [stockSalesRows, setStockSalesRows] = useState<StockSalesRow[]>([]);
+  const [laundryRecords, setLaundryRecords] = useState<LaundryRecord[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
 
   useEffect(() => {
     const applyAnalyticsSnapshot = () => {
@@ -170,6 +180,8 @@ export default function AnalyticsPage() {
       setBeverageRows(readJson<BeverageCostRow[]>(STORAGE_BEVERAGE_COST) ?? []);
       setRecipeRows(readJson<RecipeCostRow[]>(STORAGE_RECIPE_COST) ?? []);
       setStockSalesRows(readJson<StockSalesRow[]>(STORAGE_STOCK_SALES) ?? []);
+      setLaundryRecords(readJson<LaundryRecord[]>(STORAGE_LAUNDRY_RECORDS) ?? []);
+      setExpenses(readJson<ExpenseRecord[]>(STORAGE_EXPENSES) ?? []);
     };
 
     applyAnalyticsSnapshot();
@@ -181,6 +193,8 @@ export default function AnalyticsPage() {
       subscribeToSyncedStorageKey(STORAGE_BEVERAGE_COST, applyAnalyticsSnapshot),
       subscribeToSyncedStorageKey(STORAGE_RECIPE_COST, applyAnalyticsSnapshot),
       subscribeToSyncedStorageKey(STORAGE_STOCK_SALES, applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_LAUNDRY_RECORDS, applyAnalyticsSnapshot),
+      subscribeToSyncedStorageKey(STORAGE_EXPENSES, applyAnalyticsSnapshot),
     ];
 
     return () => {
@@ -188,8 +202,8 @@ export default function AnalyticsPage() {
     };
   }, []);
 
-  const revenueEvents = useMemo<RevenueEvent[]>(() => {
-    const events: RevenueEvent[] = [];
+  const businessEvents = useMemo<BusinessEvent[]>(() => {
+    const events: BusinessEvent[] = [];
 
     bookings.forEach((booking) => {
       if (booking.status === "credit" || !booking.createdAt || !booking.total) return;
@@ -206,8 +220,20 @@ export default function AnalyticsPage() {
       events.push({ date: toDayKey(payment.createdAt), timestamp: payment.createdAt, source: "barista", total: payment.total });
     });
 
+    laundryRecords.forEach((record) => {
+      if (record.status === "credit" || !record.createdAt || !record.totalAmount) return;
+      events.push({ date: toDayKey(record.createdAt), timestamp: record.createdAt, source: "laundry", total: record.totalAmount });
+    });
+
+    expenses.forEach((expense) => {
+      if (!expense.createdAt || !expense.amount) return;
+      events.push({ date: toDayKey(expense.createdAt), timestamp: expense.createdAt, source: "expense", total: expense.amount });
+    });
+
     return events;
-  }, [baristaPayments, bookings, kitchenPayments]);
+  }, [baristaPayments, bookings, expenses, kitchenPayments, laundryRecords]);
+
+  const revenueEvents = useMemo(() => businessEvents.filter((event) => event.source !== "expense"), [businessEvents]);
 
   const availableMonths = useMemo(() => {
     const monthKeys = Array.from(new Set(revenueEvents.map((event) => toMonthKey(event.timestamp))));
@@ -248,28 +274,37 @@ export default function AnalyticsPage() {
           roomRevenue: 0,
           kitchenRevenue: 0,
           baristaRevenue: 0,
+          laundryRevenue: 0,
+          expenses: 0,
+          netRevenue: 0,
         },
       ]),
     );
 
-    revenueEvents.forEach((event) => {
+    businessEvents.forEach((event) => {
       const key = range === "all-time" ? toMonthKey(event.timestamp) : event.date;
       const row = rows.get(key);
       if (!row) return;
       if (event.source === "rooms") row.roomRevenue += event.total;
       if (event.source === "kitchen") row.kitchenRevenue += event.total;
       if (event.source === "barista") row.baristaRevenue += event.total;
-      row.totalRevenue += event.total;
+      if (event.source === "laundry") row.laundryRevenue += event.total;
+      if (event.source === "expense") row.expenses += event.total;
+      if (event.source !== "expense") row.totalRevenue += event.total;
+      row.netRevenue = row.totalRevenue - row.expenses;
     });
 
     return keys.map((key) => rows.get(key)!);
-  }, [availableMonths, range, revenueEvents, selectedMonth]);
+  }, [availableMonths, businessEvents, range, selectedMonth]);
 
   const totals = useMemo(() => {
     const totalRevenue = history.reduce((sum, day) => sum + day.totalRevenue, 0);
     const roomRevenue = history.reduce((sum, day) => sum + day.roomRevenue, 0);
     const kitchenRevenue = history.reduce((sum, day) => sum + day.kitchenRevenue, 0);
     const baristaRevenue = history.reduce((sum, day) => sum + day.baristaRevenue, 0);
+    const laundryRevenue = history.reduce((sum, day) => sum + day.laundryRevenue, 0);
+    const expensesTotal = history.reduce((sum, day) => sum + day.expenses, 0);
+    const netRevenue = totalRevenue - expensesTotal;
     const avgDaily = history.length === 0 ? 0 : Math.round(totalRevenue / history.length);
     const periodKeys = new Set(history.map((row) => row.date));
     const totalGuests = bookings.filter((booking) => {
@@ -285,11 +320,24 @@ export default function AnalyticsPage() {
       roomRevenue,
       kitchenRevenue,
       baristaRevenue,
+      laundryRevenue,
+      expensesTotal,
+      netRevenue,
       avgDaily,
       totalGuests,
       bookingFreq,
     };
   }, [bookings, history, range]);
+
+  const activePeriodKeys = useMemo(() => new Set(history.map((row) => row.date)), [history]);
+  const periodExpenses = useMemo(
+    () =>
+      expenses.filter((expense) => {
+        const key = range === "all-time" ? toMonthKey(expense.createdAt) : toDayKey(expense.createdAt);
+        return activePeriodKeys.has(key);
+      }),
+    [activePeriodKeys, expenses, range],
+  );
 
   const growth = useMemo(() => {
     if (range === "all-time") return "All";
@@ -332,15 +380,51 @@ export default function AnalyticsPage() {
       { name: "Room Revenue", value: totals.roomRevenue },
       { name: "Kitchen Revenue", value: totals.kitchenRevenue },
       { name: "Barista Revenue", value: totals.baristaRevenue },
-      {
-        name: "Credit Exposure",
-        value:
-          bookings.filter((booking) => booking.status === "credit").reduce((sum, booking) => sum + (booking.total ?? 0), 0) +
-          kitchenPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + (payment.total ?? 0), 0) +
-          baristaPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + (payment.total ?? 0), 0),
-      },
+      { name: "Laundry Revenue", value: totals.laundryRevenue },
+    ].filter((item) => item.value > 0),
+    [totals.baristaRevenue, totals.kitchenRevenue, totals.laundryRevenue, totals.roomRevenue],
+  );
+
+  const creditExposure = useMemo(
+    () =>
+      bookings.filter((booking) => booking.status === "credit").reduce((sum, booking) => sum + (booking.total ?? 0), 0) +
+      kitchenPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + (payment.total ?? 0), 0) +
+      baristaPayments.filter((payment) => payment.status === "credit").reduce((sum, payment) => sum + (payment.total ?? 0), 0) +
+      laundryRecords.filter((record) => record.status === "credit").reduce((sum, record) => sum + (record.totalAmount ?? 0), 0),
+    [baristaPayments, bookings, kitchenPayments, laundryRecords],
+  );
+
+  const expenseMixData = useMemo(
+    () =>
+      EXPENSE_DEPARTMENTS.map((department) => ({
+        name: department.label,
+        value: periodExpenses.filter((expense) => expense.department === department.value).reduce((sum, expense) => sum + expense.amount, 0),
+      })).filter((item) => item.value > 0),
+    [periodExpenses],
+  );
+
+  const expenseTypeData = useMemo(() => {
+    const totalsByType = new Map<string, number>();
+    periodExpenses.forEach((expense) => {
+      totalsByType.set(expense.amountType, (totalsByType.get(expense.amountType) ?? 0) + expense.amount);
+    });
+    return Array.from(totalsByType.entries()).map(([type, value]) => ({
+      name: getExpenseAmountTypeLabel(type as ExpenseRecord["amountType"]),
+      value,
+    }));
+  }, [periodExpenses]);
+
+  const aspectRows = useMemo(
+    () => [
+      { label: "Rooms", revenue: totals.roomRevenue, expenses: periodExpenses.filter((expense) => expense.department === "rooms").reduce((sum, expense) => sum + expense.amount, 0), color: "#F57C00" },
+      { label: "Kitchen", revenue: totals.kitchenRevenue, expenses: periodExpenses.filter((expense) => expense.department === "kitchen").reduce((sum, expense) => sum + expense.amount, 0), color: "#111111" },
+      { label: "Barista", revenue: totals.baristaRevenue, expenses: periodExpenses.filter((expense) => expense.department === "barista").reduce((sum, expense) => sum + expense.amount, 0), color: "#00A676" },
+      { label: "Laundry", revenue: totals.laundryRevenue, expenses: 0, color: "#2F80ED" },
+      { label: "Staff", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "staff-salary-allowance" || expense.department === "staff-food").reduce((sum, expense) => sum + expense.amount, 0), color: "#8E44AD" },
+      { label: "Utilities", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "utilities-government").reduce((sum, expense) => sum + expense.amount, 0), color: "#64748B" },
+      { label: "MD/Maint.", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "others").reduce((sum, expense) => sum + expense.amount, 0), color: "#D92D20" },
     ],
-    [baristaPayments, bookings, kitchenPayments, totals.baristaRevenue, totals.kitchenRevenue, totals.roomRevenue],
+    [periodExpenses, totals.baristaRevenue, totals.kitchenRevenue, totals.laundryRevenue, totals.roomRevenue],
   );
 
   const stats = useMemo(
@@ -349,8 +433,12 @@ export default function AnalyticsPage() {
       { label: "Period Growth", value: growth, trend: "Vs previous period", icon: TrendingUp },
       { label: "Total Guests", value: totals.totalGuests.toLocaleString(), trend: "Filtered bookings", icon: Users },
       { label: "Booking Freq", value: `${totals.bookingFreq}/${range === "all-time" ? "period" : "day"}`, trend: "Filtered average", icon: Calendar },
+      { label: "Laundry Revenue", value: `TSh ${totals.laundryRevenue.toLocaleString()}`, trend: "Included in total", icon: DollarSign },
+      { label: "Expenses", value: `TSh ${totals.expensesTotal.toLocaleString()}`, trend: "All departments", icon: TrendingUp },
+      { label: "Net Revenue", value: `TSh ${totals.netRevenue.toLocaleString()}`, trend: "Revenue minus expenses", icon: DollarSign },
+      { label: "Credit Exposure", value: `TSh ${creditExposure.toLocaleString()}`, trend: "Unsettled balances", icon: Users },
     ],
-    [activeReportLabel, growth, range, totals.avgDaily, totals.bookingFreq, totals.totalGuests],
+    [activeReportLabel, creditExposure, growth, range, totals.avgDaily, totals.bookingFreq, totals.expensesTotal, totals.laundryRevenue, totals.netRevenue, totals.totalGuests],
   );
 
   const fnbControlMetrics = useMemo(() => {
@@ -392,6 +480,9 @@ export default function AnalyticsPage() {
       totals,
       history,
       pieData,
+      expenseMixData,
+      expenseTypeData,
+      aspectRows,
       fnbControlMetrics,
     };
 
@@ -463,7 +554,7 @@ export default function AnalyticsPage() {
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Active Report</p>
             <p className="mt-1 text-xl font-black uppercase tracking-tight">{activeReportLabel}</p>
           </div>
-          <div className="grid grid-cols-3 gap-3 text-right">
+          <div className="grid grid-cols-2 gap-3 text-right md:grid-cols-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rooms</p>
               <p className="text-sm font-black">TSh {totals.roomRevenue.toLocaleString()}</p>
@@ -476,11 +567,15 @@ export default function AnalyticsPage() {
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Barista</p>
               <p className="text-sm font-black">TSh {totals.baristaRevenue.toLocaleString()}</p>
             </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Laundry</p>
+              <p className="text-sm font-black">TSh {totals.laundryRevenue.toLocaleString()}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="rounded-lg border-none bg-white shadow-sm transition-shadow hover:shadow-md">
             <CardContent className="p-4 md:p-6">
@@ -495,6 +590,53 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card className="rounded-lg border-none bg-white shadow-sm xl:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">All Aspects Performance</CardTitle>
+            <CardDescription>Revenue and expense comparison across rooms, F&amp;B, laundry, staff, utilities, and MD/maintenance</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[320px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={aspectRows}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} fontSize={10} fontWeight="bold" />
+                  <YAxis axisLine={false} tickLine={false} fontSize={10} fontWeight="bold" tickFormatter={(value) => `TSh ${Math.round(value / 1000)}k`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.1)", fontWeight: "bold" }}
+                    formatter={(value: number) => [`TSh ${value.toLocaleString()}`, ""]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase" }} />
+                  <Bar dataKey="revenue" name="Revenue" fill="#00A676" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="expenses" name="Expenses" fill="#D92D20" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg border-none bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">Profit Position</CardTitle>
+            <CardDescription>High-level income less all recorded expenses</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {[
+              { label: "Gross Revenue", value: totals.totalRevenue, tone: "text-green-600" },
+              { label: "Total Expenses", value: totals.expensesTotal, tone: "text-red-600" },
+              { label: "Net Revenue", value: totals.netRevenue, tone: totals.netRevenue >= 0 ? "text-green-700" : "text-red-700" },
+              { label: "Credit Exposure", value: creditExposure, tone: "text-orange-600" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.label}</p>
+                <p className={`mt-1 text-2xl font-black ${item.tone}`}>TSh {item.value.toLocaleString()}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="rounded-lg border-none bg-white shadow-sm">
@@ -530,7 +672,7 @@ export default function AnalyticsPage() {
         <Card className="rounded-lg border-none bg-white shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Trend</CardTitle>
-            <CardDescription>Actual room, kitchen, and barista revenue for {activeReportLabel}</CardDescription>
+            <CardDescription>Actual room, kitchen, barista, laundry, expenses, and net revenue for {activeReportLabel}</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
             <div className="h-[260px] w-full md:h-[350px]">
@@ -547,10 +689,13 @@ export default function AnalyticsPage() {
                   <YAxis axisLine={false} tickLine={false} fontSize={10} fontWeight="bold" tickFormatter={(value) => `TSh ${Math.round(value / 1000)}k`} />
                   <Tooltip
                     contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.1)", fontWeight: "bold" }}
-                    formatter={(value: number) => [`TSh ${value.toLocaleString()}`, "Revenue"]}
+                    formatter={(value: number, name: string) => [`TSh ${value.toLocaleString()}`, name]}
                     labelFormatter={(value) => (/^\d{4}-\d{2}$/.test(String(value)) ? formatMonthLabel(String(value)) : new Date(`${value}T00:00:00`).toLocaleDateString())}
                   />
-                  <Area type="monotone" dataKey="totalRevenue" stroke="#F57C00" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
+                  <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase" }} />
+                  <Area type="monotone" dataKey="totalRevenue" name="Gross Revenue" stroke="#F57C00" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
+                  <Area type="monotone" dataKey="netRevenue" name="Net Revenue" stroke="#00A676" strokeWidth={3} fillOpacity={0} />
+                  <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#D92D20" strokeWidth={3} fillOpacity={0} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -560,14 +705,14 @@ export default function AnalyticsPage() {
         <Card className="rounded-lg border-none bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl font-black uppercase tracking-tight">Revenue Mix</CardTitle>
-            <CardDescription>Current distribution across live departments and credit exposure</CardDescription>
+            <CardDescription>Current distribution across revenue departments</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
             <div className="h-[220px] w-full md:h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={8} dataKey="value" stroke="none">
-                    {pieData.map((item, index) => (
+                  <Pie data={pieData.length > 0 ? pieData : [{ name: "No revenue", value: 1 }]} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={8} dataKey="value" stroke="none">
+                    {(pieData.length > 0 ? pieData : [{ name: "No revenue", value: 1 }]).map((item, index) => (
                       <Cell key={`${item.name}-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -576,7 +721,7 @@ export default function AnalyticsPage() {
               </ResponsiveContainer>
             </div>
             <div className="grid grid-cols-1 gap-4 w-full mt-6 border-t pt-6">
-              {pieData.map((item, index) => (
+              {(pieData.length > 0 ? pieData : [{ name: "No revenue", value: 0 }]).map((item, index) => (
                 <div key={item.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
@@ -585,6 +730,66 @@ export default function AnalyticsPage() {
                   <span className="text-sm font-black">TSh {item.value.toLocaleString()}</span>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="rounded-lg border-none bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">Expense Mix</CardTitle>
+            <CardDescription>Spend grouped by department for management review</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center">
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={expenseMixData.length > 0 ? expenseMixData : [{ name: "No expenses", value: 1 }]} cx="50%" cy="50%" outerRadius={92} dataKey="value" stroke="none">
+                    {(expenseMixData.length > 0 ? expenseMixData : [{ name: "No expenses", value: 1 }]).map((item, index) => (
+                      <Cell key={`${item.name}-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => [`TSh ${value.toLocaleString()}`, "Expense"]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid w-full gap-3 border-t pt-4 md:grid-cols-2">
+              {(expenseMixData.length > 0 ? expenseMixData : [{ name: "No expenses", value: 0 }]).map((item, index) => (
+                <div key={item.name} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[(index + 2) % COLORS.length] }} />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.name}</span>
+                  </div>
+                  <span className="text-xs font-black">TSh {item.value.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg border-none bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl font-black uppercase tracking-tight">Payment/Expense Type Mix</CardTitle>
+            <CardDescription>How expense money was requested or settled</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {(expenseTypeData.length > 0 ? expenseTypeData : [{ name: "No expense types", value: 0 }]).map((item, index) => {
+                const pct = totals.expensesTotal > 0 ? Math.round((item.value / totals.expensesTotal) * 100) : 0;
+                return (
+                  <div key={item.name} className="rounded-xl border p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.name}</p>
+                      <p className="text-xs font-black">{pct}%</p>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: COLORS[index % COLORS.length] }} />
+                    </div>
+                    <p className="mt-2 text-sm font-black">TSh {item.value.toLocaleString()}</p>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -604,7 +809,10 @@ export default function AnalyticsPage() {
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Rooms</th>
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Kitchen</th>
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Barista</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Laundry</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Expenses</th>
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Total</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Net</th>
                 </tr>
               </thead>
               <tbody>
@@ -614,7 +822,10 @@ export default function AnalyticsPage() {
                     <td className="px-4 py-3 font-bold">TSh {row.roomRevenue.toLocaleString()}</td>
                     <td className="px-4 py-3 font-bold">TSh {row.kitchenRevenue.toLocaleString()}</td>
                     <td className="px-4 py-3 font-bold">TSh {row.baristaRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 font-bold">TSh {row.laundryRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 font-bold text-red-600">TSh {row.expenses.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right font-black">TSh {row.totalRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-black">TSh {row.netRevenue.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

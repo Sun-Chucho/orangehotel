@@ -222,10 +222,12 @@ export function KitchenSessionManager({
   isDirector,
   department = "kitchen",
   externalSearchTerm = "",
+  visibleTabs,
 }: {
   isDirector: boolean;
   department?: SessionDepartment;
   externalSearchTerm?: string;
+  visibleTabs?: KitchenWorkflowTab[];
 }) {
   const [activeTab, setActiveTab] = useState<KitchenWorkflowTab>("purchase");
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
@@ -245,6 +247,11 @@ export function KitchenSessionManager({
   const departmentLabel = department === "kitchen" ? "Kitchen" : "Barista";
   const departmentCategory = department === "kitchen" ? "Kitchen" : "Bar";
   const isBaristaDepartment = department === "barista";
+  const availableTabs = useMemo<KitchenWorkflowTab[]>(
+    () => visibleTabs ?? (isBaristaDepartment ? ["purchase"] : ["purchase", "daily-stock"]),
+    [isBaristaDepartment, visibleTabs],
+  );
+  const visibleActiveTab = availableTabs.includes(activeTab) ? activeTab : availableTabs[0] ?? "purchase";
   const purchaseSessionKey =
     department === "kitchen" ? STORAGE_KITCHEN_PURCHASE_SESSION : STORAGE_BARISTA_PURCHASE_SESSION;
   const purchaseHistoryKey =
@@ -281,10 +288,10 @@ export function KitchenSessionManager({
   }, [dailyHistoryKey, dailySessionKey, department, purchaseHistoryKey, purchaseSessionKey]);
 
   useEffect(() => {
-    if (isBaristaDepartment && activeTab === "daily-stock") {
-      setActiveTab("purchase");
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0] ?? "purchase");
     }
-  }, [activeTab, isBaristaDepartment]);
+  }, [activeTab, availableTabs]);
 
   const purchaseTotalAmount = useMemo(
     () =>
@@ -977,20 +984,24 @@ export function KitchenSessionManager({
 
   return (
     <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as KitchenWorkflowTab)}>
-        <TabsList className="h-11">
-          <TabsTrigger value="purchase" className="font-black uppercase text-[10px] tracking-widest">
-            {purchaseCopy.tabLabel}
-          </TabsTrigger>
-          {!isBaristaDepartment && (
+      {availableTabs.length > 1 && (
+        <Tabs value={visibleActiveTab} onValueChange={(value) => setActiveTab(value as KitchenWorkflowTab)}>
+          <TabsList className="h-11">
+            {availableTabs.includes("purchase") && (
+              <TabsTrigger value="purchase" className="font-black uppercase text-[10px] tracking-widest">
+                {purchaseCopy.tabLabel}
+              </TabsTrigger>
+            )}
+            {availableTabs.includes("daily-stock") && (
             <TabsTrigger value="daily-stock" className="font-black uppercase text-[10px] tracking-widest">
               {dailyCopy.tabLabel}
             </TabsTrigger>
-          )}
-        </TabsList>
-      </Tabs>
+            )}
+          </TabsList>
+        </Tabs>
+      )}
 
-      {activeTab === "purchase" && (
+      {visibleActiveTab === "purchase" && (
         <div className="space-y-6">
           <Card className="shadow-sm">
             <CardHeader className="border-b">
@@ -1159,7 +1170,7 @@ export function KitchenSessionManager({
         </div>
       )}
 
-      {activeTab === "daily-stock" && (
+      {visibleActiveTab === "daily-stock" && (
         <div className="space-y-6">
           <Card className="shadow-sm">
             <CardHeader className="border-b">

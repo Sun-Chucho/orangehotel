@@ -80,6 +80,7 @@ export default function ExpensesPage() {
   const allTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   const saveExpense = () => {
+    if (isDirector) return;
     const parsedAmount = Number(amount);
     if (!title.trim() || Number.isNaN(parsedAmount) || parsedAmount <= 0) return;
 
@@ -105,12 +106,14 @@ export default function ExpensesPage() {
   };
 
   const openMoveDialog = (expense: ExpenseRecord) => {
+    if (isDirector) return;
     const fallbackTarget = EXPENSE_DEPARTMENTS.find((item) => item.value !== expense.department)?.value ?? "kitchen";
     setMovingExpense(expense);
     setMoveTarget(fallbackTarget);
   };
 
   const moveExpense = () => {
+    if (isDirector) return;
     if (!movingExpense || moveTarget === movingExpense.department) return;
     const nextExpenses = expenses.map((expense) =>
       expense.id === movingExpense.id ? { ...expense, department: moveTarget } : expense,
@@ -218,7 +221,7 @@ export default function ExpensesPage() {
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Type</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest">Notes</TableHead>
                 <TableHead className="text-right font-black uppercase text-[10px] tracking-widest">Amount</TableHead>
-                <TableHead className="text-right font-black uppercase text-[10px] tracking-widest">Action</TableHead>
+                {!isDirector && <TableHead className="text-right font-black uppercase text-[10px] tracking-widest">Action</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -229,16 +232,18 @@ export default function ExpensesPage() {
                   <TableCell className="font-bold">{getExpenseAmountTypeLabel(expense.amountType)}</TableCell>
                   <TableCell className="max-w-xs font-medium text-muted-foreground">{expense.notes ?? "-"}</TableCell>
                   <TableCell className="text-right font-black">TSh {expense.amount.toLocaleString()}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => openMoveDialog(expense)} className="font-black uppercase tracking-widest text-[10px]">
-                      Move
-                    </Button>
-                  </TableCell>
+                  {!isDirector && (
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => openMoveDialog(expense)} className="font-black uppercase tracking-widest text-[10px]">
+                        Move
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {filteredExpenses.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  <TableCell colSpan={isDirector ? 5 : 6} className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     No expenses saved for this group
                   </TableCell>
                 </TableRow>
@@ -248,6 +253,7 @@ export default function ExpensesPage() {
         </CardContent>
       </Card>
 
+      {!isDirector && (
       <Dialog open={!!movingExpense} onOpenChange={(open) => !open && setMovingExpense(null)}>
         <DialogContent>
           <DialogHeader>
@@ -278,6 +284,7 @@ export default function ExpensesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

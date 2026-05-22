@@ -89,7 +89,7 @@ export default function KitchenPage() {
   const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<Role | null>(null);
   const isManager = role === "manager";
-  const [directorTab, setDirectorTab] = useState<"inventory" | "sales">("inventory");
+  const [directorTab, setDirectorTab] = useState<"inventory" | "purchases" | "entries">("inventory");
   const [category, setCategory] = useState<KitchenCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -512,7 +512,7 @@ export default function KitchenPage() {
               <ChefHat className="w-7 h-7" />
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tight">Kitchen Analytics</h1>
+              <h1 className="text-3xl font-black tracking-tight">Kitchen Stock</h1>
               <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
                 Managing Director read-only controls
               </p>
@@ -523,10 +523,11 @@ export default function KitchenPage() {
           </Badge>
         </header>
 
-        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "sales")}>
+        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "purchases" | "entries")}>
           <TabsList className="h-10">
-            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
-            <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
+            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Stock / Inventory</TabsTrigger>
+            <TabsTrigger value="purchases" className="font-black uppercase text-[10px] tracking-widest">Purchases</TabsTrigger>
+            <TabsTrigger value="entries" className="font-black uppercase text-[10px] tracking-widest">Entries</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -576,56 +577,11 @@ export default function KitchenPage() {
               </CardContent>
             </Card>
 
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-xl font-black uppercase tracking-tight">Kitchen Entry History</h2>
-                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  View and download saved kitchen purchase and daily stock records.
-                </p>
-              </div>
-              <KitchenSessionManager isDirector />
-            </div>
           </div>
+        ) : directorTab === "purchases" ? (
+          <KitchenSessionManager isDirector visibleTabs={["purchase"]} />
         ) : (
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight">Kitchen Sales</CardTitle>
-              <CardDescription>Completed and credit sales summary</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/10">
-                  <TableRow>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Code</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Destination</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Status</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Method</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Amount</TableHead>
-                    <TableHead className="font-black uppercase text-[10px] tracking-widest h-12">Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {kitchenPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="font-black">{payment.code}</TableCell>
-                      <TableCell className="font-bold">{payment.destination}</TableCell>
-                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.status}</TableCell>
-                      <TableCell className="font-black uppercase text-[10px] tracking-widest">{payment.method}</TableCell>
-                      <TableCell className="font-bold">TSh {payment.total.toLocaleString()}</TableCell>
-                      <TableCell className="font-bold text-sm">{new Date(payment.createdAt).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                  {kitchenPayments.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                        No sales records
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <KitchenSessionManager isDirector visibleTabs={["daily-stock"]} />
         )}
       </div>
     );

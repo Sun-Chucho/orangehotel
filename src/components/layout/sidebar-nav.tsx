@@ -40,22 +40,24 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['manager', 'director'] },
   { label: 'Rooms', href: '/dashboard/rooms', icon: Hotel, roles: ['manager', 'director', 'cashier'] },
-  { label: 'Kitchen Stock', href: '/dashboard/inventory/kitchen-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
-  { label: 'Barista Stock', href: '/dashboard/inventory/barista-stock', icon: Package, roles: ['manager', 'director', 'inventory'] },
-  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['director', 'inventory'] },
+  { label: 'Kitchen Stock', href: '/dashboard/inventory/kitchen-stock', icon: Package, roles: ['manager', 'inventory'] },
+  { label: 'Barista Stock', href: '/dashboard/inventory/barista-stock', icon: Package, roles: ['manager', 'inventory'] },
+  { label: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['inventory'] },
   { label: 'Menu Create', href: '/dashboard/menu-create', icon: FileSpreadsheet, roles: ['manager'] },
-  { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'director', 'inventory'] },
+  { label: 'Company Stock', href: '/dashboard/company-stock', icon: Building2, roles: ['manager', 'inventory'] },
   { label: 'F&B Suite', href: '/dashboard/fnb-suite', icon: FileSpreadsheet, roles: [] },
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
   { label: 'Cash Requests', href: '/dashboard/cash-requests', icon: HandCoins, roles: ['cashier'] },
-  { label: 'Laundry', href: '/dashboard/laundry', icon: Shirt, roles: ['manager', 'director', 'cashier'] },
-  { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['director', 'cashier'] },
-  { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['director', 'cashier'] },
+  { label: 'Laundry', href: '/dashboard/laundry', icon: Shirt, roles: ['manager', 'cashier'] },
+  { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['cashier'] },
+  { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
   { label: 'Expenses', href: '/dashboard/expenses', icon: ReceiptText, roles: ['manager', 'director'] },
   { label: 'Finances', href: '/dashboard/finances', icon: Calculator, roles: ['manager', 'director'] },
-  { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['director', 'kitchen', 'barista'] },
+  { label: 'Kitchen Stock', href: '/dashboard/kitchen', icon: Utensils, roles: ['director'] },
+  { label: 'Barista Stock', href: '/dashboard/barista', icon: Package, roles: ['director'] },
+  { label: 'Cancelled', href: '/dashboard/cancelled', icon: XCircle, roles: ['kitchen', 'barista'] },
   { label: 'Staff', href: '/dashboard/staff', icon: Users, roles: ['manager', 'director'] },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['director'] },
   { label: 'Settings', href: '/dashboard/settings/password', icon: Settings, roles: ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'] },
@@ -118,7 +120,7 @@ export function SidebarNav({ role }: { role: Role }) {
   []);
 
   return (
-    <div className="flex flex-col h-full bg-black text-white border-r border-sidebar-border w-64">
+    <div className="flex h-full min-h-0 w-64 flex-col bg-black text-white border-r border-sidebar-border">
       <div className="p-8 flex justify-center">
         <Link href="/dashboard" className="group">
           <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-105 transition-transform overflow-hidden shadow-2xl relative">
@@ -137,7 +139,7 @@ export function SidebarNav({ role }: { role: Role }) {
         </Link>
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4 [-webkit-overflow-scrolling:touch]">
         <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-3 py-4 opacity-50">
           Management
         </div>
@@ -177,7 +179,7 @@ export function SidebarNav({ role }: { role: Role }) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-sidebar-border mt-auto">
+      <div className="shrink-0 p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3 p-3 rounded-xl bg-sidebar-accent mb-4 border border-white/5">
           <div className="w-9 h-9 rounded-lg bg-muted overflow-hidden relative border border-white/20">
             <Image 

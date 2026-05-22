@@ -282,7 +282,8 @@ export default function OverviewPage() {
             {[
               { label: "Reports", href: "/dashboard/analytics", note: "Daily, weekly, monthly" },
               { label: "Payments", href: "/dashboard/payments", note: "Collections and credits" },
-              { label: "Laundry", href: "/dashboard/laundry", note: "Laundry income" },
+              { label: "Kitchen Stock", href: "/dashboard/kitchen", note: "Stock, purchases, entries" },
+              { label: "Barista Stock", href: "/dashboard/barista", note: "Inventory, finances, purchases" },
               { label: "Finances", href: "/dashboard/finances", note: "Income and expenses" },
               { label: "Rooms", href: "/dashboard/rooms", note: "Occupancy status" },
               { label: "Expenses", href: "/dashboard/expenses", note: "Grouped spending" },

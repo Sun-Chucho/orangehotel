@@ -76,19 +76,24 @@
     @apply border-border;
   }
   html {
+    height: 100%;
     min-height: 100%;
     width: 100%;
     overflow-x: hidden;
+    overflow-y: auto;
     background: hsl(var(--background));
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
   body {
     @apply bg-background text-foreground;
+    height: 100%;
     min-height: 100dvh;
     width: 100%;
     overflow-x: hidden;
-    overscroll-behavior-y: none;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
     -webkit-tap-highlight-color: transparent;
   }
 }

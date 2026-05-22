@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
+import { KitchenSessionManager } from "@/components/dashboard/kitchen-session-manager";
 import { CheckCircle2, Coffee, Lock, Minus, Plus, Receipt, Search, Trash2, User, XCircle } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
@@ -230,7 +231,7 @@ export default function BaristaPage() {
   const [role, setRole] = useState<Role | null>(null);
   const isManager = role === "manager";
   const [managerTab, setManagerTab] = useState<"inventory" | "finance">("finance");
-  const [directorTab, setDirectorTab] = useState<"inventory" | "finance">("finance");
+  const [directorTab, setDirectorTab] = useState<"inventory" | "finance" | "purchases">("finance");
   const [category, setCategory] = useState<BaristaCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -1159,10 +1160,11 @@ export default function BaristaPage() {
           </Card>
         </div>
 
-        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "finance")}>
+        <Tabs value={directorTab} onValueChange={(value) => setDirectorTab(value as "inventory" | "finance" | "purchases")}>
           <TabsList className="h-10">
-            <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finance</TabsTrigger>
-            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Inventory</TabsTrigger>
+            <TabsTrigger value="inventory" className="font-black uppercase text-[10px] tracking-widest">Stock / Inventory</TabsTrigger>
+            <TabsTrigger value="finance" className="font-black uppercase text-[10px] tracking-widest">Finances</TabsTrigger>
+            <TabsTrigger value="purchases" className="font-black uppercase text-[10px] tracking-widest">Purchases</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -1224,7 +1226,7 @@ export default function BaristaPage() {
               </Table>
             </CardContent>
           </Card>
-        ) : (
+        ) : directorTab === "finance" ? (
           <div className="space-y-6">
             {renderFinanceTable()}
             <Card className="border-none shadow-sm">
@@ -1267,6 +1269,8 @@ export default function BaristaPage() {
               </CardContent>
             </Card>
           </div>
+        ) : (
+          <KitchenSessionManager isDirector department="barista" visibleTabs={["purchase"]} />
         )}
       </div>
     );
