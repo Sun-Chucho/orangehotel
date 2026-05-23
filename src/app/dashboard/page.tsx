@@ -77,6 +77,18 @@ export default function OverviewPage() {
       }).length;
       return { paid, credit, settledCount };
     };
+    const collectRecordTotals = <T extends { total?: number; totalAmount?: number; status?: string }>(
+      records: T[],
+      amountKey: "total" | "totalAmount",
+    ) => {
+      const paid = records
+        .filter((record) => record.status !== "credit")
+        .reduce((sum, record) => sum + (Number(record[amountKey]) || 0), 0);
+      const credit = records
+        .filter((record) => record.status === "credit")
+        .reduce((sum, record) => sum + (Number(record[amountKey]) || 0), 0);
+      return { paid, credit };
+    };
 
     const refreshOverview = () => {
       const savedRole = readStoredRole();
@@ -96,11 +108,10 @@ export default function OverviewPage() {
       if (savedRole) setRole(savedRole);
       if (savedShift) setShift(savedShift);
 
-      setBookingRevenue(
-        cashierSnapshot.transactions
-          .filter((tx) => tx.status !== "credit")
-          .reduce((sum, tx) => sum + (tx.total || 0), 0),
-      );
+      const bookingMetrics = collectRecordTotals(cashierSnapshot.transactions, "total");
+      const laundryMetrics = collectRecordTotals(laundry, "totalAmount");
+
+      setBookingRevenue(bookingMetrics.paid);
       setActiveKitchen(kitchenSnapshot.tickets.length);
       setActiveBarista(baristaSnapshot.tickets.length);
 
@@ -110,9 +121,9 @@ export default function OverviewPage() {
       setKitchenRevenue(kitchenMetrics.paid);
       setBaristaRevenue(baristaMetrics.paid);
       setFoodRevenue(kitchenMetrics.paid + baristaMetrics.paid);
-      setLaundryRevenue(laundry.filter((record) => record.status !== "credit").reduce((sum, record) => sum + record.totalAmount, 0));
+      setLaundryRevenue(laundryMetrics.paid);
       setExpensesTotal(expenses.reduce((sum, expense) => sum + (expense.amount || 0), 0));
-      setCreditExposure(kitchenMetrics.credit + baristaMetrics.credit);
+      setCreditExposure(bookingMetrics.credit + kitchenMetrics.credit + baristaMetrics.credit + laundryMetrics.credit);
       setSettledToday(kitchenMetrics.settledCount + baristaMetrics.settledCount);
       setMounted(true);
     };

@@ -5,7 +5,7 @@ import { readStoredRole } from "@/app/lib/auth";
 import { LaundryPaymentMethod, LaundryPaymentStatus, LaundryRecord, STORAGE_LAUNDRY_RECORDS } from "@/app/lib/laundry";
 import { Role } from "@/app/lib/mock-data";
 import { readJson, writeJson } from "@/app/lib/storage";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +51,7 @@ export default function LaundryPage() {
     };
 
     refreshLaundry();
+    void hydrateStorageKeyFromFirebase(STORAGE_LAUNDRY_RECORDS).finally(refreshLaundry);
     return subscribeToSyncedStorageKey(STORAGE_LAUNDRY_RECORDS, refreshLaundry);
   }, []);
 

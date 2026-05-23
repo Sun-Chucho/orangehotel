@@ -1,11 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Building2, Coffee, Download, Lock, Package, ShieldCheck, ShoppingCart, Smartphone, Sun, Moon, User, Utensils } from "lucide-react";
 import { Role } from "@/app/lib/mock-data";
-import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -94,7 +92,6 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [isIosDevice, setIsIosDevice] = useState(false);
   const [isAndroidDevice, setIsAndroidDevice] = useState(false);
   const [serviceWorkerReady, setServiceWorkerReady] = useState(false);
-  const logo = useMemo(() => PlaceHolderImages.find((img) => img.id === "app-logo"), []);
 
   useEffect(() => {
     const applyProfiles = () => {
@@ -315,20 +312,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   return (
     <div className={cn("flex min-h-[100dvh] w-full flex-col overflow-x-hidden", isDirector ? "bg-[#f4f7f2]" : "bg-background")}>
       <div className={cn("flex flex-1 flex-col items-center justify-center p-6 text-center", isDirector && "justify-start px-3 py-4 sm:px-4 sm:py-8 sm:justify-center")}>
-        <div className={cn("mb-12", isDirector && "mb-4 sm:mb-6")}>
-          <div className={cn("w-40 h-40 bg-white flex items-center justify-center mx-auto shadow-2xl mb-4 overflow-hidden p-4", isDirector ? "h-24 w-24 rounded-lg shadow-xl sm:h-28 sm:w-28" : "rounded-3xl")}>
-            {logo && (
-              <Image
-                src={logo.imageUrl}
-                alt="Orange Hotel Logo"
-                width={150}
-                height={150}
-                className="object-contain"
-                data-ai-hint={logo.imageHint}
-                priority
-              />
-            )}
-          </div>
+        <div className={cn("mb-8", isDirector && "mb-4 sm:mb-6")}>
           <p className="text-muted-foreground text-[10px] uppercase tracking-[0.3em] font-black opacity-60">
             Authorized Access Only
           </p>

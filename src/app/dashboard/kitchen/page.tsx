@@ -633,10 +633,13 @@ export default function KitchenPage() {
             <div>
               <h1 className="text-3xl font-black tracking-tight">Kitchen Setup</h1>
               <p className="text-muted-foreground text-sm uppercase font-bold tracking-wider">
-                Inventory visibility for kitchen operations
+                Inventory, entry history, and sales visibility for kitchen operations
               </p>
             </div>
           </div>
+          <Badge variant="outline" className="h-10 px-4 justify-center border-primary text-primary font-black uppercase text-[10px] tracking-widest">
+            {kitchenPayments.length} Sales Records
+          </Badge>
         </header>
         <Card className="border-none shadow-sm">
           <CardHeader>
@@ -685,6 +688,8 @@ export default function KitchenPage() {
           </div>
           <KitchenSessionManager isDirector />
         </div>
+
+        {renderDirectorSalesTable()}
       </div>
     );
   }

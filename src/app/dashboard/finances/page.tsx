@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ExpenseRecord, STORAGE_EXPENSES, getExpenseDepartmentLabel } from "@/app/lib/expenses";
 import { LaundryRecord, STORAGE_LAUNDRY_RECORDS } from "@/app/lib/laundry";
 import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -42,6 +42,13 @@ export default function FinancesPage() {
     };
 
     refreshFinances();
+    void Promise.all([
+      hydrateStorageKeyFromFirebase("orange-hotel-cashier-state"),
+      hydrateStorageKeyFromFirebase(STORAGE_KITCHEN_STATE),
+      hydrateStorageKeyFromFirebase(STORAGE_BARISTA_STATE),
+      hydrateStorageKeyFromFirebase(STORAGE_LAUNDRY_RECORDS),
+      hydrateStorageKeyFromFirebase(STORAGE_EXPENSES),
+    ]).finally(refreshFinances);
     const unsubscribers = [
       subscribeToSyncedStorageKey("orange-hotel-cashier-state", refreshFinances),
       subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, refreshFinances),
