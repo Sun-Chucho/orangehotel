@@ -49,7 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'F&B POS', href: '/dashboard/fnb-pos', icon: Utensils, roles: ['kitchen', 'barista'] },
   { label: 'Booking', href: '/dashboard/cashier', icon: ShoppingCart, roles: ['manager', 'director', 'cashier'] },
   { label: 'Cash Requests', href: '/dashboard/cash-requests', icon: HandCoins, roles: ['cashier'] },
-  { label: 'Laundry', href: '/dashboard/laundry', icon: Shirt, roles: ['manager', 'cashier'] },
+  { label: 'Laundry', href: '/dashboard/laundry', icon: Shirt, roles: ['manager', 'director', 'cashier'] },
   { label: 'Website Booking', href: '/dashboard/website-bookings', icon: MonitorSmartphone, roles: ['cashier'] },
   { label: 'Live Chat', href: '/dashboard/live-chat', icon: MessageCircle, roles: ['cashier'] },
   { label: 'Payments', href: '/dashboard/payments', icon: WalletCards, roles: ['manager', 'director', 'cashier', 'kitchen', 'barista'] },
@@ -96,6 +96,11 @@ export function SidebarNav({ role }: { role: Role }) {
         if (role !== "manager") return item;
         if (item.href === "/dashboard/inventory/kitchen-stock") return { ...item, label: "Kitchen" };
         if (item.href === "/dashboard/inventory/barista-stock") return { ...item, label: "Barista" };
+        return item;
+      })
+      .map((item) => {
+        if (role !== "director") return item;
+        if (item.href === "/dashboard/laundry") return { ...item, label: "Laundry Sales" };
         return item;
       })
       .map((item) => {

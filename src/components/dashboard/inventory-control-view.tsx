@@ -26,7 +26,7 @@ import {
   STORAGE_KITCHEN_DAILY_STOCK_HISTORY,
   STORAGE_KITCHEN_PURCHASE_HISTORY,
 } from "@/app/lib/kitchen-session-storage";
-import { readJson, STORAGE_BARISTA_STATE, writeJson } from "@/app/lib/storage";
+import { readJson, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE, writeJson } from "@/app/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,7 +42,7 @@ export type InventoryTab =
   | "kitchen-stock"
   | "barista-stock";
 
-type KitchenManagerPane = "stock" | "expenses" | "entries";
+type KitchenManagerPane = "stock" | "expenses" | "entries" | "sales";
 type BaristaManagerPane = "finance" | "inventory" | "purchase" | "sales";
 type SalesDateFilter = "day" | "week" | "month" | "all";
 type HistoryPreview =
@@ -262,10 +262,13 @@ export function InventoryControlView({
   const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab | null>(initialTab);
   const [kitchenManagerPane, setKitchenManagerPane] = useState<KitchenManagerPane>("stock");
+  const [kitchenSalesDateFilter, setKitchenSalesDateFilter] = useState<SalesDateFilter>("day");
   const [baristaView, setBaristaView] = useState<BaristaManagerPane>("finance");
   const [baristaSalesDateFilter, setBaristaSalesDateFilter] = useState<SalesDateFilter>("day");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
+  const [kitchenPayments, setKitchenPayments] = useState<PosPaymentRecord[]>([]);
+  const [kitchenMenuItems, setKitchenMenuItems] = useState<Array<{ name: string; price: number }>>([]);
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
   const [baristaMenuItems, setBaristaMenuItems] = useState<Array<{ name: string; price: number }>>([]);
   const [kitchenPurchaseHistory, setKitchenPurchaseHistory] = useState<KitchenPurchaseHistoryEntry[]>([]);
@@ -335,6 +338,7 @@ export function InventoryControlView({
     const applyInventorySnapshot = () => {
       const inv = readJson<InventoryItem[]>(STORAGE_INVENTORY_ITEMS) ?? [];
       const store = readJson<Array<MainStoreItem & { lane?: StoreLane }>>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+      const kitchenState = readJson<PosStateSnapshot>(STORAGE_KITCHEN_STATE);
       const baristaState = readJson<PosStateSnapshot>(STORAGE_BARISTA_STATE);
       const normalizedStore: MainStoreItem[] = store.map((item) => ({
         ...item,
@@ -342,6 +346,8 @@ export function InventoryControlView({
       }));
       setItems(inv);
       setStoreItems(normalizedStore);
+      setKitchenPayments(Array.isArray(kitchenState?.payments) ? kitchenState.payments : []);
+      setKitchenMenuItems(Array.isArray(kitchenState?.menuItems) ? kitchenState.menuItems : []);
       setBaristaPayments(Array.isArray(baristaState?.payments) ? baristaState.payments : []);
       setBaristaMenuItems(Array.isArray(baristaState?.menuItems) ? baristaState.menuItems : []);
       setKitchenPurchaseHistory(readJson<KitchenPurchaseHistoryEntry[]>(STORAGE_KITCHEN_PURCHASE_HISTORY) ?? []);
@@ -352,6 +358,7 @@ export function InventoryControlView({
     applyInventorySnapshot();
     const unsubscribeInventory = subscribeToSyncedStorageKey(STORAGE_INVENTORY_ITEMS, applyInventorySnapshot);
     const unsubscribeStore = subscribeToSyncedStorageKey(STORAGE_MAIN_STORE_ITEMS, applyInventorySnapshot);
+    const unsubscribeKitchen = subscribeToSyncedStorageKey(STORAGE_KITCHEN_STATE, applyInventorySnapshot);
     const unsubscribeBarista = subscribeToSyncedStorageKey(STORAGE_BARISTA_STATE, applyInventorySnapshot);
     const unsubscribeKitchenPurchase = subscribeToSyncedStorageKey(STORAGE_KITCHEN_PURCHASE_HISTORY, applyInventorySnapshot);
     const unsubscribeKitchenDaily = subscribeToSyncedStorageKey(STORAGE_KITCHEN_DAILY_STOCK_HISTORY, applyInventorySnapshot);
@@ -360,6 +367,7 @@ export function InventoryControlView({
     return () => {
       unsubscribeInventory();
       unsubscribeStore();
+      unsubscribeKitchen();
       unsubscribeBarista();
       unsubscribeKitchenPurchase();
       unsubscribeKitchenDaily();
@@ -388,6 +396,79 @@ export function InventoryControlView({
     [baristaInventoryItems, inventorySearchTerm],
   );
   const canViewBaristaFinance = role === "manager" || role === "director";
+
+  const kitchenMenuPriceByItem = useMemo(() => {
+    const priceMap = new Map<string, number>();
+
+    kitchenMenuItems.forEach((item) => {
+      const key = normalizeStockName(item.name);
+      if (typeof item.price === "number" && item.price > 0) {
+        priceMap.set(key, item.price);
+      }
+    });
+
+    return priceMap;
+  }, [kitchenMenuItems]);
+
+  const filteredKitchenSalesPayments = useMemo(
+    () =>
+      [...kitchenPayments]
+        .filter((payment) => matchesSalesDateFilter(payment.createdAt, kitchenSalesDateFilter))
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
+    [kitchenPayments, kitchenSalesDateFilter],
+  );
+
+  const kitchenSalesRows = useMemo(
+    () =>
+      filteredKitchenSalesPayments.flatMap((payment) => {
+        if (!Array.isArray(payment.lines) || payment.lines.length === 0) {
+          return [
+            {
+              id: payment.id ?? `${payment.code ?? "sale"}-${payment.createdAt ?? 0}`,
+              code: payment.code ?? "-",
+              createdAt: payment.createdAt,
+              itemName: "Unitemized sale",
+              quantity: 1,
+              destination: payment.destination ?? payment.mode ?? "-",
+              method: payment.method ?? "-",
+              status: payment.status ?? "completed",
+              amount: payment.total || 0,
+            },
+          ];
+        }
+
+        return payment.lines.map((line, index) => {
+          const price = kitchenMenuPriceByItem.get(normalizeStockName(line.name)) ?? 0;
+          const amount = price > 0
+            ? line.qty * price
+            : payment.lines?.length === 1
+              ? payment.total || 0
+              : 0;
+
+          return {
+            id: `${payment.id ?? payment.code ?? "sale"}-${index}`,
+            code: payment.code ?? "-",
+            createdAt: payment.createdAt,
+            itemName: line.name,
+            quantity: line.qty,
+            destination: payment.destination ?? payment.mode ?? "-",
+            method: payment.method ?? "-",
+            status: payment.status ?? "completed",
+            amount,
+          };
+        });
+      }),
+    [filteredKitchenSalesPayments, kitchenMenuPriceByItem],
+  );
+
+  const kitchenSalesQuantityTotal = useMemo(
+    () => kitchenSalesRows.reduce((sum, row) => sum + row.quantity, 0),
+    [kitchenSalesRows],
+  );
+  const kitchenSalesAmountTotal = useMemo(
+    () => filteredKitchenSalesPayments.reduce((sum, payment) => sum + (payment.total || 0), 0),
+    [filteredKitchenSalesPayments],
+  );
 
   const resolveBaristaInventoryMatch = (item: MainStoreItem) =>
     items.find((entry) => {
@@ -1272,6 +1353,92 @@ export function InventoryControlView({
     </div>
   );
 
+  const renderKitchenSales = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black uppercase tracking-tight">Kitchen Sales</h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Recorded kitchen POS sales with day, week, month, and all-time filters.
+          </p>
+        </div>
+        <Tabs value={kitchenSalesDateFilter} onValueChange={(value) => setKitchenSalesDateFilter(value as SalesDateFilter)}>
+          <TabsList className="h-10">
+            <TabsTrigger value="day" className="font-black uppercase text-[10px] tracking-widest">Day</TabsTrigger>
+            <TabsTrigger value="week" className="font-black uppercase text-[10px] tracking-widest">Week</TabsTrigger>
+            <TabsTrigger value="month" className="font-black uppercase text-[10px] tracking-widest">Month</TabsTrigger>
+            <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">All Time</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Records</p>
+            <p className="mt-2 text-2xl font-black">{filteredKitchenSalesPayments.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Items Sold</p>
+            <p className="mt-2 text-2xl font-black">{kitchenSalesQuantityTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sales Total</p>
+            <p className="mt-2 text-2xl font-black">TSh {kitchenSalesAmountTotal.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg uppercase font-black">Kitchen Sold Items</CardTitle>
+          <CardDescription>All recorded kitchen sales for the selected period.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Code</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Item Sold</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Qty</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Destination</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Method</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {kitchenSalesRows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-bold text-sm">{formatPaymentDate(row.createdAt)}</TableCell>
+                  <TableCell className="font-black">{row.code}</TableCell>
+                  <TableCell className="font-bold">{row.itemName}</TableCell>
+                  <TableCell className="font-bold">{row.quantity}</TableCell>
+                  <TableCell className="font-bold">{row.destination}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{row.method}</TableCell>
+                  <TableCell className="font-black uppercase text-[10px] tracking-widest">{row.status}</TableCell>
+                  <TableCell className="font-bold">TSh {row.amount.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+              {kitchenSalesRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                    No kitchen sales found for this filter
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   const downloadPurchaseHistoryEntry = (department: "kitchen" | "barista", entry: KitchenPurchaseHistoryEntry) => {
     downloadCsvFile(`${department}-daily-purchases-${getHistoryFileDate(entry.closedAt)}.csv`, [
       ["Department", department === "kitchen" ? "Kitchen" : "Barista"],
@@ -1562,6 +1729,7 @@ export function InventoryControlView({
                   <TabsTrigger value="stock" className="font-black uppercase text-[10px] tracking-widest">Kitchen Stock</TabsTrigger>
                   <TabsTrigger value="expenses" className="font-black uppercase text-[10px] tracking-widest">Daily Expenses</TabsTrigger>
                   <TabsTrigger value="entries" className="font-black uppercase text-[10px] tracking-widest">Daily Entries</TabsTrigger>
+                  <TabsTrigger value="sales" className="font-black uppercase text-[10px] tracking-widest">Sales</TabsTrigger>
                 </TabsList>
               </Tabs>
               {kitchenManagerPane === "stock" && (
@@ -1572,6 +1740,7 @@ export function InventoryControlView({
               )}
               {kitchenManagerPane === "expenses" && renderHistoryCards(kitchenPurchaseHistory, "purchase", "kitchen")}
               {kitchenManagerPane === "entries" && renderHistoryCards(kitchenDailyHistory, "daily", "kitchen")}
+              {kitchenManagerPane === "sales" && renderKitchenSales()}
             </>
           ) : isReadOnlyStock ? (
             <>
