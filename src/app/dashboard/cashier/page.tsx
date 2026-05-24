@@ -485,11 +485,6 @@ export default function BookingPage() {
     resetBookingForm();
   };
 
-  const markRoomStatus = (roomNumber: string, status: Room["status"]) => {
-    const nextRooms = updateRoomStatusByNumber(roomNumber, status, rooms);
-    setRooms(nextRooms);
-  };
-
   const saveBooking = (status: "completed" | "credit", paymentMethod: PaymentMethod) => {
     if (isDirector) return;
     if (!canSubmitBooking) return;
@@ -692,7 +687,10 @@ export default function BookingPage() {
 
     setTransactions(nextTransactions);
     writeCashierState(nextTransactions, receiptSeq);
-    markRoomStatus(booking.roomNumber, "cleaning");
+
+    const checkedOutRooms = syncRoomsStateFromBookings(nextTransactions, rooms);
+    const cleaningRooms = updateRoomStatusByNumber(booking.roomNumber, "cleaning", checkedOutRooms);
+    setRooms(cleaningRooms);
   };
 
   return (

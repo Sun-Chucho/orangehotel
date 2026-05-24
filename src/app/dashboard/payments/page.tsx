@@ -337,7 +337,13 @@ export default function PaymentsPage() {
       const mappedMethod: PaymentMethod = method === "mobile" ? "mobile-money" : method;
       const snapshot = readCashierState<BookingRecord>(STORAGE_BOOKING_TX, "orange-hotel-cashier-seq", 84920);
       const nextTransactions = snapshot.transactions.map((tx) =>
-        tx.id === selectedCredit.id ? { ...tx, status: "completed" as const, payment: mappedMethod } : tx,
+        tx.id === selectedCredit.id
+          ? {
+              ...tx,
+              status: tx.status === "checked-out" ? "checked-out" as const : "completed" as const,
+              payment: mappedMethod,
+            }
+          : tx,
       );
       setBookingTransactions(nextTransactions);
       writeCashierState(nextTransactions, snapshot.receiptSeq);
