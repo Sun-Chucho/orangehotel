@@ -95,6 +95,41 @@ const USD_TO_TSH_RATE = 2500;
 const STORAGE_TX = "orange-hotel-cashier-transactions";
 const STORAGE_SEQ = "orange-hotel-cashier-seq";
 
+function mergeCashierSnapshots(
+  localSnapshot: { transactions: BookingRecord[]; receiptSeq: number },
+  remoteSnapshot: { transactions?: BookingRecord[]; receiptSeq?: number },
+) {
+  const remoteTransactions = Array.isArray(remoteSnapshot.transactions) ? remoteSnapshot.transactions : [];
+  const mergedById = new Map<string, BookingRecord>();
+  const transactionsWithoutId: BookingRecord[] = [];
+
+  for (const transaction of remoteTransactions) {
+    if (transaction.id) {
+      mergedById.set(transaction.id, transaction);
+    } else {
+      transactionsWithoutId.push(transaction);
+    }
+  }
+
+  for (const transaction of localSnapshot.transactions) {
+    if (transaction.id) {
+      mergedById.set(transaction.id, transaction);
+    } else {
+      transactionsWithoutId.push(transaction);
+    }
+  }
+
+  return {
+    transactions: [...Array.from(mergedById.values()), ...transactionsWithoutId].sort(
+      (a, b) => (b.createdAt || 0) - (a.createdAt || 0),
+    ),
+    receiptSeq: Math.max(
+      Number.isFinite(localSnapshot.receiptSeq) ? localSnapshot.receiptSeq : 84920,
+      Number.isFinite(remoteSnapshot.receiptSeq) ? Number(remoteSnapshot.receiptSeq) : 84920,
+    ),
+  };
+}
+
 async function hydrateCashierStateFromServer() {
   if (typeof window === "undefined") return;
 
@@ -108,12 +143,20 @@ async function hydrateCashierStateFromServer() {
   if (!remoteSnapshot || !Array.isArray(remoteSnapshot.transactions)) return;
 
   const localSnapshot = readCashierState<BookingRecord>(STORAGE_TX, STORAGE_SEQ, 84920);
-  if (remoteSnapshot.transactions.length < localSnapshot.transactions.length) return;
+  const mergedSnapshot = mergeCashierSnapshots(localSnapshot, remoteSnapshot);
 
-  localStorage.setItem(STORAGE_CASHIER_STATE, JSON.stringify(remoteSnapshot));
-  localStorage.setItem(STORAGE_TX, JSON.stringify(remoteSnapshot.transactions));
-  localStorage.setItem(STORAGE_SEQ, String(Number.isFinite(remoteSnapshot.receiptSeq) ? remoteSnapshot.receiptSeq : 84920));
+  localStorage.setItem(STORAGE_CASHIER_STATE, JSON.stringify(mergedSnapshot));
+  localStorage.setItem(STORAGE_TX, JSON.stringify(mergedSnapshot.transactions));
+  localStorage.setItem(STORAGE_SEQ, String(mergedSnapshot.receiptSeq));
   window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key: STORAGE_CASHIER_STATE } }));
+
+  if (JSON.stringify(mergedSnapshot) !== JSON.stringify(remoteSnapshot)) {
+    await fetch(`/api/storage-sync/${encodeURIComponent(STORAGE_CASHIER_STATE)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: mergedSnapshot }),
+    }).catch(() => undefined);
+  }
 }
 
 function daysBetween(checkIn: string, checkOut: string): number {
