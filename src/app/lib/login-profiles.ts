@@ -25,6 +25,13 @@ export interface LoginProfileEntry {
 export type LoginProfiles = Partial<Record<Role, LoginProfileEntry>>;
 
 export const DEFAULT_LOGIN_PASSWORD = "1234";
+export const MANAGER_LOGIN_PASSWORD = "4321";
+export const MANAGER_SESSION_VERSION = "manager-password-4321-v1";
+export const STORAGE_MANAGER_SESSION_VERSION = "orange-hotel-manager-session-version";
+
+export function getDefaultLoginPassword(role: Role) {
+  return role === "manager" ? MANAGER_LOGIN_PASSWORD : DEFAULT_LOGIN_PASSWORD;
+}
 
 function dispatchLoginProfilesUpdated() {
   window.dispatchEvent(new CustomEvent("orange-hotel-storage-updated", { detail: { key: STORAGE_LOGIN_PROFILES } }));

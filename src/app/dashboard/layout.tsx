@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
-import { readActiveSessionUsername, readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeActiveSessionUsername } from "@/app/lib/login-profiles";
+import { MANAGER_SESSION_VERSION, STORAGE_MANAGER_SESSION_VERSION, readActiveSessionUsername, readLocalLoginProfiles, renameProfileUser, saveLoginProfileToServer, writeActiveSessionUsername } from "@/app/lib/login-profiles";
 
 const VALID_ROLES: Role[] = ['manager', 'director', 'inventory', 'cashier', 'kitchen', 'barista'];
 const DIRECTOR_MOBILE_NAV = [
@@ -1106,7 +1106,17 @@ export default function DashboardLayout({
       if (!savedRole || !VALID_ROLES.includes(savedRole)) {
         localStorage.removeItem('orange-hotel-role');
         localStorage.removeItem('orange-hotel-shift');
+        localStorage.removeItem(STORAGE_MANAGER_SESSION_VERSION);
         router.replace('/');
+        return;
+      }
+
+      if (savedRole === "manager" && localStorage.getItem(STORAGE_MANAGER_SESSION_VERSION) !== MANAGER_SESSION_VERSION) {
+        localStorage.removeItem("orange-hotel-role");
+        localStorage.removeItem("orange-hotel-shift");
+        localStorage.removeItem("orange-hotel-username");
+        localStorage.removeItem(STORAGE_MANAGER_SESSION_VERSION);
+        router.replace("/MANAGER");
         return;
       }
 

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DEFAULT_LOGIN_PASSWORD, getProfilePassword, hydrateLoginProfilesFromServer, isProfileUserBlocked, LoginProfiles, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
+import { MANAGER_SESSION_VERSION, STORAGE_MANAGER_SESSION_VERSION, getDefaultLoginPassword, getProfilePassword, hydrateLoginProfilesFromServer, isProfileUserBlocked, LoginProfiles, readLocalLoginProfiles, saveLoginProfileToServer, STORAGE_LOGIN_PROFILES, upsertProfileUser, writeLocalLoginProfiles } from "@/app/lib/login-profiles";
 
 interface RoleLoginPageProps {
   role: Role;
@@ -92,6 +92,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const [isIosDevice, setIsIosDevice] = useState(false);
   const [isAndroidDevice, setIsAndroidDevice] = useState(false);
   const [serviceWorkerReady, setServiceWorkerReady] = useState(false);
+  const roleDefaultPassword = getDefaultLoginPassword(role);
 
   useEffect(() => {
     const applyProfiles = () => {
@@ -216,7 +217,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 (() => {
   const role = ${JSON.stringify(role)};
   const destination = ${JSON.stringify(config.destination)};
-  const defaultPassword = ${JSON.stringify(DEFAULT_LOGIN_PASSWORD)};
+  const defaultPassword = ${JSON.stringify(roleDefaultPassword)};
   const defaultUsername = ${JSON.stringify(config.username)};
   const allowedUsernames = ${JSON.stringify(selectableUsers.map((user) => user.name.trim().toLowerCase()))};
   const profileUserCount = ${JSON.stringify(profileUsers.length)};
@@ -240,6 +241,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     }
     localStorage.setItem("orange-hotel-username", username);
     localStorage.setItem("orange-hotel-role", role);
+    if (role === "manager") {
+      localStorage.setItem(${JSON.stringify(STORAGE_MANAGER_SESSION_VERSION)}, ${JSON.stringify(MANAGER_SESSION_VERSION)});
+    } else {
+      localStorage.removeItem(${JSON.stringify(STORAGE_MANAGER_SESSION_VERSION)});
+    }
     if (role === "cashier") {
       localStorage.setItem("orange-hotel-shift", "day");
     } else {
@@ -266,7 +272,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     const profiles = readLocalLoginProfiles() ?? {};
     const currentProfile = profiles[role];
-    const expectedPassword = getProfilePassword(currentProfile, username, DEFAULT_LOGIN_PASSWORD);
+    const expectedPassword = role === "manager" ? roleDefaultPassword : getProfilePassword(currentProfile, username, roleDefaultPassword);
     const normalizedUsername = username.trim().toLowerCase();
     const allowedUsernames = selectableUsers.map((user) => user.name.trim().toLowerCase());
     const listedUserRequired = profileUsers.length > 0;
@@ -284,6 +290,11 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     setError("");
     localStorage.setItem("orange-hotel-username", username.trim());
     localStorage.setItem("orange-hotel-role", role);
+    if (role === "manager") {
+      localStorage.setItem(STORAGE_MANAGER_SESSION_VERSION, MANAGER_SESSION_VERSION);
+    } else {
+      localStorage.removeItem(STORAGE_MANAGER_SESSION_VERSION);
+    }
 
     if (role === "cashier") {
       localStorage.setItem("orange-hotel-shift", shift);
@@ -410,7 +421,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                 Synced Default Username: {config.username}
               </p>
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">
-                Default Password: {DEFAULT_LOGIN_PASSWORD}
+                Default Password: {roleDefaultPassword}
               </p>
             </div>
 
