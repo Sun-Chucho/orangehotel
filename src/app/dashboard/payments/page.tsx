@@ -288,9 +288,17 @@ export default function PaymentsPage() {
     [baristaPayments],
   );
 
-  const allRows = useMemo(() => [...bookingRows, ...kitchenRows, ...baristaRows], [bookingRows, kitchenRows, baristaRows]);
-  const completedPayments = useMemo(() => allRows.filter((tx) => tx.status === "completed"), [allRows]);
-  const creditPayments = useMemo(() => allRows.filter((tx) => tx.status === "credit"), [allRows]);
+  const activePaymentRows = useMemo(
+    () =>
+      paymentsTab === "reception"
+        ? bookingRows
+        : paymentsTab === "kitchen"
+        ? kitchenRows
+        : baristaRows,
+    [baristaRows, bookingRows, kitchenRows, paymentsTab],
+  );
+  const completedPayments = useMemo(() => activePaymentRows.filter((tx) => tx.status === "completed"), [activePaymentRows]);
+  const creditPayments = useMemo(() => activePaymentRows.filter((tx) => tx.status === "credit"), [activePaymentRows]);
 
   const totalCompleted = completedPayments.reduce((sum, tx) => sum + tx.amount, 0);
   const totalCredit = creditPayments.reduce((sum, tx) => sum + tx.amount, 0);
@@ -364,16 +372,10 @@ export default function PaymentsPage() {
   };
 
   const rows = useMemo(() => {
-    const base =
-      paymentsTab === "reception"
-        ? bookingRows
-        : paymentsTab === "kitchen"
-        ? kitchenRows
-        : baristaRows;
-    return base
+    return activePaymentRows
       .filter((row) => matchesPaymentDateFilter(row.createdAt, paymentDateFilter, selectedPaymentDate))
       .sort((a, b) => b.createdAt - a.createdAt);
-  }, [paymentDateFilter, selectedPaymentDate, paymentsTab, bookingRows, kitchenRows, baristaRows]);
+  }, [activePaymentRows, paymentDateFilter, selectedPaymentDate]);
 
   const canViewAllTabs = role === "manager" || role === "director";
   const headerDescription =

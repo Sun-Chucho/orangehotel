@@ -366,23 +366,22 @@ function mergeCashierStateForSync(localValue: unknown, remoteValue: unknown) {
 
   const localTransactions = localSnapshot.transactions;
   const remoteTransactions = remoteSnapshot.transactions;
-  if (remoteTransactions.length <= localTransactions.length) {
-    return localValue;
-  }
 
   const mergedById = new Map<string, unknown>();
 
   for (const transaction of remoteTransactions) {
-    const id = typeof transaction === "object" && transaction !== null ? (transaction as { id?: unknown }).id : null;
-    if (typeof id === "string" && id.trim()) {
-      mergedById.set(id, transaction);
+    const id = getRecordId(transaction);
+    if (id) {
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, transaction) : transaction);
     }
   }
 
   for (const transaction of localTransactions) {
-    const id = typeof transaction === "object" && transaction !== null ? (transaction as { id?: unknown }).id : null;
-    if (typeof id === "string" && id.trim()) {
-      mergedById.set(id, transaction);
+    const id = getRecordId(transaction);
+    if (id) {
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, transaction) : transaction);
     }
   }
 
@@ -392,7 +391,7 @@ function mergeCashierStateForSync(localValue: unknown, remoteValue: unknown) {
     return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
   });
 
-  if (mergedTransactions.length === localTransactions.length) {
+  if (areSnapshotsEqual(mergedTransactions, localTransactions)) {
     return localValue;
   }
 
@@ -412,16 +411,30 @@ function getRecordId(record: unknown) {
   return typeof id === "string" && id.trim() ? id : null;
 }
 
-function mergeRecordsById(localRecords: unknown[], remoteRecords: unknown[]) {
-  if (remoteRecords.length <= localRecords.length) return localRecords;
+function getSettlementPriority(record: unknown) {
+  if (typeof record !== "object" || record === null) return 0;
+  const status = (record as { status?: unknown }).status;
+  if (status === "checked-out") return 3;
+  if (status === "completed") return 2;
+  if (status === "credit") return 1;
+  return 0;
+}
 
+function chooseRecordBySettlementPriority(currentRecord: unknown, incomingRecord: unknown) {
+  const currentPriority = getSettlementPriority(currentRecord);
+  const incomingPriority = getSettlementPriority(incomingRecord);
+  return incomingPriority >= currentPriority ? incomingRecord : currentRecord;
+}
+
+function mergeRecordsById(localRecords: unknown[], remoteRecords: unknown[]) {
   const mergedById = new Map<string, unknown>();
   const recordsWithoutId: unknown[] = [];
 
   for (const record of remoteRecords) {
     const id = getRecordId(record);
     if (id) {
-      mergedById.set(id, record);
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, record) : record);
     } else {
       recordsWithoutId.push(record);
     }
@@ -430,7 +443,39 @@ function mergeRecordsById(localRecords: unknown[], remoteRecords: unknown[]) {
   for (const record of localRecords) {
     const id = getRecordId(record);
     if (id) {
-      mergedById.set(id, record);
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, record) : record);
+    } else {
+      recordsWithoutId.push(record);
+    }
+  }
+
+  return [...Array.from(mergedById.values()), ...recordsWithoutId].sort((a, b) => {
+    const left = typeof a === "object" && a !== null ? Number((a as { createdAt?: unknown; movedAt?: unknown; usedAt?: unknown; closedAt?: unknown }).createdAt ?? (a as { movedAt?: unknown }).movedAt ?? (a as { usedAt?: unknown }).usedAt ?? Date.parse(String((a as { closedAt?: unknown }).closedAt ?? ""))) : 0;
+    const right = typeof b === "object" && b !== null ? Number((b as { createdAt?: unknown; movedAt?: unknown; usedAt?: unknown; closedAt?: unknown }).createdAt ?? (b as { movedAt?: unknown }).movedAt ?? (b as { usedAt?: unknown }).usedAt ?? Date.parse(String((b as { closedAt?: unknown }).closedAt ?? ""))) : 0;
+    return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
+  });
+}
+
+function mergeRecordsByIdWithRemoteWins(localRecords: unknown[], remoteRecords: unknown[]) {
+  const mergedById = new Map<string, unknown>();
+  const recordsWithoutId: unknown[] = [];
+
+  for (const record of localRecords) {
+    const id = getRecordId(record);
+    if (id) {
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, record) : record);
+    } else {
+      recordsWithoutId.push(record);
+    }
+  }
+
+  for (const record of remoteRecords) {
+    const id = getRecordId(record);
+    if (id) {
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, record) : record);
     } else {
       recordsWithoutId.push(record);
     }
@@ -470,6 +515,66 @@ function mergePosStateForSync(localValue: unknown, remoteValue: unknown) {
       Number.isFinite(remoteSnapshot.ticketSeq) ? Number(remoteSnapshot.ticketSeq) : 0,
     ),
   };
+}
+
+function mergeCashierStateForRemoteApply(localValue: unknown, remoteValue: unknown) {
+  const localSnapshot = localValue as { transactions?: unknown[]; receiptSeq?: number };
+  const remoteSnapshot = remoteValue as { transactions?: unknown[]; receiptSeq?: number };
+
+  if (!Array.isArray(localSnapshot?.transactions) || !Array.isArray(remoteSnapshot?.transactions)) {
+    return remoteValue;
+  }
+
+  return {
+    ...localSnapshot,
+    ...remoteSnapshot,
+    transactions: mergeRecordsByIdWithRemoteWins(localSnapshot.transactions, remoteSnapshot.transactions),
+    receiptSeq: Math.max(
+      Number.isFinite(localSnapshot.receiptSeq) ? Number(localSnapshot.receiptSeq) : 0,
+      Number.isFinite(remoteSnapshot.receiptSeq) ? Number(remoteSnapshot.receiptSeq) : 0,
+    ),
+  };
+}
+
+function mergePosStateForRemoteApply(localValue: unknown, remoteValue: unknown) {
+  const localSnapshot = localValue as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+  const remoteSnapshot = remoteValue as { tickets?: unknown[]; ticketSeq?: number; payments?: unknown[]; menuItems?: unknown[] };
+
+  if (!localSnapshot || typeof localSnapshot !== "object" || !remoteSnapshot || typeof remoteSnapshot !== "object") {
+    return remoteValue;
+  }
+
+  const localTickets = Array.isArray(localSnapshot.tickets) ? localSnapshot.tickets : [];
+  const remoteTickets = Array.isArray(remoteSnapshot.tickets) ? remoteSnapshot.tickets : [];
+  const localPayments = Array.isArray(localSnapshot.payments) ? localSnapshot.payments : [];
+  const remotePayments = Array.isArray(remoteSnapshot.payments) ? remoteSnapshot.payments : [];
+
+  return {
+    ...localSnapshot,
+    ...remoteSnapshot,
+    tickets: mergeRecordsByIdWithRemoteWins(localTickets, remoteTickets),
+    payments: mergeRecordsByIdWithRemoteWins(localPayments, remotePayments),
+    ticketSeq: Math.max(
+      Number.isFinite(localSnapshot.ticketSeq) ? Number(localSnapshot.ticketSeq) : 0,
+      Number.isFinite(remoteSnapshot.ticketSeq) ? Number(remoteSnapshot.ticketSeq) : 0,
+    ),
+  };
+}
+
+function mergeRemoteValueWithLocalOnlyRecords(key: string, localValue: unknown, remoteValue: unknown) {
+  if (key === "orange-hotel-cashier-state") {
+    return mergeCashierStateForRemoteApply(localValue, remoteValue);
+  }
+
+  if (key === "orange-hotel-kitchen-state" || key === "orange-hotel-barista-state") {
+    return mergePosStateForRemoteApply(localValue, remoteValue);
+  }
+
+  if (Array.isArray(localValue) && Array.isArray(remoteValue)) {
+    return mergeRecordsByIdWithRemoteWins(localValue, remoteValue);
+  }
+
+  return remoteValue;
 }
 
 function protectSyncedValueBeforeWrite(key: string, localValue: unknown, remoteValue: unknown) {
@@ -672,7 +777,7 @@ function mergeRemoteValueForLocalApply(key: string, remoteValue: unknown) {
   const localValue = getLocalSyncedValue(key);
   if (!hasUsableSyncedValue(key, localValue)) return applyLocalBookingOccupancy(key, remoteValue);
   if (!hasUsableSyncedValue(key, remoteValue)) return applyLocalBookingOccupancy(key, localValue);
-  return applyLocalBookingOccupancy(key, protectSyncedValueBeforeWrite(key, localValue, remoteValue));
+  return applyLocalBookingOccupancy(key, mergeRemoteValueWithLocalOnlyRecords(key, localValue, remoteValue));
 }
 
 function readSnapshotValue<T>(key: string, rawValue: T | null, onChange: (value: T | null) => void) {

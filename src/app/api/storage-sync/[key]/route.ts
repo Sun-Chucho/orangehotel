@@ -34,6 +34,21 @@ function getRecordId(record: unknown) {
   return typeof id === "string" && id.trim() ? id : null;
 }
 
+function getSettlementPriority(record: unknown) {
+  if (typeof record !== "object" || record === null) return 0;
+  const status = (record as { status?: unknown }).status;
+  if (status === "checked-out") return 3;
+  if (status === "completed") return 2;
+  if (status === "credit") return 1;
+  return 0;
+}
+
+function chooseRecordBySettlementPriority(currentRecord: unknown, incomingRecord: unknown) {
+  const currentPriority = getSettlementPriority(currentRecord);
+  const incomingPriority = getSettlementPriority(incomingRecord);
+  return incomingPriority >= currentPriority ? incomingRecord : currentRecord;
+}
+
 function sortByCreatedAtDesc(records: unknown[]) {
   return records.sort((a, b) => {
     const left = typeof a === "object" && a !== null ? Number((a as { createdAt?: unknown }).createdAt) : 0;
@@ -58,7 +73,8 @@ function mergeRecordsByIdPreservingIncomingChanges(currentRecords: unknown[], in
   for (const record of incomingRecords) {
     const id = getRecordId(record);
     if (id) {
-      mergedById.set(id, record);
+      const existingRecord = mergedById.get(id);
+      mergedById.set(id, existingRecord ? chooseRecordBySettlementPriority(existingRecord, record) : record);
     } else {
       recordsWithoutId.push(record);
     }
@@ -94,6 +110,27 @@ function protectIncomingSyncedValue(key: string, incomingValue: unknown, current
     if (currentOccupied > 0 && incomingOccupied === 0) {
       return currentValue;
     }
+  }
+
+  if (key === "orange-hotel-kitchen-state" || key === "orange-hotel-barista-state") {
+    const currentSnapshot = currentValue as { tickets?: unknown[]; ticketSeq?: unknown; payments?: unknown[]; menuItems?: unknown[] } | null;
+    const incomingSnapshot = incomingValue as { tickets?: unknown[]; ticketSeq?: unknown; payments?: unknown[]; menuItems?: unknown[] } | null;
+    const currentTickets = Array.isArray(currentSnapshot?.tickets) ? currentSnapshot.tickets : [];
+    const incomingTickets = Array.isArray(incomingSnapshot?.tickets) ? incomingSnapshot.tickets : [];
+    const currentPayments = Array.isArray(currentSnapshot?.payments) ? currentSnapshot.payments : [];
+    const incomingPayments = Array.isArray(incomingSnapshot?.payments) ? incomingSnapshot.payments : [];
+    const currentSeq = Number(currentSnapshot?.ticketSeq);
+    const incomingSeq = Number(incomingSnapshot?.ticketSeq);
+
+    return {
+      ...(typeof incomingValue === "object" && incomingValue !== null ? incomingValue : {}),
+      tickets: mergeRecordsByIdPreservingIncomingChanges(currentTickets, incomingTickets),
+      payments: mergeRecordsByIdPreservingIncomingChanges(currentPayments, incomingPayments),
+      ticketSeq: Math.max(
+        Number.isFinite(currentSeq) ? currentSeq : 0,
+        Number.isFinite(incomingSeq) ? incomingSeq : 0,
+      ),
+    };
   }
 
   if (Array.isArray(currentValue) && Array.isArray(incomingValue) && getArrayCount(incomingValue) < getArrayCount(currentValue)) {

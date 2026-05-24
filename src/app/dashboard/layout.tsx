@@ -82,6 +82,19 @@ async function hydrateStartupStateForRole(role: Role) {
   ]);
 }
 const KALUSE_KIANGI_BOOKING_FIX_KEY = "orange-hotel-kaluse-kiangi-booking-fix-v2";
+const LOCAL_BUSINESS_CORRECTION_KEYS = [
+  KALUSE_KIANGI_BOOKING_FIX_KEY,
+  KITCHEN_TRANSACTIONS_RESET_KEY,
+  KITCHEN_MENU_PRICE_FIX_KEY,
+  DOMPO_STOCK_FIX_KEY,
+  BARISTA_STOCK_FIX_KEY,
+  BARISTA_FINANCE_PRICE_FIX_KEY,
+  BARISTA_SHARED_STATE_FIX_KEY,
+  BARISTA_INVENTORY_CORRECTION_FIX_KEY,
+  COMPANY_STOCK_SHEET_FIX_KEY,
+  BARISTA_MENU_REMOVAL_FIX_KEY,
+  JACK_DANIELS_TOTS_PRICE_FIX_KEY,
+] as const;
 
 const BARISTA_STOCK_TARGETS = {
   "Serengeti Lager|330ml": 20,
@@ -376,8 +389,49 @@ const SODA_MERGE_GROUPS = [
   },
 ] as const;
 
+function hasExistingSharedBusinessData() {
+  const kitchenSnapshot = readPosState<unknown, unknown, unknown>(
+    STORAGE_KITCHEN_STATE,
+    "orange-hotel-kitchen-tickets",
+    "orange-hotel-kitchen-seq",
+    "orange-hotel-kitchen-payments",
+    "orange-hotel-kitchen-menu",
+    300,
+  );
+  const baristaSnapshot = readPosState<unknown, unknown, unknown>(
+    STORAGE_BARISTA_STATE,
+    "orange-hotel-barista-orders",
+    "orange-hotel-barista-seq",
+    "orange-hotel-barista-payments",
+    "orange-hotel-barista-menu",
+    490,
+  );
+  const cashierSnapshot = readJson<{ transactions?: unknown[] }>("orange-hotel-cashier-state");
+  const inventoryItems = readJson<unknown[]>("orange-hotel-inventory-items") ?? [];
+  const storeItems = readJson<unknown[]>(STORAGE_MAIN_STORE_ITEMS) ?? [];
+
+  return (
+    (Array.isArray(cashierSnapshot?.transactions) && cashierSnapshot.transactions.length > 0) ||
+    kitchenSnapshot.tickets.length > 0 ||
+    kitchenSnapshot.payments.length > 0 ||
+    baristaSnapshot.tickets.length > 0 ||
+    baristaSnapshot.payments.length > 0 ||
+    inventoryItems.length > 0 ||
+    storeItems.length > 0
+  );
+}
+
+function markLocalBusinessCorrectionsApplied() {
+  LOCAL_BUSINESS_CORRECTION_KEYS.forEach((key) => localStorage.setItem(key, "1"));
+}
+
 function applyBusinessCorrections() {
   if (typeof window === "undefined") return;
+
+  if (hasExistingSharedBusinessData()) {
+    markLocalBusinessCorrectionsApplied();
+    return;
+  }
 
   if (!localStorage.getItem(KALUSE_KIANGI_BOOKING_FIX_KEY)) {
     const cashierSnapshot = readJson<{ transactions?: StoredBookingRecord[]; receiptSeq?: number }>("orange-hotel-cashier-state");
