@@ -43,6 +43,7 @@ const COMPANY_STOCK_SHEET_FIX_KEY = "orange-hotel-company-stock-sheet-fix-v1";
 const BARISTA_MENU_REMOVAL_FIX_KEY = "orange-hotel-barista-menu-removal-fix-v1";
 const JACK_DANIELS_TOTS_PRICE_FIX_KEY = "orange-hotel-jack-daniels-tots-price-fix-v1";
 const STAFF_FOOD_DISHES_EXPENSE_REMOVAL_KEY = "orange-hotel-staff-food-dishes-expense-removal-v2";
+const KITCHEN_MAY_SALES_YEAR_FIX_KEY = "orange-hotel-kitchen-may-sales-year-fix-v1";
 
 const MANAGEMENT_SYNC_KEYS = [
   "orange-hotel-settings",
@@ -94,6 +95,7 @@ const LOCAL_BUSINESS_CORRECTION_KEYS = [
   COMPANY_STOCK_SHEET_FIX_KEY,
   BARISTA_MENU_REMOVAL_FIX_KEY,
   JACK_DANIELS_TOTS_PRICE_FIX_KEY,
+  KITCHEN_MAY_SALES_YEAR_FIX_KEY,
 ] as const;
 
 const BARISTA_STOCK_TARGETS = {
@@ -334,6 +336,74 @@ function correctKaluseKiangiBookings(bookings: StoredBookingRecord[]) {
   });
 }
 
+function correctMaySalesTimestamp(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return value;
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  if (date.getMonth() !== 4 || (date.getFullYear() !== 2025 && date.getFullYear() !== 2007)) return value;
+
+  const correctedDate = new Date(value);
+  correctedDate.setFullYear(2026);
+  return correctedDate.getTime();
+}
+
+function correctKitchenMaySalesRecord<T extends { createdAt?: unknown }>(record: T): T {
+  const correctedCreatedAt = correctMaySalesTimestamp(record.createdAt);
+  if (correctedCreatedAt === record.createdAt) return record;
+  return { ...record, createdAt: correctedCreatedAt };
+}
+
+function correctKitchenMaySalesRecords<T extends { createdAt?: unknown }>(records: T[]) {
+  let changed = false;
+  const nextRecords = records.map((record) => {
+    const nextRecord = correctKitchenMaySalesRecord(record);
+    if (nextRecord !== record) changed = true;
+    return nextRecord;
+  });
+
+  return { records: nextRecords, changed };
+}
+
+function applyKitchenMaySalesYearCorrection() {
+  if (localStorage.getItem(KITCHEN_MAY_SALES_YEAR_FIX_KEY)) return;
+
+  const kitchenSnapshot = readPosState<{ createdAt?: unknown }, { createdAt?: unknown }, unknown>(
+    STORAGE_KITCHEN_STATE,
+    "orange-hotel-kitchen-tickets",
+    "orange-hotel-kitchen-seq",
+    "orange-hotel-kitchen-payments",
+    "orange-hotel-kitchen-menu",
+    300,
+  );
+  const nextTickets = correctKitchenMaySalesRecords(kitchenSnapshot.tickets);
+  const nextPayments = correctKitchenMaySalesRecords(kitchenSnapshot.payments);
+
+  if (nextTickets.changed || nextPayments.changed) {
+    writePosState(
+      STORAGE_KITCHEN_STATE,
+      nextTickets.records,
+      kitchenSnapshot.ticketSeq,
+      nextPayments.records,
+      kitchenSnapshot.menuItems,
+    );
+  }
+
+  const legacyTickets = readJson<Array<{ createdAt?: unknown }>>("orange-hotel-kitchen-tickets") ?? [];
+  const nextLegacyTickets = correctKitchenMaySalesRecords(legacyTickets);
+  if (nextLegacyTickets.changed) {
+    writeJson("orange-hotel-kitchen-tickets", nextLegacyTickets.records);
+  }
+
+  const legacyPayments = readJson<Array<{ createdAt?: unknown }>>("orange-hotel-kitchen-payments") ?? [];
+  const nextLegacyPayments = correctKitchenMaySalesRecords(legacyPayments);
+  if (nextLegacyPayments.changed) {
+    writeJson("orange-hotel-kitchen-payments", nextLegacyPayments.records);
+  }
+
+  localStorage.setItem(KITCHEN_MAY_SALES_YEAR_FIX_KEY, "1");
+}
+
 const BARISTA_PRICE_UPDATES: InventorySeedUpdate[] = [
   { name: "Classic Dompo", size: "750ml", buyingPrice: 11000, stockDelta: 3 },
   { name: "Kilimanjaro Water", size: "1L", buyingPrice: 833 },
@@ -427,6 +497,8 @@ function markLocalBusinessCorrectionsApplied() {
 
 function applyBusinessCorrections() {
   if (typeof window === "undefined") return;
+
+  applyKitchenMaySalesYearCorrection();
 
   if (hasExistingSharedBusinessData()) {
     markLocalBusinessCorrectionsApplied();

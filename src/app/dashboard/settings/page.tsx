@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Bell,
   CreditCard,
+  Lock,
   Printer,
   Save,
   Settings,
@@ -27,6 +28,21 @@ import {
 import { useIsDirector } from "@/hooks/use-is-director";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { normalizeRole } from "@/app/lib/auth";
+import { Role } from "@/app/lib/mock-data";
+import {
+  DEFAULT_LOGIN_PASSWORD,
+  getProfilePassword,
+  LoginProfileEntry,
+  readActiveSessionUsername,
+  readLocalLoginProfiles,
+  renameProfileUser,
+  saveLoginProfileToServer,
+  STORAGE_LOGIN_PROFILES,
+  subscribeToSessionIdentity,
+  writeActiveSessionUsername,
+  upsertProfileUser,
+} from "@/app/lib/login-profiles";
 
 type SettingsSection = "profile" | "notifications" | "security" | "general" | "billing" | "hardware";
 
@@ -76,6 +92,15 @@ export default function SettingsPage() {
   const [printerNames, setPrinterNames] = useState<string[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [role, setRole] = useState<Role>("manager");
+  const [activeUsername, setActiveUsername] = useState("");
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [activeProfile, setActiveProfile] = useState<LoginProfileEntry | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountFeedback, setAccountFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
   useEffect(() => {
     const applySettingsSnapshot = (value?: Partial<AppSettings> | null) => {
@@ -121,6 +146,34 @@ export default function SettingsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applySession = () => {
+      const storedRole = normalizeRole(localStorage.getItem("orange-hotel-role")) ?? "manager";
+      const sessionUsername = readActiveSessionUsername(storedRole);
+      setRole(storedRole);
+      setActiveUsername(sessionUsername);
+      setUsernameDraft(sessionUsername);
+      setActiveProfile(readLocalLoginProfiles()?.[storedRole] ?? null);
+    };
+
+    const handleProfilesUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key !== STORAGE_LOGIN_PROFILES) return;
+      applySession();
+    };
+
+    applySession();
+    const unsubscribeSession = subscribeToSessionIdentity(applySession);
+    window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+
+    return () => {
+      unsubscribeSession();
+      window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
+    };
+  }, []);
+
   const loadPrinters = async () => {
     setLoadingPrinters(true);
     const printers = await listSystemPrinters();
@@ -133,15 +186,18 @@ export default function SettingsPage() {
   }, []);
 
   const saveChanges = async () => {
-    if (isDirector) return;
     const approved = await confirm({
       title: "Save Settings",
-      description: "Are you sure you want to save these system and hardware settings?",
+      description: isDirector
+        ? "Are you sure you want to save your MD profile details?"
+        : "Are you sure you want to save these system and hardware settings?",
       actionLabel: "Save Changes",
     });
     if (!approved) return;
     writeJson(STORAGE_KEY, settings);
-    writeJson(STORAGE_HARDWARE_SETTINGS, hardwareSettings);
+    if (!isDirector) {
+      writeJson(STORAGE_HARDWARE_SETTINGS, hardwareSettings);
+    }
     setSavedAt(Date.now());
   };
 
@@ -155,6 +211,87 @@ export default function SettingsPage() {
     if (!approved) return;
     setSettings(DEFAULT_SETTINGS);
     setHardwareSettings(DEFAULT_HARDWARE_SETTINGS);
+  };
+
+  const updateUsername = async () => {
+    const nextUsername = usernameDraft.trim();
+    const previousUsername = activeUsername.trim();
+    if (!nextUsername || !previousUsername) {
+      setAccountFeedback({ type: "error", message: "No active user found for this session." });
+      return;
+    }
+
+    setAccountSaving(true);
+    setAccountFeedback(null);
+    try {
+      const profiles = readLocalLoginProfiles() ?? {};
+      const currentProfile = profiles[role] ?? {
+        username: previousUsername,
+        updatedAt: Date.now(),
+        users: [],
+      };
+      const nextEntry = renameProfileUser(currentProfile, previousUsername, nextUsername);
+      const saved = await saveLoginProfileToServer(role, nextEntry);
+      if (!saved) {
+        setAccountFeedback({ type: "error", message: "Username was not saved. Check sync and try again." });
+        return;
+      }
+
+      writeActiveSessionUsername(nextUsername);
+      setActiveUsername(nextUsername);
+      setActiveProfile(nextEntry);
+      setAccountFeedback({ type: "success", message: `Username updated to ${nextUsername}.` });
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const updatePassword = async () => {
+    const normalizedUsername = activeUsername.trim();
+    if (!normalizedUsername) {
+      setAccountFeedback({ type: "error", message: "No active user found for this session." });
+      return;
+    }
+
+    const expectedPassword = getProfilePassword(activeProfile, normalizedUsername, DEFAULT_LOGIN_PASSWORD);
+    if (currentPassword !== expectedPassword) {
+      setAccountFeedback({ type: "error", message: "Current password is incorrect." });
+      return;
+    }
+
+    const nextPassword = newPassword.trim();
+    if (nextPassword.length < 4) {
+      setAccountFeedback({ type: "error", message: "New password must be at least 4 characters." });
+      return;
+    }
+
+    if (nextPassword !== confirmPassword.trim()) {
+      setAccountFeedback({ type: "error", message: "New password and confirmation do not match." });
+      return;
+    }
+
+    setAccountSaving(true);
+    setAccountFeedback(null);
+    try {
+      const profiles = readLocalLoginProfiles() ?? {};
+      const nextEntry = upsertProfileUser(profiles[role], normalizedUsername, {
+        password: nextPassword,
+        updatedAt: Date.now(),
+      });
+      const saved = await saveLoginProfileToServer(role, nextEntry);
+      if (!saved) {
+        setAccountFeedback({ type: "error", message: "Password was not saved. Check sync and try again." });
+        return;
+      }
+
+      setActiveProfile(nextEntry);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setAccountFeedback({ type: "success", message: `Password updated for ${normalizedUsername}.` });
+    } finally {
+      setAccountSaving(false);
+    }
   };
 
   const savedLabel = useMemo(() => {
@@ -186,7 +323,7 @@ export default function SettingsPage() {
           <Button variant="outline" className="font-bold px-6 h-12" onClick={resetDefaults}>
             {isDirector ? "Read Only" : "Reset"}
           </Button>
-          <Button className="bg-primary hover:bg-primary/90 font-bold px-8 h-12 shadow-lg shadow-primary/20" onClick={saveChanges} disabled={isDirector}>
+          <Button className="bg-primary hover:bg-primary/90 font-bold px-8 h-12 shadow-lg shadow-primary/20" onClick={saveChanges}>
             <Save className="w-4 h-4 mr-2" /> Save Changes
           </Button>
         </div>
@@ -228,16 +365,97 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Full Name</Label>
-                    <Input value={settings.fullName} onChange={(event) => setSettings((current) => ({ ...current, fullName: event.target.value }))} disabled={isDirector} />
+                    <Input value={settings.fullName} onChange={(event) => setSettings((current) => ({ ...current, fullName: event.target.value }))} />
                   </div>
                   <div className="space-y-2">
                     <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Email Address</Label>
-                    <Input value={settings.email} onChange={(event) => setSettings((current) => ({ ...current, email: event.target.value }))} disabled={isDirector} />
+                    <Input value={settings.email} onChange={(event) => setSettings((current) => ({ ...current, email: event.target.value }))} />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Work Department</Label>
-                  <Input value={settings.department} onChange={(event) => setSettings((current) => ({ ...current, department: event.target.value }))} disabled={isDirector} />
+                  <Input value={settings.department} onChange={(event) => setSettings((current) => ({ ...current, department: event.target.value }))} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "profile" && (
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-muted/30 border-b">
+                <CardTitle className="text-xl font-black">Login Account</CardTitle>
+                <CardDescription>Edit the current login name and password used for this session.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-5">
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">Current Account</p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black">{activeUsername || role}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{role}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                  <div className="space-y-2">
+                    <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Login Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input value={usernameDraft} onChange={(event) => setUsernameDraft(event.target.value)} className="h-11 pl-10" />
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="h-11 font-black uppercase text-[10px] tracking-widest"
+                    onClick={() => void updateUsername()}
+                    disabled={!usernameDraft.trim() || usernameDraft.trim() === activeUsername.trim() || accountSaving}
+                  >
+                    Save Name
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Current Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="h-11 pl-10" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="h-11 pl-10" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold uppercase text-[10px] tracking-widest opacity-60">Confirm Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="h-11 pl-10" />
+                    </div>
+                  </div>
+                </div>
+
+                {accountFeedback && (
+                  <div className={`rounded-xl border px-4 py-3 text-xs font-black uppercase tracking-widest ${accountFeedback.type === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                    {accountFeedback.message}
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <Button
+                    className="h-11 font-black uppercase text-[10px] tracking-widest"
+                    onClick={() => void updatePassword()}
+                    disabled={!currentPassword || !newPassword || !confirmPassword || accountSaving}
+                  >
+                    {accountSaving ? "Saving..." : "Update Password"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
