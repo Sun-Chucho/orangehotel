@@ -38,7 +38,7 @@ type KitchenCategory = "all" | KitchenMenuCategory;
 type ServiceMode = "restaurant" | "room-service" | "take-away";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type KitchenPaymentStatus = "completed" | "credit";
-type SalesDateFilter = "day" | "week" | "month" | "all";
+type SalesDateFilter = "all" | "date";
 
 interface CartLine {
   item: KitchenMenuItem;
@@ -86,29 +86,20 @@ const STORAGE_MENU = "orange-hotel-kitchen-menu";
 const STORAGE_CANCELLED = "orange-hotel-cancelled-tickets";
 const STORAGE_PAYMENTS = "orange-hotel-kitchen-payments";
 
-function matchesSalesDateFilter(createdAt: number | undefined, filter: SalesDateFilter) {
+function getNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toDayKey(createdAt: number | undefined) {
+  const saleDate = new Date(getNumber(createdAt));
+  if (!Number.isFinite(saleDate.getTime())) return "";
+  return saleDate.toISOString().slice(0, 10);
+}
+
+function matchesSalesDateFilter(createdAt: number | undefined, filter: SalesDateFilter, selectedDate: string) {
   if (filter === "all") return true;
-  if (!createdAt) return false;
-
-  const saleDate = new Date(createdAt);
-  if (!Number.isFinite(saleDate.getTime())) return false;
-
-  const now = new Date();
-  const saleDay = new Date(saleDate.getFullYear(), saleDate.getMonth(), saleDate.getDate()).getTime();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-  if (filter === "day") return saleDay === today;
-
-  if (filter === "week") {
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
-    return saleDate >= startOfWeek && saleDate < endOfWeek;
-  }
-
-  return saleDate.getFullYear() === now.getFullYear() && saleDate.getMonth() === now.getMonth();
+  return Boolean(selectedDate) && toDayKey(createdAt) === selectedDate;
 }
 
 function formatPaymentDate(createdAt: number | undefined) {
@@ -123,7 +114,8 @@ export default function KitchenPage() {
   const [role, setRole] = useState<Role | null>(null);
   const isManager = role === "manager";
   const [directorTab, setDirectorTab] = useState<"inventory" | "purchases" | "entries" | "sales">("inventory");
-  const [directorSalesDateFilter, setDirectorSalesDateFilter] = useState<SalesDateFilter>("day");
+  const [directorSalesDateFilter, setDirectorSalesDateFilter] = useState<SalesDateFilter>("all");
+  const [directorSalesDate, setDirectorSalesDate] = useState("");
   const [category, setCategory] = useState<KitchenCategory>("all");
   const [serviceMode, setServiceMode] = useState<ServiceMode>("restaurant");
   const [searchTerm, setSearchTerm] = useState("");
@@ -298,9 +290,9 @@ export default function KitchenPage() {
   const filteredDirectorSalesPayments = useMemo(
     () =>
       [...kitchenPayments]
-        .filter((payment) => matchesSalesDateFilter(payment.createdAt, directorSalesDateFilter))
+        .filter((payment) => matchesSalesDateFilter(payment.createdAt, directorSalesDateFilter, directorSalesDate))
         .sort((a, b) => b.createdAt - a.createdAt),
-    [directorSalesDateFilter, kitchenPayments],
+    [directorSalesDate, directorSalesDateFilter, kitchenPayments],
   );
   const directorSalesRows = useMemo(
     () =>
@@ -316,7 +308,7 @@ export default function KitchenPage() {
               destination: payment.destination,
               method: payment.method,
               status: payment.status,
-              amount: payment.total,
+              amount: getNumber(payment.total),
             },
           ];
         }
@@ -326,7 +318,7 @@ export default function KitchenPage() {
           const amount = price > 0
             ? line.qty * price
             : payment.lines?.length === 1
-              ? payment.total
+              ? getNumber(payment.total)
               : 0;
 
           return {
@@ -349,7 +341,7 @@ export default function KitchenPage() {
     [directorSalesRows],
   );
   const directorSalesAmountTotal = useMemo(
-    () => filteredDirectorSalesPayments.reduce((sum, payment) => sum + payment.total, 0),
+    () => filteredDirectorSalesPayments.reduce((sum, payment) => sum + getNumber(payment.total), 0),
     [filteredDirectorSalesPayments],
   );
 
@@ -362,14 +354,17 @@ export default function KitchenPage() {
             All recorded kitchen POS sales for the selected period.
           </p>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Tabs value={directorSalesDateFilter} onValueChange={(value) => setDirectorSalesDateFilter(value as SalesDateFilter)}>
           <TabsList className="h-10">
-            <TabsTrigger value="day" className="font-black uppercase text-[10px] tracking-widest">Day</TabsTrigger>
-            <TabsTrigger value="week" className="font-black uppercase text-[10px] tracking-widest">Week</TabsTrigger>
-            <TabsTrigger value="month" className="font-black uppercase text-[10px] tracking-widest">Month</TabsTrigger>
             <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">All Time</TabsTrigger>
+            <TabsTrigger value="date" className="font-black uppercase text-[10px] tracking-widest">Date</TabsTrigger>
           </TabsList>
         </Tabs>
+        {directorSalesDateFilter === "date" && (
+          <Input type="date" value={directorSalesDate} onChange={(event) => setDirectorSalesDate(event.target.value)} className="h-10 sm:w-[160px]" />
+        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

@@ -16,7 +16,7 @@ import { useIsDirector } from "@/hooks/use-is-director";
 import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 
 type PaymentsTab = "reception" | "kitchen" | "barista";
-type PaymentDateFilter = "all" | "day" | "week" | "month";
+type PaymentDateFilter = "all" | "date";
 type PaymentMethod = "cash" | "card" | "mobile-money" | "credit";
 type KitchenPaymentMethod = "cash" | "card" | "mobile" | "credit";
 type BaristaPaymentMethod = "cash" | "card" | "mobile" | "credit";
@@ -116,28 +116,23 @@ function formatDate(value: string): string {
   });
 }
 
-function matchesPaymentDateFilter(createdAt: number, filter: PaymentDateFilter) {
+function asNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toDayKey(value: number) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function matchesPaymentDateFilter(createdAt: number, filter: PaymentDateFilter, selectedDate: string) {
   if (filter === "all") return true;
 
   const createdDate = new Date(createdAt);
   if (!Number.isFinite(createdDate.getTime())) return false;
-
-  const now = new Date();
-  const createdDay = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-  if (filter === "day") return createdDay === today;
-
-  if (filter === "week") {
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
-    return createdDate >= startOfWeek && createdDate < endOfWeek;
-  }
-
-  return createdDate.getFullYear() === now.getFullYear() && createdDate.getMonth() === now.getMonth();
+  return Boolean(selectedDate) && toDayKey(createdDate.getTime()) === selectedDate;
 }
 
 function normalizeReceiptNo(value: string) {
@@ -171,6 +166,7 @@ export default function PaymentsPage() {
   const [role, setRole] = useState<Role>("manager");
   const [paymentsTab, setPaymentsTab] = useState<PaymentsTab>("reception");
   const [paymentDateFilter, setPaymentDateFilter] = useState<PaymentDateFilter>("all");
+  const [selectedPaymentDate, setSelectedPaymentDate] = useState("");
   const [bookingTransactions, setBookingTransactions] = useState<BookingRecord[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<KitchenPaymentRecord[]>([]);
   const [baristaPayments, setBaristaPayments] = useState<BaristaPaymentRecord[]>([]);
@@ -251,8 +247,8 @@ export default function PaymentsPage() {
         dateLabel: `${formatDate(tx.checkInDate)} - ${formatDate(tx.checkOutDate)}`,
         dateDetail: `${tx.nights} night${tx.nights === 1 ? "" : "s"}`,
         method: getBookingPaymentLabel(tx),
-        amount: tx.total,
-        createdAt: tx.createdAt,
+        amount: asNumber(tx.total),
+        createdAt: asNumber(tx.createdAt),
         status: tx.status === "credit" ? "credit" : "completed",
       })),
     [bookingTransactions],
@@ -268,8 +264,8 @@ export default function PaymentsPage() {
         context: tx.destination,
         dateLabel: formatDate(new Date(tx.createdAt).toISOString()),
         method: tx.method,
-        amount: tx.total,
-        createdAt: tx.createdAt,
+        amount: asNumber(tx.total),
+        createdAt: asNumber(tx.createdAt),
         status: tx.status,
       })),
     [kitchenPayments],
@@ -285,8 +281,8 @@ export default function PaymentsPage() {
         context: formatPaymentItems(tx.lines) || tx.destination,
         dateLabel: formatDate(new Date(tx.createdAt).toISOString()),
         method: tx.method,
-        amount: tx.total,
-        createdAt: tx.createdAt,
+        amount: asNumber(tx.total),
+        createdAt: asNumber(tx.createdAt),
         status: tx.status,
       })),
     [baristaPayments],
@@ -375,9 +371,9 @@ export default function PaymentsPage() {
         ? kitchenRows
         : baristaRows;
     return base
-      .filter((row) => matchesPaymentDateFilter(row.createdAt, paymentDateFilter))
+      .filter((row) => matchesPaymentDateFilter(row.createdAt, paymentDateFilter, selectedPaymentDate))
       .sort((a, b) => b.createdAt - a.createdAt);
-  }, [paymentDateFilter, paymentsTab, bookingRows, kitchenRows, baristaRows]);
+  }, [paymentDateFilter, selectedPaymentDate, paymentsTab, bookingRows, kitchenRows, baristaRows]);
 
   const canViewAllTabs = role === "manager" || role === "director";
   const headerDescription =
@@ -432,13 +428,19 @@ export default function PaymentsPage() {
             </div>
             <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
               <Tabs value={paymentDateFilter} onValueChange={(value) => setPaymentDateFilter(value as PaymentDateFilter)} className="w-full md:w-auto">
-                <TabsList className="grid h-10 w-full grid-cols-4 md:w-auto">
-                  <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
-                  <TabsTrigger value="day" className="text-[10px] font-black uppercase tracking-widest">Day</TabsTrigger>
-                  <TabsTrigger value="week" className="text-[10px] font-black uppercase tracking-widest">Week</TabsTrigger>
-                  <TabsTrigger value="month" className="text-[10px] font-black uppercase tracking-widest">Month</TabsTrigger>
+                <TabsList className="grid h-10 w-full grid-cols-2 md:w-auto">
+                  <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All Time</TabsTrigger>
+                  <TabsTrigger value="date" className="text-[10px] font-black uppercase tracking-widest">Date</TabsTrigger>
                 </TabsList>
               </Tabs>
+              {paymentDateFilter === "date" && (
+                <Input
+                  type="date"
+                  value={selectedPaymentDate}
+                  onChange={(event) => setSelectedPaymentDate(event.target.value)}
+                  className="h-10 w-full md:w-[160px]"
+                />
+              )}
               {canViewAllTabs && (
                 <Tabs value={paymentsTab} onValueChange={(value) => setPaymentsTab(value as PaymentsTab)} className="w-full md:w-auto">
                   <TabsList className="h-10 w-full md:w-auto">

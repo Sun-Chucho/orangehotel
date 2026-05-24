@@ -6,20 +6,39 @@ import { LaundryRecord, STORAGE_LAUNDRY_RECORDS } from "@/app/lib/laundry";
 import { readCashierState, readJson, readPosState, STORAGE_BARISTA_STATE, STORAGE_KITCHEN_STATE } from "@/app/lib/storage";
 import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface BookingRecord {
   total: number;
+  createdAt?: number;
   status?: "completed" | "checked-out" | "credit";
 }
 
 interface PosPaymentRecord {
   total: number;
+  createdAt?: number;
   status?: "completed" | "credit";
 }
 
 function money(value: number) {
-  return `TSh ${Math.round(value).toLocaleString()}`;
+  return `TSh ${Math.round(asNumber(value)).toLocaleString()}`;
+}
+
+function asNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getDayKey(value: unknown) {
+  const date = new Date(asNumber(value));
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function matchesSelectedDate(createdAt: unknown, selectedDate: string) {
+  if (!selectedDate) return true;
+  return getDayKey(createdAt) === selectedDate;
 }
 
 export default function FinancesPage() {
@@ -28,6 +47,7 @@ export default function FinancesPage() {
   const [baristaPayments, setBaristaPayments] = useState<PosPaymentRecord[]>([]);
   const [laundryRecords, setLaundryRecords] = useState<LaundryRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
 
   useEffect(() => {
     const refreshFinances = () => {
@@ -61,15 +81,20 @@ export default function FinancesPage() {
   }, []);
 
   const totals = useMemo(() => {
-    const bookingRevenue = bookings.filter((item) => item.status !== "credit").reduce((sum, item) => sum + (item.total || 0), 0);
-    const bookingCredit = bookings.filter((item) => item.status === "credit").reduce((sum, item) => sum + (item.total || 0), 0);
-    const kitchenRevenue = kitchenPayments.filter((item) => item.status !== "credit").reduce((sum, item) => sum + (item.total || 0), 0);
-    const kitchenCredit = kitchenPayments.filter((item) => item.status === "credit").reduce((sum, item) => sum + (item.total || 0), 0);
-    const baristaRevenue = baristaPayments.filter((item) => item.status !== "credit").reduce((sum, item) => sum + (item.total || 0), 0);
-    const baristaCredit = baristaPayments.filter((item) => item.status === "credit").reduce((sum, item) => sum + (item.total || 0), 0);
-    const laundryRevenue = laundryRecords.filter((item) => item.status !== "credit").reduce((sum, item) => sum + item.totalAmount, 0);
-    const laundryCredit = laundryRecords.filter((item) => item.status === "credit").reduce((sum, item) => sum + item.totalAmount, 0);
-    const expenseTotal = expenses.reduce((sum, item) => sum + item.amount, 0);
+    const datedBookings = bookings.filter((item) => matchesSelectedDate(item.createdAt, selectedDate));
+    const datedKitchenPayments = kitchenPayments.filter((item) => matchesSelectedDate(item.createdAt, selectedDate));
+    const datedBaristaPayments = baristaPayments.filter((item) => matchesSelectedDate(item.createdAt, selectedDate));
+    const datedLaundryRecords = laundryRecords.filter((item) => matchesSelectedDate(item.createdAt, selectedDate));
+    const datedExpenses = expenses.filter((item) => matchesSelectedDate(item.createdAt, selectedDate));
+    const bookingRevenue = datedBookings.filter((item) => item.status !== "credit").reduce((sum, item) => sum + asNumber(item.total), 0);
+    const bookingCredit = datedBookings.filter((item) => item.status === "credit").reduce((sum, item) => sum + asNumber(item.total), 0);
+    const kitchenRevenue = datedKitchenPayments.filter((item) => item.status !== "credit").reduce((sum, item) => sum + asNumber(item.total), 0);
+    const kitchenCredit = datedKitchenPayments.filter((item) => item.status === "credit").reduce((sum, item) => sum + asNumber(item.total), 0);
+    const baristaRevenue = datedBaristaPayments.filter((item) => item.status !== "credit").reduce((sum, item) => sum + asNumber(item.total), 0);
+    const baristaCredit = datedBaristaPayments.filter((item) => item.status === "credit").reduce((sum, item) => sum + asNumber(item.total), 0);
+    const laundryRevenue = datedLaundryRecords.filter((item) => item.status !== "credit").reduce((sum, item) => sum + asNumber(item.totalAmount), 0);
+    const laundryCredit = datedLaundryRecords.filter((item) => item.status === "credit").reduce((sum, item) => sum + asNumber(item.totalAmount), 0);
+    const expenseTotal = datedExpenses.reduce((sum, item) => sum + asNumber(item.amount), 0);
     const incomeTotal = bookingRevenue + kitchenRevenue + baristaRevenue + laundryRevenue;
     const creditTotal = bookingCredit + kitchenCredit + baristaCredit + laundryCredit;
 
@@ -83,18 +108,18 @@ export default function FinancesPage() {
       creditTotal,
       netCash: incomeTotal - expenseTotal,
     };
-  }, [baristaPayments, bookings, expenses, kitchenPayments, laundryRecords]);
+  }, [baristaPayments, bookings, expenses, kitchenPayments, laundryRecords, selectedDate]);
 
   const expenseRows = useMemo(() => {
     const grouped = new Map<string, number>();
-    expenses.forEach((expense) => {
-      grouped.set(expense.department, (grouped.get(expense.department) ?? 0) + expense.amount);
+    expenses.filter((expense) => matchesSelectedDate(expense.createdAt, selectedDate)).forEach((expense) => {
+      grouped.set(expense.department, (grouped.get(expense.department) ?? 0) + asNumber(expense.amount));
     });
     return Array.from(grouped.entries()).map(([department, total]) => ({
       label: getExpenseDepartmentLabel(department as ExpenseRecord["department"]),
       total,
     }));
-  }, [expenses]);
+  }, [expenses, selectedDate]);
 
   const incomeRows = [
     { label: "Booking Revenue", total: totals.bookingRevenue },
@@ -105,11 +130,17 @@ export default function FinancesPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-black uppercase tracking-tight">Finances</h1>
-        <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Income, expenses, credit exposure, and actual cash position
-        </p>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-black uppercase tracking-tight">Finances</h1>
+          <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            Income, expenses, credit exposure, and actual cash position
+          </p>
+        </div>
+        <div className="w-full md:w-[180px]">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Specific Date</p>
+          <Input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="h-10" />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">

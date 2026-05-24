@@ -44,7 +44,7 @@ export type InventoryTab =
 
 type KitchenManagerPane = "stock" | "expenses" | "entries" | "sales";
 type BaristaManagerPane = "finance" | "inventory" | "purchase" | "sales";
-type SalesDateFilter = "day" | "week" | "month" | "all";
+type SalesDateFilter = "all" | "date";
 type HistoryPreview =
   | { department: "kitchen" | "barista"; kind: "purchase"; entry: KitchenPurchaseHistoryEntry }
   | { department: "kitchen"; kind: "daily"; entry: KitchenDailyStockHistoryEntry }
@@ -165,29 +165,31 @@ function normalizeBaristaFinanceTarget(value: string) {
   return normalizeBaristaProductTarget(value);
 }
 
-function matchesSalesDateFilter(createdAt: number | undefined, filter: SalesDateFilter) {
-  if (filter === "all") return true;
-  if (!createdAt) return false;
+function toDayKey(createdAt: number | undefined) {
+  const saleDate = new Date(Number(createdAt));
+  if (!Number.isFinite(saleDate.getTime())) return "";
+  return saleDate.toISOString().slice(0, 10);
+}
 
-  const saleDate = new Date(createdAt);
-  if (!Number.isFinite(saleDate.getTime())) return false;
+function matchesSalesSpecificDate(createdAt: number | undefined, selectedDate: string) {
+  if (!selectedDate) return true;
+  return toDayKey(createdAt) === selectedDate;
+}
 
-  const now = new Date();
-  const saleDay = new Date(saleDate.getFullYear(), saleDate.getMonth(), saleDate.getDate()).getTime();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+function getNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  if (filter === "day") return saleDay === today;
+function normalizePaymentLine(line: { name: string; qty: number }) {
+  return {
+    name: typeof line.name === "string" ? line.name : "Item",
+    qty: getNumber(line.qty),
+  };
+}
 
-  if (filter === "week") {
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
-    return saleDate >= startOfWeek && saleDate < endOfWeek;
-  }
-
-  return saleDate.getFullYear() === now.getFullYear() && saleDate.getMonth() === now.getMonth();
+function getPaymentLines(payment: PosPaymentRecord) {
+  return Array.isArray(payment.lines) ? payment.lines.map(normalizePaymentLine) : [];
 }
 
 function formatPaymentDate(createdAt: number | undefined) {
@@ -262,9 +264,11 @@ export function InventoryControlView({
   const [role, setRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab | null>(initialTab);
   const [kitchenManagerPane, setKitchenManagerPane] = useState<KitchenManagerPane>("stock");
-  const [kitchenSalesDateFilter, setKitchenSalesDateFilter] = useState<SalesDateFilter>("day");
+  const [kitchenSalesDateFilter, setKitchenSalesDateFilter] = useState<SalesDateFilter>("all");
+  const [kitchenSalesDate, setKitchenSalesDate] = useState("");
   const [baristaView, setBaristaView] = useState<BaristaManagerPane>("finance");
-  const [baristaSalesDateFilter, setBaristaSalesDateFilter] = useState<SalesDateFilter>("day");
+  const [baristaSalesDateFilter, setBaristaSalesDateFilter] = useState<SalesDateFilter>("all");
+  const [baristaSalesDate, setBaristaSalesDate] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [storeItems, setStoreItems] = useState<MainStoreItem[]>([]);
   const [kitchenPayments, setKitchenPayments] = useState<PosPaymentRecord[]>([]);
@@ -413,15 +417,16 @@ export function InventoryControlView({
   const filteredKitchenSalesPayments = useMemo(
     () =>
       [...kitchenPayments]
-        .filter((payment) => matchesSalesDateFilter(payment.createdAt, kitchenSalesDateFilter))
+        .filter((payment) => kitchenSalesDateFilter === "all" || matchesSalesSpecificDate(payment.createdAt, kitchenSalesDate))
         .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
-    [kitchenPayments, kitchenSalesDateFilter],
+    [kitchenPayments, kitchenSalesDate, kitchenSalesDateFilter],
   );
 
   const kitchenSalesRows = useMemo(
     () =>
       filteredKitchenSalesPayments.flatMap((payment) => {
-        if (!Array.isArray(payment.lines) || payment.lines.length === 0) {
+        const lines = getPaymentLines(payment);
+        if (lines.length === 0) {
           return [
             {
               id: payment.id ?? `${payment.code ?? "sale"}-${payment.createdAt ?? 0}`,
@@ -432,17 +437,17 @@ export function InventoryControlView({
               destination: payment.destination ?? payment.mode ?? "-",
               method: payment.method ?? "-",
               status: payment.status ?? "completed",
-              amount: payment.total || 0,
+              amount: getNumber(payment.total),
             },
           ];
         }
 
-        return payment.lines.map((line, index) => {
+        return lines.map((line, index) => {
           const price = kitchenMenuPriceByItem.get(normalizeStockName(line.name)) ?? 0;
           const amount = price > 0
             ? line.qty * price
-            : payment.lines?.length === 1
-              ? payment.total || 0
+            : lines.length === 1
+              ? getNumber(payment.total)
               : 0;
 
           return {
@@ -466,7 +471,7 @@ export function InventoryControlView({
     [kitchenSalesRows],
   );
   const kitchenSalesAmountTotal = useMemo(
-    () => filteredKitchenSalesPayments.reduce((sum, payment) => sum + (payment.total || 0), 0),
+    () => filteredKitchenSalesPayments.reduce((sum, payment) => sum + getNumber(payment.total), 0),
     [filteredKitchenSalesPayments],
   );
 
@@ -576,14 +581,15 @@ export function InventoryControlView({
   const filteredBaristaSalesPayments = useMemo(
     () =>
       [...baristaPayments]
-        .filter((payment) => matchesSalesDateFilter(payment.createdAt, baristaSalesDateFilter))
+        .filter((payment) => baristaSalesDateFilter === "all" || matchesSalesSpecificDate(payment.createdAt, baristaSalesDate))
         .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
-    [baristaPayments, baristaSalesDateFilter],
+    [baristaPayments, baristaSalesDate, baristaSalesDateFilter],
   );
   const baristaSalesRows = useMemo(
     () =>
       filteredBaristaSalesPayments.flatMap((payment) => {
-        if (!Array.isArray(payment.lines) || payment.lines.length === 0) {
+        const lines = getPaymentLines(payment);
+        if (lines.length === 0) {
           return [
             {
               id: payment.id ?? `${payment.code ?? "sale"}-${payment.createdAt ?? 0}`,
@@ -594,17 +600,17 @@ export function InventoryControlView({
               destination: payment.destination ?? payment.mode ?? "-",
               method: payment.method ?? "-",
               status: payment.status ?? "completed",
-              amount: payment.total || 0,
+              amount: getNumber(payment.total),
             },
           ];
         }
 
-        return payment.lines.map((line, index) => {
+        return lines.map((line, index) => {
           const price = baristaMenuPriceByItem.get(normalizeBaristaFinanceTarget(line.name)) ?? 0;
           const amount = price > 0
             ? line.qty * price
-            : payment.lines?.length === 1
-              ? payment.total || 0
+            : lines.length === 1
+              ? getNumber(payment.total)
               : 0;
 
           return {
@@ -627,7 +633,7 @@ export function InventoryControlView({
     [baristaSalesRows],
   );
   const baristaSalesAmountTotal = useMemo(
-    () => filteredBaristaSalesPayments.reduce((sum, payment) => sum + (payment.total || 0), 0),
+    () => filteredBaristaSalesPayments.reduce((sum, payment) => sum + getNumber(payment.total), 0),
     [filteredBaristaSalesPayments],
   );
 
@@ -1276,14 +1282,17 @@ export function InventoryControlView({
             Itemized sales captured from barista POS settlements.
           </p>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Tabs value={baristaSalesDateFilter} onValueChange={(value) => setBaristaSalesDateFilter(value as SalesDateFilter)}>
           <TabsList className="h-10">
-            <TabsTrigger value="day" className="font-black uppercase text-[10px] tracking-widest">Day</TabsTrigger>
-            <TabsTrigger value="week" className="font-black uppercase text-[10px] tracking-widest">Week</TabsTrigger>
-            <TabsTrigger value="month" className="font-black uppercase text-[10px] tracking-widest">Month</TabsTrigger>
             <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">All Time</TabsTrigger>
+            <TabsTrigger value="date" className="font-black uppercase text-[10px] tracking-widest">Date</TabsTrigger>
           </TabsList>
         </Tabs>
+        {baristaSalesDateFilter === "date" && (
+          <Input type="date" value={baristaSalesDate} onChange={(event) => setBaristaSalesDate(event.target.value)} className="h-10 sm:w-[160px]" />
+        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1310,7 +1319,7 @@ export function InventoryControlView({
       <Card className="shadow-sm">
         <CardHeader className="border-b">
           <CardTitle className="text-lg uppercase font-black">Sold Items</CardTitle>
-          <CardDescription>Filter by day, week, month, or all time.</CardDescription>
+          <CardDescription>Showing all time by default. Choose Date to inspect one day.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -1359,17 +1368,20 @@ export function InventoryControlView({
         <div>
           <h2 className="text-xl font-black uppercase tracking-tight">Kitchen Sales</h2>
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Recorded kitchen POS sales with day, week, month, and all-time filters.
+            Recorded kitchen POS sales with all-time and specific date filters.
           </p>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Tabs value={kitchenSalesDateFilter} onValueChange={(value) => setKitchenSalesDateFilter(value as SalesDateFilter)}>
           <TabsList className="h-10">
-            <TabsTrigger value="day" className="font-black uppercase text-[10px] tracking-widest">Day</TabsTrigger>
-            <TabsTrigger value="week" className="font-black uppercase text-[10px] tracking-widest">Week</TabsTrigger>
-            <TabsTrigger value="month" className="font-black uppercase text-[10px] tracking-widest">Month</TabsTrigger>
             <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">All Time</TabsTrigger>
+            <TabsTrigger value="date" className="font-black uppercase text-[10px] tracking-widest">Date</TabsTrigger>
           </TabsList>
         </Tabs>
+        {kitchenSalesDateFilter === "date" && (
+          <Input type="date" value={kitchenSalesDate} onChange={(event) => setKitchenSalesDate(event.target.value)} className="h-10 sm:w-[160px]" />
+        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
