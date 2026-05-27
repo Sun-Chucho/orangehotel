@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
-import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
+import { hydrateStorageKeyFromFirebase, subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { Pencil, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type InventoryActionMode = "received" | "issued" | "damaged";
+type CompanyStockTab = "all" | CompanyStockCategory;
 
 const COMPANY_CATEGORIES: Array<{ value: CompanyStockCategory; label: string }> = [
   { value: "linen", label: "Linen" },
@@ -65,7 +66,7 @@ export default function CompanyStockPage() {
   const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<string | null>(null);
   const [items, setItems] = useState<CompanyStockItem[]>([]);
-  const [tab, setTab] = useState<CompanyStockCategory>("linen");
+  const [tab, setTab] = useState<CompanyStockTab>("all");
   const [name, setName] = useState("");
   const [openingStock, setOpeningStock] = useState("");
   const [received, setReceived] = useState("");
@@ -97,6 +98,7 @@ export default function CompanyStockPage() {
     };
 
     applyCompanyStockSnapshot();
+    void hydrateStorageKeyFromFirebase(STORAGE_COMPANY_STOCK).finally(applyCompanyStockSnapshot);
     const unsubscribeCompanyStock = subscribeToSyncedStorageKey(STORAGE_COMPANY_STOCK, applyCompanyStockSnapshot);
 
     return () => unsubscribeCompanyStock();
@@ -106,7 +108,10 @@ export default function CompanyStockPage() {
     () => items.filter((item) => matchesCompanyStockSearch(item, searchTerm)),
     [items, searchTerm],
   );
-  const filteredItems = useMemo(() => searchedItems.filter((item) => item.category === tab), [searchedItems, tab]);
+  const filteredItems = useMemo(
+    () => (tab === "all" ? searchedItems : searchedItems.filter((item) => item.category === tab)),
+    [searchedItems, tab],
+  );
 
   const resetForm = () => {
     setEditingItemId(null);
@@ -395,8 +400,11 @@ export default function CompanyStockPage() {
             </div>
           )}
 
-          <Tabs value={tab} onValueChange={(value) => setTab(value as CompanyStockCategory)}>
+          <Tabs value={tab} onValueChange={(value) => setTab(value as CompanyStockTab)}>
             <TabsList className="h-auto flex-wrap">
+              <TabsTrigger value="all" className="font-black uppercase text-[10px] tracking-widest">
+                All Stock
+              </TabsTrigger>
               {COMPANY_CATEGORIES.map((entry) => (
                 <TabsTrigger key={entry.value} value={entry.value} className="font-black uppercase text-[10px] tracking-widest">
                   {entry.label}
@@ -442,7 +450,7 @@ export default function CompanyStockPage() {
               {filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={isDirector ? (isInventoryRole ? 8 : 7) : (isInventoryRole ? 9 : 8)} className="py-10 text-center font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                    No company stock items in this category
+                    No company stock items in this view
                   </TableCell>
                 </TableRow>
               )}
