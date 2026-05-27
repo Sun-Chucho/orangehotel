@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { readStoredRole } from "@/app/lib/auth";
 import { CompanyStockCategory, CompanyStockItem, STORAGE_COMPANY_STOCK } from "@/app/lib/company-stock";
 import { readJson, writeJson } from "@/app/lib/storage";
-import { useIsDirector } from "@/hooks/use-is-director";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,6 +38,39 @@ function calculateBalance(openingStock: number, received: number, issued: number
   return Math.max(0, openingStock + received - issued - damaged);
 }
 
+function asStockText(value: unknown) {
+  if (value === undefined || value === null) return "";
+  return String(value);
+}
+
+function asStockDate(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now();
+}
+
+function asCompanyStockCategory(value: unknown): CompanyStockCategory {
+  return COMPANY_CATEGORIES.some((entry) => entry.value === value) ? (value as CompanyStockCategory) : "others";
+}
+
+function normalizeCompanyStockItems(value: unknown): CompanyStockItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is Partial<CompanyStockItem> => typeof item === "object" && item !== null)
+    .map((item, index) => ({
+      id: asStockText(item.id) || `company-stock-${index}-${asStockDate(item.createdAt)}`,
+      name: asStockText(item.name) || "Unnamed Item",
+      openingStock: asStockText(item.openingStock),
+      received: asStockText(item.received),
+      issued: asStockText(item.issued),
+      damaged: asStockText(item.damaged),
+      damageReason: asStockText(item.damageReason),
+      balance: asStockText(item.balance),
+      category: asCompanyStockCategory(item.category),
+      createdAt: asStockDate(item.createdAt),
+    }));
+}
+
 function matchesCompanyStockSearch(item: CompanyStockItem, searchTerm: string) {
   const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return true;
@@ -62,7 +94,6 @@ function matchesCompanyStockSearch(item: CompanyStockItem, searchTerm: string) {
 }
 
 export default function CompanyStockPage() {
-  const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
   const [role, setRole] = useState<string | null>(null);
   const [items, setItems] = useState<CompanyStockItem[]>([]);
@@ -81,7 +112,10 @@ export default function CompanyStockPage() {
   const [damageReason, setDamageReason] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const isDirector = role === "director";
   const isInventoryRole = role === "inventory";
+  const canEditFullSheet = role !== null && !isDirector && !isInventoryRole;
+  const canEditInventoryMovement = role !== null && !isDirector && isInventoryRole;
 
   useEffect(() => {
     setRole(readStoredRole());
@@ -89,12 +123,7 @@ export default function CompanyStockPage() {
 
   useEffect(() => {
     const applyCompanyStockSnapshot = () => {
-      const saved = readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK);
-      if (Array.isArray(saved)) {
-        setItems(saved);
-        return;
-      }
-      setItems([]);
+      setItems(normalizeCompanyStockItems(readJson<CompanyStockItem[]>(STORAGE_COMPANY_STOCK)));
     };
 
     applyCompanyStockSnapshot();
@@ -312,7 +341,7 @@ export default function CompanyStockPage() {
             />
           </div>
 
-          {!isDirector && !isInventoryRole && (
+          {canEditFullSheet && (
             <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-7 gap-2">
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Item Name" />
               <Input value={openingStock} onChange={(event) => setOpeningStock(event.target.value)} placeholder="Opening" />
@@ -342,7 +371,7 @@ export default function CompanyStockPage() {
             </div>
           )}
 
-          {!isDirector && isInventoryRole && (
+          {canEditInventoryMovement && (
             <div className="space-y-4 rounded-xl border p-4">
               <Tabs value={inventoryMode} onValueChange={(value) => setInventoryMode(value as InventoryActionMode)}>
                 <TabsList className="h-11">

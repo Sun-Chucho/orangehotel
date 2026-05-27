@@ -588,6 +588,7 @@ function protectSyncedValueBeforeWrite(key: string, localValue: unknown, remoteV
 
   if (
     key === "orange-hotel-website-bookings" ||
+    key === "orange-hotel-company-stock" ||
     key === "orange-hotel-live-chat" ||
     key === "orange-hotel-expenses" ||
     key === "orange-hotel-laundry-records" ||

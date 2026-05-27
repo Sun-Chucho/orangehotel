@@ -1131,7 +1131,10 @@ function applyBusinessCorrections() {
   }
 
   if (!localStorage.getItem(COMPANY_STOCK_SHEET_FIX_KEY)) {
-    writeJson(STORAGE_COMPANY_STOCK, COMPANY_STOCK_SHEET);
+    const existingCompanyStock = readJson<unknown[]>(STORAGE_COMPANY_STOCK);
+    if (!Array.isArray(existingCompanyStock) || existingCompanyStock.length === 0) {
+      writeJson(STORAGE_COMPANY_STOCK, COMPANY_STOCK_SHEET);
+    }
     localStorage.setItem(COMPANY_STOCK_SHEET_FIX_KEY, "1");
   }
 }

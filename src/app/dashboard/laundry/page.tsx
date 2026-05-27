@@ -16,11 +16,15 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shirt, Save } from "lucide-react";
 
 function formatMoney(value: number) {
-  return `TSh ${Math.round(value).toLocaleString()}`;
+  const amount = Number(value);
+  return `TSh ${Math.round(Number.isFinite(amount) ? amount : 0).toLocaleString()}`;
 }
 
 function formatDate(value: number) {
-  return new Date(value).toLocaleString();
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "-";
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
 function todayText() {
@@ -28,7 +32,40 @@ function todayText() {
 }
 
 function formatBookingDate(record: LaundryRecord) {
-  return record.bookingDate || new Date(record.createdAt).toISOString().slice(0, 10);
+  if (record.bookingDate) return record.bookingDate;
+  const timestamp = Number(record.createdAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "-";
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? "-" : date.toISOString().slice(0, 10);
+}
+
+function normalizeLaundryRecords(value: unknown): LaundryRecord[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((record): record is Partial<LaundryRecord> => typeof record === "object" && record !== null)
+    .map((record, index) => {
+      const createdAt = Number(record.createdAt);
+      const status = record.status === "credit" ? "credit" : "completed";
+      const paymentMethod =
+        status === "credit"
+          ? "credit"
+          : record.paymentMethod === "card" || record.paymentMethod === "mobile-money" || record.paymentMethod === "cash"
+            ? record.paymentMethod
+            : "cash";
+
+      return {
+        id: typeof record.id === "string" && record.id.trim() ? record.id : `laundry-${index}-${Date.now()}`,
+        clientName: typeof record.clientName === "string" && record.clientName.trim() ? record.clientName : "Walk-in Client",
+        itemCount: Number.isFinite(Number(record.itemCount)) ? Number(record.itemCount) : 0,
+        totalAmount: Number.isFinite(Number(record.totalAmount)) ? Number(record.totalAmount) : 0,
+        status,
+        paymentMethod,
+        createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now(),
+        bookingDate: typeof record.bookingDate === "string" ? record.bookingDate : undefined,
+        createdBy: typeof record.createdBy === "string" ? record.createdBy : undefined,
+      };
+    });
 }
 
 export default function LaundryPage() {
@@ -46,8 +83,7 @@ export default function LaundryPage() {
     setRole(readStoredRole() ?? "cashier");
 
     const refreshLaundry = () => {
-      const saved = readJson<LaundryRecord[]>(STORAGE_LAUNDRY_RECORDS);
-      setRecords(Array.isArray(saved) ? saved : []);
+      setRecords(normalizeLaundryRecords(readJson<LaundryRecord[]>(STORAGE_LAUNDRY_RECORDS)));
     };
 
     refreshLaundry();

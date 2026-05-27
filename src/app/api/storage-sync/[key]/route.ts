@@ -133,6 +133,10 @@ function protectIncomingSyncedValue(key: string, incomingValue: unknown, current
     };
   }
 
+  if (key === "orange-hotel-company-stock" && Array.isArray(currentValue) && Array.isArray(incomingValue)) {
+    return mergeRecordsByIdPreservingIncomingChanges(currentValue, incomingValue);
+  }
+
   if (Array.isArray(currentValue) && Array.isArray(incomingValue) && getArrayCount(incomingValue) < getArrayCount(currentValue)) {
     return currentValue;
   }
