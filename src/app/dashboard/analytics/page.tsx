@@ -74,7 +74,7 @@ type BusinessEvent = {
   total: number;
 };
 
-const COLORS = ["#F57C00", "#111111", "#00A676", "#2F80ED", "#D92D20", "#8E44AD", "#64748B"];
+const COLORS = ["#F57C00", "#111111", "#00A676", "#2F80ED", "#2563EB", "#D92D20", "#8E44AD", "#64748B"];
 
 function formatShortDate(dateText: string) {
   if (/^\d{4}-\d{2}$/.test(dateText)) {
@@ -420,6 +420,7 @@ export default function AnalyticsPage() {
       { label: "Kitchen", revenue: totals.kitchenRevenue, expenses: periodExpenses.filter((expense) => expense.department === "kitchen").reduce((sum, expense) => sum + expense.amount, 0), color: "#111111" },
       { label: "Barista", revenue: totals.baristaRevenue, expenses: periodExpenses.filter((expense) => expense.department === "barista").reduce((sum, expense) => sum + expense.amount, 0), color: "#00A676" },
       { label: "Laundry", revenue: totals.laundryRevenue, expenses: 0, color: "#2F80ED" },
+      { label: "Office", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "office").reduce((sum, expense) => sum + expense.amount, 0), color: "#2563EB" },
       { label: "Staff", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "staff-salary-allowance" || expense.department === "staff-food").reduce((sum, expense) => sum + expense.amount, 0), color: "#8E44AD" },
       { label: "Utilities", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "utilities-government").reduce((sum, expense) => sum + expense.amount, 0), color: "#64748B" },
       { label: "MD/Maint.", revenue: 0, expenses: periodExpenses.filter((expense) => expense.department === "others").reduce((sum, expense) => sum + expense.amount, 0), color: "#D92D20" },

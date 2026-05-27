@@ -4,6 +4,7 @@ export type ExpenseDepartment =
   | "kitchen"
   | "barista"
   | "rooms"
+  | "office"
   | "staff-salary-allowance"
   | "staff-food"
   | "others"
@@ -28,6 +29,7 @@ export const EXPENSE_DEPARTMENTS: Array<{ value: ExpenseDepartment; label: strin
   { value: "kitchen", label: "Kitchen" },
   { value: "barista", label: "Barista" },
   { value: "rooms", label: "Rooms" },
+  { value: "office", label: "Office" },
   { value: "staff-salary-allowance", label: "Staff Salary/Allowance" },
   { value: "staff-food", label: "Staff Food" },
   { value: "others", label: "MD/Maintenance" },
