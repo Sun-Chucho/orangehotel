@@ -1,4 +1,4 @@
-import { ROOMS, Room } from "@/app/lib/mock-data";
+import { PLATINUM_ROOM_PRICE, ROOMS, Room, STANDARD_ROOM_PRICE } from "@/app/lib/mock-data";
 import { readJson, writeJson } from "@/app/lib/storage";
 
 interface ActiveBookingRoom {
@@ -14,12 +14,23 @@ export function getDefaultRooms(): Room[] {
   return ROOMS.map((room) => ({ ...room }));
 }
 
+function getRoomRateByType(type: Room["type"]) {
+  return type === "Standard" ? STANDARD_ROOM_PRICE : PLATINUM_ROOM_PRICE;
+}
+
+function normalizeRoomRates(rooms: Room[]): Room[] {
+  return rooms.map((room) => {
+    const price = getRoomRateByType(room.type);
+    return room.price === price ? room : { ...room, price };
+  });
+}
+
 export function readRoomsState(): Room[] {
   const saved = readJson<Room[]>(STORAGE_ROOMS);
   if (!Array.isArray(saved) || saved.length === 0) {
     return getDefaultRooms();
   }
-  return saved;
+  return normalizeRoomRates(saved);
 }
 
 function hasSavedRoomsState(): boolean {
@@ -28,9 +39,10 @@ function hasSavedRoomsState(): boolean {
 }
 
 export function writeRoomsState(rooms: Room[]) {
+  const normalizedRooms = normalizeRoomRates(rooms);
   const saved = readJson<Room[]>(STORAGE_ROOMS);
-  if (Array.isArray(saved) && JSON.stringify(saved) === JSON.stringify(rooms)) return;
-  writeJson(STORAGE_ROOMS, rooms);
+  if (Array.isArray(saved) && JSON.stringify(saved) === JSON.stringify(normalizedRooms)) return;
+  writeJson(STORAGE_ROOMS, normalizedRooms);
 }
 
 function readBaseRooms(baseRooms?: Room[]) {

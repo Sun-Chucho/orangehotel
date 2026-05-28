@@ -35,6 +35,10 @@ interface BookingRoomRecord {
   createdAt?: number;
 }
 
+function getRoomTypeLabel(type: Room["type"]) {
+  return type === "Platinum" ? "Premium" : type;
+}
+
 export default function RoomsPage() {
   const isDirector = useIsDirector();
   const { confirm, dialog } = useConfirmDialog();
@@ -76,7 +80,11 @@ export default function RoomsPage() {
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
-      const inSearch = room.number.includes(searchTerm) || room.type.toLowerCase().includes(searchTerm.toLowerCase());
+      const normalizedSearch = searchTerm.toLowerCase();
+      const inSearch =
+        room.number.includes(searchTerm) ||
+        room.type.toLowerCase().includes(normalizedSearch) ||
+        getRoomTypeLabel(room.type).toLowerCase().includes(normalizedSearch);
       const inType = typeFilter === "all" || room.type === typeFilter;
       const inStatus = statusFilter === "all" || room.status === statusFilter;
       return inSearch && inType && inStatus;
@@ -293,7 +301,7 @@ export default function RoomsPage() {
               <TabsList className="h-10">
                 <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
                 <TabsTrigger value="Standard" className="text-[10px] font-black uppercase tracking-widest">Standard</TabsTrigger>
-                <TabsTrigger value="Platinum" className="text-[10px] font-black uppercase tracking-widest">Platinum</TabsTrigger>
+                <TabsTrigger value="Platinum" className="text-[10px] font-black uppercase tracking-widest">Premium</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -334,7 +342,7 @@ export default function RoomsPage() {
 
                   <div className="mt-6 flex items-center justify-between gap-3">
                     <Badge className="font-black uppercase text-[10px] tracking-widest bg-black text-white border-black hover:bg-black">
-                      {room.type}
+                      {getRoomTypeLabel(room.type)}
                     </Badge>
                     <Badge className={cn("font-black uppercase text-[10px] tracking-widest", getStatusTextStyles(room.status))}>
                       {room.status === "available" ? "Free" : room.status === "occupied" ? "Occupied" : room.status === "cleaning" ? "Cleaning" : "Fix"}
@@ -377,7 +385,7 @@ export default function RoomsPage() {
               <div className={cn("rounded-3xl border p-5", getStatusCardStyles(selectedRoom.status))}>
                 <div className="flex items-center justify-between gap-3">
                   <Badge className="font-black uppercase text-[10px] tracking-widest bg-black text-white border-black hover:bg-black">
-                    {selectedRoom.type}
+                    {getRoomTypeLabel(selectedRoom.type)}
                   </Badge>
                   <Badge className={cn("font-black uppercase text-[10px] tracking-widest", getStatusTextStyles(selectedRoom.status))}>
                     {selectedRoom.status}

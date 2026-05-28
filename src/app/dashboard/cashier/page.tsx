@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROOMS, Role, Room } from "@/app/lib/mock-data";
+import { PLATINUM_ROOM_PRICE, ROOMS, Role, Room, STANDARD_ROOM_PRICE } from "@/app/lib/mock-data";
 import { readStoredRole } from "@/app/lib/auth";
 import { readCashierState, STORAGE_CASHIER_STATE, writeCashierState } from "@/app/lib/storage";
 import { HISTORICAL_BOOKINGS } from "@/app/lib/seed-bookings";
@@ -62,8 +62,8 @@ interface BookingRecord {
 }
 
 const ROOM_RATE: Record<RoomType, number> = {
-  standard: 100000,
-  platinum: 120000,
+  standard: STANDARD_ROOM_PRICE,
+  platinum: PLATINUM_ROOM_PRICE,
 };
 
 const SPECIAL_PACKAGES: Record<
@@ -73,8 +73,8 @@ const SPECIAL_PACKAGES: Record<
   "resident-with-breakfast": {
     label: "Resident with Breakfast",
     currency: "TSh",
-    standardRate: 100000,
-    platinumRate: 120000,
+    standardRate: STANDARD_ROOM_PRICE,
+    platinumRate: PLATINUM_ROOM_PRICE,
   },
   "non-resident-with-breakfast": {
     label: "Non Resident with Breakfast",
@@ -85,8 +85,8 @@ const SPECIAL_PACKAGES: Record<
   "ninety-day-special": {
     label: "90 Day Special Package",
     currency: "TSh",
-    standardRate: 70000,
-    platinumRate: 100000,
+    standardRate: STANDARD_ROOM_PRICE,
+    platinumRate: PLATINUM_ROOM_PRICE,
   },
 };
 
@@ -815,7 +815,7 @@ export default function BookingPage() {
                   roomType === "platinum" ? "bg-yellow-500 text-black border-yellow-500" : "bg-white"
                 }`}
               >
-                Platinum
+                Premium
               </button>
             </div>
             {selectedRoomNumber && (
@@ -831,9 +831,9 @@ export default function BookingPage() {
               onChange={(event) => setSelectedPackage(event.target.value as SpecialPackage | "none")}
             >
               <option value="none">No special package</option>
-              <option value="resident-with-breakfast">Resident with Breakfast (Standard TSh 100,000 | Platinum TSh 120,000)</option>
-              <option value="non-resident-with-breakfast">Non Resident with Breakfast (Standard $60 | Platinum $90)</option>
-              <option value="ninety-day-special">90 Day Special Package (Standard TSh 70,000 | Platinum TSh 100,000)</option>
+              <option value="resident-with-breakfast">Resident with Breakfast (Standard TSh 70,000 | Premium TSh 100,000)</option>
+              <option value="non-resident-with-breakfast">Non Resident with Breakfast (Standard $60 | Premium $90)</option>
+              <option value="ninety-day-special">90 Day Special Package (Standard TSh 70,000 | Premium TSh 100,000)</option>
             </select>
 
             {packageConfig && (
@@ -845,7 +845,7 @@ export default function BookingPage() {
                   placeholder="Rate per night"
                 />
                 <div className="rounded-md border px-3 py-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
-                  {roomType === "standard" ? "Standard" : "Platinum"} package rate: {packageConfig.currency} {rate.toLocaleString()}
+                  {roomType === "standard" ? "Standard" : "Premium"} package rate: {packageConfig.currency} {rate.toLocaleString()}
                   {packageConfig.currency === "$" ? ` | TSh ${accountingRate.toLocaleString()} accounting` : ""}
                 </div>
               </div>
@@ -1037,7 +1037,7 @@ export default function BookingPage() {
           <Card className="w-full max-w-2xl">
             <CardHeader>
               <CardTitle className="text-xl font-black uppercase tracking-tight">
-                {roomType === "standard" ? "Standard" : "Platinum"} Rooms
+                {roomType === "standard" ? "Standard" : "Premium"} Rooms
               </CardTitle>
               <CardDescription>Select from all rooms. Only available rooms can be booked.</CardDescription>
             </CardHeader>
