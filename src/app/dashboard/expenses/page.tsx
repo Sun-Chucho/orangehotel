@@ -129,7 +129,7 @@ export default function ExpensesPage() {
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tight">Expenses</h1>
           <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-            Record and review kitchen, barista, rooms, office, and other expense requests
+            Record and review kitchen, barista, rooms, office, managing director, maintenance, and utility expense requests
           </p>
         </div>
         <Badge variant="outline" className="w-fit px-3 py-1 font-black uppercase tracking-widest">
@@ -150,7 +150,7 @@ export default function ExpensesPage() {
       </div>
 
       <Tabs value={department} onValueChange={(value) => setDepartment(value as ExpenseDepartment)}>
-        <TabsList className="h-11 flex-wrap">
+        <TabsList className="h-auto min-h-11 flex-wrap justify-start">
           {EXPENSE_DEPARTMENTS.map((item) => (
             <TabsTrigger key={item.value} value={item.value} className="font-black uppercase text-[10px] tracking-widest">
               {item.label}

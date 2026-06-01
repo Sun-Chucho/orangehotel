@@ -79,12 +79,10 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
   const config = ROLE_CONFIG[role];
   const isDirector = role === "director";
   const isInstallableRole = role === "director" || role === "kitchen" || role === "barista";
-  const isSingleBaristaLogin = role === "barista";
   const [profileUsers, setProfileUsers] = useState<Array<{ id: string; name: string; blocked?: boolean }>>([]);
   const selectableUsers = useMemo(() => {
-    if (isSingleBaristaLogin) return [];
     return profileUsers.filter((user) => !user.blocked);
-  }, [isSingleBaristaLogin, profileUsers]);
+  }, [profileUsers]);
   const [username, setUsername] = useState(config.username);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -100,11 +98,6 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const applyProfiles = () => {
       const profiles = readLocalLoginProfiles();
       const profile = profiles?.[role];
-      if (isSingleBaristaLogin) {
-        setProfileUsers([]);
-        setUsername(config.username);
-        return;
-      }
       const nextProfileUsers = (profile?.users ?? []).map((user) => ({
           id: `${role}-${user.username}`,
           name: user.username,
@@ -137,7 +130,7 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     window.addEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
     return () => window.removeEventListener("orange-hotel-storage-updated", handleProfilesUpdated as EventListener);
-  }, [config.username, isSingleBaristaLogin, role]);
+  }, [config.username, role]);
 
   useEffect(() => {
     if (!isInstallableRole || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -237,9 +230,22 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const error = form.querySelector("[data-login-error]");
     const username = (usernameInput?.value || defaultUsername).trim();
     const password = passwordInput?.value || "";
-    const listedUserRequired = profileUserCount > 0;
-    const usernameAllowed = !listedUserRequired || allowedUsernames.includes(username.toLowerCase());
-    if (!username || !usernameAllowed || password !== defaultPassword) {
+    let profiles = {};
+    try {
+      profiles = JSON.parse(localStorage.getItem("orange-hotel-login-profiles") || "{}");
+    } catch {
+      profiles = {};
+    }
+    const profile = profiles?.[role] || null;
+    const users = Array.isArray(profile?.users) ? profile.users : [];
+    const selectableUsers = users.filter((user) => user?.blocked !== true);
+    const liveAllowedUsernames = selectableUsers.map((user) => String(user?.username || "").trim().toLowerCase()).filter(Boolean);
+    const listedUserRequired = liveAllowedUsernames.length > 0 || profileUserCount > 0;
+    const allowedNames = liveAllowedUsernames.length > 0 ? liveAllowedUsernames : allowedUsernames;
+    const usernameAllowed = !listedUserRequired || allowedNames.includes(username.toLowerCase());
+    const matchedUser = users.find((user) => String(user?.username || "").trim().toLowerCase() === username.toLowerCase());
+    const expectedPassword = String(matchedUser?.password || profile?.password || defaultPassword).trim();
+    if (matchedUser?.blocked === true || !username || !usernameAllowed || password !== expectedPassword) {
       if (error) {
         error.textContent = "Invalid username or password.";
         error.classList.remove("hidden");
@@ -279,8 +285,8 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
 
     const profiles = readLocalLoginProfiles() ?? {};
     const currentProfile = profiles[role];
-    const loginUsername = isSingleBaristaLogin ? config.username : username.trim();
-    const expectedPassword = role === "manager" ? roleDefaultPassword : getProfilePassword(currentProfile, loginUsername, roleDefaultPassword);
+    const loginUsername = username.trim() || config.username;
+    const expectedPassword = getProfilePassword(currentProfile, loginUsername, roleDefaultPassword);
     const normalizedUsername = loginUsername.toLowerCase();
     const allowedUsernames = selectableUsers.map((user) => user.name.trim().toLowerCase());
     const listedUserRequired = selectableUsers.length > 0;
@@ -313,16 +319,10 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
     const nextProfiles: LoginProfiles = {
       ...profiles,
       [role]: {
-        ...(isSingleBaristaLogin
-          ? {
-              username: config.username,
-              password: expectedPassword,
-              updatedAt: Date.now(),
-            }
-          : upsertProfileUser(currentProfile, loginUsername, {
-              password: expectedPassword,
-              updatedAt: Date.now(),
-            })),
+        ...upsertProfileUser(currentProfile, loginUsername, {
+          password: expectedPassword,
+          updatedAt: Date.now(),
+        }),
         ...(role === "cashier" ? { shift } : {}),
         updatedAt: Date.now(),
       },
@@ -388,10 +388,9 @@ export function RoleLoginPage({ role }: RoleLoginPageProps) {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     name="username"
-                    value={isSingleBaristaLogin ? config.username : username}
+                    value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     className="pl-10 h-12"
-                    readOnly={isSingleBaristaLogin}
                     placeholder="Enter username"
                     autoComplete="username"
                   />

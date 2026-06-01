@@ -24,6 +24,7 @@ import { subscribeToSyncedStorageKey } from "@/app/lib/firebase-sync";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DEFAULT_LOGIN_PASSWORD,
+  getProfilePassword,
   LoginProfiles,
   readLocalLoginProfiles,
   saveLoginProfileToServer,
@@ -46,6 +47,14 @@ interface StaffMember {
 }
 
 const ROLE_OPTIONS: Role[] = ["manager", "director", "inventory", "cashier", "kitchen", "barista"];
+const DEFAULT_ROLE_USERNAMES: Record<Role, string> = {
+  manager: "manager",
+  director: "md",
+  inventory: "inventory",
+  cashier: "reception",
+  kitchen: "kitchen",
+  barista: "barista",
+};
 const STAFF_STORAGE_KEY = "orange-hotel-staff-members";
 const DEFAULT_BARISTA_STAFF: StaffMember[] = [
   {
@@ -177,6 +186,7 @@ export default function StaffPage() {
     const nextUsers = (entry.users ?? []).filter((user) => user.username.trim().toLowerCase() !== username.trim().toLowerCase());
     const nextEntry = {
       ...entry,
+      username: nextUsers[0]?.username ?? DEFAULT_ROLE_USERNAMES[role],
       users: nextUsers,
       updatedAt: Date.now(),
     };
@@ -258,9 +268,11 @@ export default function StaffPage() {
     const nextMembers = members.map((member) =>
       member.id === memberId ? { ...member, role } : member,
     );
+    const profiles = readLocalLoginProfiles() ?? {};
+    const currentPassword = getProfilePassword(profiles[currentMember.role], currentMember.name, DEFAULT_LOGIN_PASSWORD);
     persistMembers(nextMembers);
     await removeRoleProfileUser(currentMember.role, currentMember.name);
-    await saveRoleProfile(role, currentMember.name, undefined, currentMember.blocked === true);
+    await saveRoleProfile(role, currentMember.name, currentPassword, currentMember.blocked === true);
   };
 
   const deleteMember = async (memberId: string) => {
@@ -330,12 +342,13 @@ export default function StaffPage() {
         </div>
 
         <Tabs value={roleFilter} onValueChange={(value) => setRoleFilter(value as StaffRoleFilter)}>
-          <TabsList className="h-10">
+          <TabsList className="h-auto min-h-10 flex-wrap justify-start">
             <TabsTrigger value="all" className="text-[10px] font-black uppercase tracking-widest">All</TabsTrigger>
-            <TabsTrigger value="manager" className="text-[10px] font-black uppercase tracking-widest">Manager</TabsTrigger>
-            <TabsTrigger value="cashier" className="text-[10px] font-black uppercase tracking-widest">Reception</TabsTrigger>
-            <TabsTrigger value="kitchen" className="text-[10px] font-black uppercase tracking-widest">Kitchen</TabsTrigger>
-            <TabsTrigger value="barista" className="text-[10px] font-black uppercase tracking-widest">Barista</TabsTrigger>
+            {ROLE_OPTIONS.map((role) => (
+              <TabsTrigger key={role} value={role} className="text-[10px] font-black uppercase tracking-widest">
+                {role === "cashier" ? "Reception" : role}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       </div>
